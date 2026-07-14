@@ -55,6 +55,13 @@ def _passthrough_context() -> Iterator[None]:
         ),
         (lambda: relative_path_value(".", "$"), "invalid_path"),
         (lambda: host_value("127.0.0.1", "$"), "invalid_host"),
+        (lambda: host_value("2130706433", "$"), "invalid_host"),
+        (lambda: host_value("127.1", "$"), "invalid_host"),
+        (lambda: host_value("0177.0.0.1", "$"), "invalid_host"),
+        (lambda: host_value("0x7f.0.0.1", "$"), "invalid_host"),
+        (lambda: host_value("::1", "$"), "invalid_host"),
+        (lambda: host_value("0:0:0:0:0:0:0:1", "$"), "invalid_host"),
+        (lambda: host_value("::ffff:127.0.0.1", "$"), "invalid_host"),
         (
             lambda: unique_strings(("same", "same"), "$", code="duplicate"),
             "duplicate",

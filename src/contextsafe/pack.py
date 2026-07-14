@@ -1,9 +1,10 @@
 """Deterministic, unsigned pack compiler with fail-closed declared controls."""
 
-from dataclasses import dataclass
+import re
+from dataclasses import dataclass, field
 from datetime import date
 from enum import StrEnum
-from pathlib import Path, PurePosixPath
+from pathlib import Path
 from re import Pattern
 
 from contextsafe.canonical import JsonValue, as_json_value, sha256_json
@@ -25,13 +26,17 @@ from contextsafe.contract_validation import (
     relative_path_value,
     unique_strings,
 )
-from contextsafe.jsonio import load_json
+from contextsafe.errors import ContextSafeError
+from contextsafe.jsonio import load_json_beneath
 from contextsafe.models import CASE_SCHEMA_VERSION, RULE_SET_SCHEMA_VERSION
 from contextsafe.validation import parse_case, parse_rule_set
 
 PACK_SCHEMA_VERSION = "contextsafe.pack/1.0.0"
 COMPILED_PACK_SCHEMA_VERSION = "contextsafe.compiled-pack/1.0.0"
 RUNNER_CONTRACT_VERSION = "contextsafe.runner/0.1"
+_COMPILED_CASE_ID_PATTERN = re.compile(r"^CTP-[A-Z0-9]{3,16}$")
+_COMPILED_CASE_TOKEN_PATTERN = re.compile(r"^CSYN-CTP-[A-Z0-9]{3,16}$")
+_COMPILED_RULE_ID_PATTERN = re.compile(r"^A-I[0-9]{2}$")
 
 
 class LifecycleStatus(StrEnum):
@@ -237,21 +242,29 @@ class PackCompilation:
     as_of: date
     pack_id: str
     pack_version: str
-    pack_sha256: str
+    source_pack_sha256: str
     approval_subject_sha256: str
     case_manifest: tuple[dict[str, JsonValue], ...]
     rule_set_manifest: tuple[dict[str, JsonValue], ...]
     source_manifest: tuple[dict[str, JsonValue], ...]
     approval_manifest: tuple[dict[str, JsonValue], ...]
+    compiled_pack_sha256: str = field(init=False)
 
-    def to_dict(self) -> dict[str, JsonValue]:
-        """Return an explicitly unsigned and non-executable artifact."""
+    def __post_init__(self) -> None:
+        object.__setattr__(
+            self, "compiled_pack_sha256", sha256_json(self.hash_payload())
+        )
+
+    def hash_payload(self) -> dict[str, JsonValue]:
+        """Return the complete unsigned payload covered by the compiled hash."""
 
         return {
-            "approval_manifest": list(self.approval_manifest),
+            "approval_manifest": [
+                as_json_value(item) for item in self.approval_manifest
+            ],
             "approval_subject_sha256": self.approval_subject_sha256,
             "as_of": self.as_of.isoformat(),
-            "case_manifest": list(self.case_manifest),
+            "case_manifest": [as_json_value(item) for item in self.case_manifest],
             "declared_controls_status": "pass",
             "executable": False,
             "limitations": [
@@ -259,14 +272,23 @@ class PackCompilation:
                 "cryptographic-authorization-requires-b-035",
             ],
             "pack_id": self.pack_id,
-            "pack_sha256": self.pack_sha256,
             "pack_version": self.pack_version,
-            "rule_set_manifest": list(self.rule_set_manifest),
+            "rule_set_manifest": [
+                as_json_value(item) for item in self.rule_set_manifest
+            ],
             "schema_version": COMPILED_PACK_SCHEMA_VERSION,
             "signature_status": "not_verified",
-            "source_manifest": list(self.source_manifest),
+            "source_manifest": [as_json_value(item) for item in self.source_manifest],
+            "source_pack_sha256": self.source_pack_sha256,
             "valid_for_signing": True,
         }
+
+    def to_dict(self) -> dict[str, JsonValue]:
+        """Return an explicitly unsigned and non-executable artifact."""
+
+        value = self.hash_payload()
+        value["compiled_pack_sha256"] = self.compiled_pack_sha256
+        return value
 
 
 def _nullable_string(
@@ -417,11 +439,16 @@ def _parse_source(value: object, path: str) -> SourceRecord:
         ),
         path,
     )
+    raw_limitations = array_value(data["limitations"], f"{path}.limitations")
+    if len(raw_limitations) > 20:
+        raise contract_error(
+            "invalid_limitation_count",
+            f"{path}.limitations",
+            "source limitation count exceeds the supported bound",
+        )
     limitation_values = tuple(
         bounded_string(item, f"{path}.limitations[{index}]", pattern=SLUG_PATTERN)
-        for index, item in enumerate(
-            array_value(data["limitations"], f"{path}.limitations")
-        )
+        for index, item in enumerate(raw_limitations)
     )
     unique_strings(
         limitation_values, f"{path}.limitations", code="duplicate_limitation"
@@ -608,16 +635,274 @@ def approval_subject_sha256(pack: Pack) -> str:
     return sha256_json(pack.approval_payload())
 
 
-def _resolve_component(root: Path, relative_path: str) -> Path:
-    base = root.resolve()
-    path = base.joinpath(*PurePosixPath(relative_path).parts).resolve()
-    if path == base or not path.is_relative_to(base):
+def _load_component(root: Path, relative_path: str) -> JsonValue:
+    try:
+        return load_json_beneath(root, relative_path)
+    except ContextSafeError as exc:
+        if exc.code not in {"input_path_unsafe", "input_path_unsupported"}:
+            raise
         raise contract_error(
             "component_path_escape",
             "$.components",
-            "component path must remain inside the pack directory",
+            "component path must name a regular file beneath the pack directory",
+        ) from exc
+
+
+def _compiled_case_paths(compilation: PackCompilation) -> tuple[str, ...]:
+    if not compilation.case_manifest or len(compilation.case_manifest) > 50:
+        raise contract_error(
+            "invalid_component_count", "$.case_manifest", "invalid case manifest size"
         )
-    return path
+    case_ids: list[str] = []
+    tokens: list[str] = []
+    paths: list[str] = []
+    mandatory = False
+    for index, item in enumerate(compilation.case_manifest):
+        path = f"$.case_manifest[{index}]"
+        data = object_value(item, path)
+        exact_keys(
+            data,
+            frozenset(
+                {
+                    "case_id",
+                    "mandatory",
+                    "path",
+                    "schema_version",
+                    "sha256",
+                    "synthetic_identifier",
+                }
+            ),
+            path,
+        )
+        case_id = bounded_string(
+            data["case_id"], f"{path}.case_id", pattern=_COMPILED_CASE_ID_PATTERN
+        )
+        component_path = relative_path_value(data["path"], f"{path}.path")
+        schema_version = bounded_string(
+            data["schema_version"], f"{path}.schema_version"
+        )
+        bounded_string(data["sha256"], f"{path}.sha256", pattern=SHA256_PATTERN)
+        is_mandatory = boolean_value(data["mandatory"], f"{path}.mandatory")
+        identifier = object_value(
+            data["synthetic_identifier"], f"{path}.synthetic_identifier"
+        )
+        exact_keys(
+            identifier,
+            frozenset({"system", "value"}),
+            f"{path}.synthetic_identifier",
+        )
+        system = bounded_string(
+            identifier["system"], f"{path}.synthetic_identifier.system"
+        )
+        token = bounded_string(
+            identifier["value"],
+            f"{path}.synthetic_identifier.value",
+            pattern=_COMPILED_CASE_TOKEN_PATTERN,
+        )
+        if (
+            schema_version != CASE_SCHEMA_VERSION
+            or system != "urn:contextsafe:synthetic"
+            or token != f"CSYN-{case_id}"
+        ):
+            raise contract_error(
+                "compiled_pack_relationship_mismatch",
+                path,
+                "case manifest identity relationships are invalid",
+            )
+        case_ids.append(case_id)
+        tokens.append(token)
+        paths.append(component_path)
+        mandatory = mandatory or is_mandatory
+    unique_strings(tuple(case_ids), "$.case_manifest", code="duplicate_case_id")
+    unique_strings(tuple(tokens), "$.case_manifest", code="duplicate_case_token")
+    unique_strings(tuple(paths), "$.case_manifest", code="duplicate_component_path")
+    if not mandatory:
+        raise contract_error(
+            "missing_mandatory_component",
+            "$.case_manifest",
+            "a mandatory case is required",
+        )
+    return tuple(paths)
+
+
+def _compiled_rule_set_paths(compilation: PackCompilation) -> tuple[str, ...]:
+    if not compilation.rule_set_manifest or len(compilation.rule_set_manifest) > 50:
+        raise contract_error(
+            "invalid_component_count",
+            "$.rule_set_manifest",
+            "invalid rule-set manifest size",
+        )
+    rule_set_ids: list[str] = []
+    paths: list[str] = []
+    mandatory = False
+    for index, item in enumerate(compilation.rule_set_manifest):
+        path = f"$.rule_set_manifest[{index}]"
+        data = object_value(item, path)
+        exact_keys(
+            data,
+            frozenset(
+                {
+                    "rule_set_id",
+                    "mandatory",
+                    "path",
+                    "schema_version",
+                    "sha256",
+                    "rule_ids",
+                }
+            ),
+            path,
+        )
+        rule_set_id = bounded_string(
+            data["rule_set_id"], f"{path}.rule_set_id", pattern=ID_PATTERN
+        )
+        component_path = relative_path_value(data["path"], f"{path}.path")
+        schema_version = bounded_string(
+            data["schema_version"], f"{path}.schema_version"
+        )
+        bounded_string(data["sha256"], f"{path}.sha256", pattern=SHA256_PATTERN)
+        is_mandatory = boolean_value(data["mandatory"], f"{path}.mandatory")
+        raw_rule_ids = array_value(data["rule_ids"], f"{path}.rule_ids")
+        if not raw_rule_ids:
+            raise contract_error(
+                "empty_rule_set", f"{path}.rule_ids", "at least one rule is required"
+            )
+        rule_ids = tuple(
+            bounded_string(
+                value,
+                f"{path}.rule_ids[{rule_index}]",
+                pattern=_COMPILED_RULE_ID_PATTERN,
+            )
+            for rule_index, value in enumerate(raw_rule_ids)
+        )
+        unique_strings(rule_ids, f"{path}.rule_ids", code="duplicate_rule_id")
+        if schema_version != RULE_SET_SCHEMA_VERSION:
+            raise contract_error(
+                "compiled_pack_relationship_mismatch",
+                path,
+                "rule-set manifest schema is incompatible",
+            )
+        rule_set_ids.append(rule_set_id)
+        paths.append(component_path)
+        mandatory = mandatory or is_mandatory
+    unique_strings(
+        tuple(rule_set_ids), "$.rule_set_manifest", code="duplicate_rule_set_id"
+    )
+    unique_strings(tuple(paths), "$.rule_set_manifest", code="duplicate_component_path")
+    if not mandatory:
+        raise contract_error(
+            "missing_mandatory_component",
+            "$.rule_set_manifest",
+            "a mandatory rule set is required",
+        )
+    return tuple(paths)
+
+
+def _validate_compiled_sources(compilation: PackCompilation) -> None:
+    if not compilation.source_manifest or len(compilation.source_manifest) > 100:
+        raise contract_error(
+            "invalid_source_count", "$.source_manifest", "invalid source manifest size"
+        )
+    sources = tuple(
+        _parse_source(item, f"$.source_manifest[{index}]")
+        for index, item in enumerate(compilation.source_manifest)
+    )
+    unique_strings(
+        tuple(item.source_id for item in sources),
+        "$.source_manifest",
+        code="duplicate_source_id",
+    )
+    _validate_source_records(sources, compilation.as_of, "$.source_manifest")
+
+
+def _validate_compiled_approvals(compilation: PackCompilation) -> None:
+    if len(compilation.approval_manifest) != len(REQUIRED_APPROVAL_ROLES):
+        raise contract_error(
+            "invalid_approval_count",
+            "$.approval_manifest",
+            "complete approval manifest is required",
+        )
+    roles: list[str] = []
+    for index, item in enumerate(compilation.approval_manifest):
+        path = f"$.approval_manifest[{index}]"
+        data = object_value(item, path)
+        exact_keys(
+            data,
+            frozenset(
+                {"role", "reviewer_id", "decided_on", "review_by", "subject_sha256"}
+            ),
+            path,
+        )
+        role = enum_string(data["role"], f"{path}.role", _ROLE_VALUES)
+        bounded_string(
+            data["reviewer_id"], f"{path}.reviewer_id", pattern=SAFE_TOKEN_PATTERN
+        )
+        decided_on = date_value(data["decided_on"], f"{path}.decided_on")
+        review_by = date_value(data["review_by"], f"{path}.review_by")
+        subject = bounded_string(
+            data["subject_sha256"],
+            f"{path}.subject_sha256",
+            pattern=SHA256_PATTERN,
+        )
+        if (
+            subject != compilation.approval_subject_sha256
+            or not decided_on <= compilation.as_of <= review_by
+        ):
+            raise contract_error(
+                "compiled_pack_relationship_mismatch",
+                path,
+                "approval manifest is not current and content-bound",
+            )
+        roles.append(role)
+    unique_strings(tuple(roles), "$.approval_manifest", code="duplicate_approval_role")
+    if frozenset(roles) != frozenset(item.value for item in REQUIRED_APPROVAL_ROLES):
+        raise contract_error(
+            "compiled_pack_relationship_mismatch",
+            "$.approval_manifest",
+            "approval roles are incomplete",
+        )
+
+
+def validate_compiled_pack(compilation: PackCompilation) -> None:
+    """Verify compiled-pack integrity and cross-manifest relationships."""
+
+    if compilation.compiled_pack_sha256 != sha256_json(compilation.hash_payload()):
+        raise contract_error(
+            "compiled_pack_hash_mismatch",
+            "$.compiled_pack_sha256",
+            "compiled pack payload does not match its hash",
+        )
+    try:
+        bounded_string(compilation.pack_id, "$.pack_id", pattern=ID_PATTERN)
+        bounded_string(
+            compilation.pack_version, "$.pack_version", pattern=SEMVER_PATTERN
+        )
+        bounded_string(
+            compilation.source_pack_sha256,
+            "$.source_pack_sha256",
+            pattern=SHA256_PATTERN,
+        )
+        bounded_string(
+            compilation.approval_subject_sha256,
+            "$.approval_subject_sha256",
+            pattern=SHA256_PATTERN,
+        )
+        case_paths = _compiled_case_paths(compilation)
+        rule_set_paths = _compiled_rule_set_paths(compilation)
+        unique_strings(
+            (*case_paths, *rule_set_paths),
+            "$.case_manifest",
+            code="duplicate_component_path",
+        )
+        _validate_compiled_sources(compilation)
+        _validate_compiled_approvals(compilation)
+    except ContextSafeError as exc:
+        if exc.code == "compiled_pack_relationship_mismatch":
+            raise
+        raise contract_error(
+            "compiled_pack_relationship_mismatch",
+            "$",
+            "compiled pack manifests are internally inconsistent",
+        ) from exc
 
 
 def _validate_lifecycle(pack: Pack, as_of: date) -> None:
@@ -639,9 +924,11 @@ def _validate_lifecycle(pack: Pack, as_of: date) -> None:
         )
 
 
-def _validate_sources(pack: Pack, as_of: date) -> None:
-    for index, source in enumerate(pack.sources):
-        path = f"$.sources[{index}]"
+def _validate_source_records(
+    sources: tuple[SourceRecord, ...], as_of: date, path_prefix: str
+) -> None:
+    for index, source in enumerate(sources):
+        path = f"{path_prefix}[{index}]"
         if source.status is LifecycleStatus.DRAFT:
             raise contract_error(
                 "source_not_active", f"{path}.status", "draft source blocks compilation"
@@ -676,6 +963,10 @@ def _validate_sources(pack: Pack, as_of: date) -> None:
                 f"{path}.review_by",
                 "source review date has passed",
             )
+
+
+def _validate_sources(pack: Pack, as_of: date) -> None:
+    _validate_source_records(pack.sources, as_of, "$.sources")
 
 
 def _validate_approvals(pack: Pack, as_of: date) -> None:
@@ -730,7 +1021,7 @@ def _load_components(
     case_manifest: list[dict[str, JsonValue]] = []
     case_ids: set[str] = set()
     for reference in sorted(pack.cases, key=lambda item: item.component_id):
-        value = load_json(_resolve_component(root, reference.path))
+        value = _load_component(root, reference.path)
         case = parse_case(value)
         canonical_hash = sha256_json(case.to_dict())
         if canonical_hash != reference.sha256:
@@ -758,7 +1049,7 @@ def _load_components(
         )
     rule_manifest: list[dict[str, JsonValue]] = []
     for reference in sorted(pack.rule_sets, key=lambda item: item.component_id):
-        value = load_json(_resolve_component(root, reference.path))
+        value = _load_component(root, reference.path)
         rule_set = parse_rule_set(value)
         canonical_hash = sha256_json(rule_set.to_dict())
         if canonical_hash != reference.sha256:
@@ -801,11 +1092,11 @@ def compile_pack(value: object, *, root: Path, as_of: date) -> PackCompilation:
     _validate_sources(pack, as_of)
     case_manifest, rule_set_manifest = _load_components(pack, root)
     _validate_approvals(pack, as_of)
-    return PackCompilation(
+    compilation = PackCompilation(
         as_of=as_of,
         pack_id=pack.pack_id,
         pack_version=pack.version,
-        pack_sha256=sha256_json(pack.to_dict()),
+        source_pack_sha256=sha256_json(pack.to_dict()),
         approval_subject_sha256=approval_subject_sha256(pack),
         case_manifest=case_manifest,
         rule_set_manifest=rule_set_manifest,
@@ -828,3 +1119,5 @@ def compile_pack(value: object, *, root: Path, as_of: date) -> PackCompilation:
             for item in sorted(pack.approvals, key=lambda item: item.role.value)
         ),
     )
+    validate_compiled_pack(compilation)
+    return compilation

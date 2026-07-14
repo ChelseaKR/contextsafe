@@ -3,7 +3,9 @@
 import copy
 import itertools
 import json
+import os
 import shutil
+from dataclasses import replace
 from datetime import date
 from pathlib import Path
 from typing import Any
@@ -20,6 +22,7 @@ from contextsafe.pack import (
     approval_subject_sha256,
     compile_pack,
     parse_pack,
+    validate_compiled_pack,
 )
 from contextsafe.validation import parse_case, parse_rule_set
 
@@ -132,6 +135,9 @@ def test_pack_and_compilation_conform_to_schemas() -> None:
     compiled = compile_pack(pack, root=REFERENCE, as_of=AS_OF).to_dict()
 
     compiled_validator.validate(compiled)
+    compiled_hash = compiled.pop("compiled_pack_sha256")
+    assert compiled_hash == sha256_json(compiled)
+    assert compiled["source_pack_sha256"] == sha256_json(parse_pack(pack).to_dict())
     assert compiled["declared_controls_status"] == "pass"
     assert compiled["valid_for_signing"] is True
     assert compiled["signature_status"] == "not_verified"
@@ -266,6 +272,58 @@ def test_pack_rejects_component_symlink_escape(tmp_path: Path) -> None:
     assert raised.value.code == "component_path_escape"
 
 
+def test_pack_rejects_component_symlink_even_when_target_stays_inside_root(
+    tmp_path: Path,
+) -> None:
+    pack = _valid_pack()
+    shutil.copyfile(REFERENCE / "case.json", tmp_path / "actual-case.json")
+    shutil.copyfile(REFERENCE / "rules.json", tmp_path / "rules.json")
+    (tmp_path / "case.json").symlink_to(tmp_path / "actual-case.json")
+
+    with pytest.raises(ContextSafeError) as raised:
+        compile_pack(pack, root=tmp_path, as_of=AS_OF)
+
+    assert raised.value.code == "component_path_escape"
+
+
+def test_pack_rejects_component_intermediate_symlink(tmp_path: Path) -> None:
+    pack = _valid_pack()
+    actual = tmp_path / "actual"
+    actual.mkdir()
+    shutil.copyfile(REFERENCE / "case.json", actual / "case.json")
+    shutil.copyfile(REFERENCE / "rules.json", tmp_path / "rules.json")
+    (tmp_path / "linked").symlink_to(actual, target_is_directory=True)
+    pack["components"]["cases"][0]["path"] = "linked/case.json"
+    _bind_test_approvals(pack)
+
+    with pytest.raises(ContextSafeError) as raised:
+        compile_pack(pack, root=tmp_path, as_of=AS_OF)
+
+    assert raised.value.code == "component_path_escape"
+
+
+def test_pack_rejects_fifo_component_without_blocking(tmp_path: Path) -> None:
+    pack = _valid_pack()
+    os.mkfifo(tmp_path / "case.json")
+    shutil.copyfile(REFERENCE / "rules.json", tmp_path / "rules.json")
+
+    with pytest.raises(ContextSafeError) as raised:
+        compile_pack(pack, root=tmp_path, as_of=AS_OF)
+
+    assert raised.value.code == "component_path_escape"
+
+
+def test_pack_rejects_directory_component_as_non_regular(tmp_path: Path) -> None:
+    pack = _valid_pack()
+    (tmp_path / "case.json").mkdir()
+    shutil.copyfile(REFERENCE / "rules.json", tmp_path / "rules.json")
+
+    with pytest.raises(ContextSafeError) as raised:
+        compile_pack(pack, root=tmp_path, as_of=AS_OF)
+
+    assert raised.value.code == "component_path_escape"
+
+
 def test_pack_rejects_rules_for_a_case_outside_the_pack(tmp_path: Path) -> None:
     pack = _valid_pack()
     _copy_components(tmp_path)
@@ -281,6 +339,51 @@ def test_pack_rejects_rules_for_a_case_outside_the_pack(tmp_path: Path) -> None:
         compile_pack(pack, root=tmp_path, as_of=AS_OF)
 
     assert raised.value.code == "rule_case_missing"
+
+
+def test_compiled_pack_hash_and_manifest_relationships_detect_tampering() -> None:
+    compiled = compile_pack(_valid_pack(), root=REFERENCE, as_of=AS_OF)
+    next_day = compile_pack(_valid_pack(), root=REFERENCE, as_of=date(2026, 7, 14))
+    assert next_day.source_pack_sha256 == compiled.source_pack_sha256
+    assert next_day.compiled_pack_sha256 != compiled.compiled_pack_sha256
+
+    changed_sources = copy.deepcopy(compiled.source_manifest)
+    changed_sources[0]["limitations"] = ["changed-but-valid"]
+    changed_payload = replace(compiled, source_manifest=changed_sources)
+
+    assert changed_payload.compiled_pack_sha256 != compiled.compiled_pack_sha256
+    validate_compiled_pack(changed_payload)
+
+    changed_cases = copy.deepcopy(compiled.case_manifest)
+    changed_cases[0]["synthetic_identifier"]["value"] = "CSYN-CTP-Z99"
+    invalid_relationship = replace(compiled, case_manifest=changed_cases)
+
+    with pytest.raises(ContextSafeError) as raised:
+        validate_compiled_pack(invalid_relationship)
+
+    assert raised.value.code == "compiled_pack_relationship_mismatch"
+
+
+@pytest.mark.parametrize(
+    ("manifest_name", "field", "value"),
+    [
+        ("case_manifest", "sha256", "0" * 64),
+        ("rule_set_manifest", "sha256", "0" * 64),
+        ("source_manifest", "limitations", ["changed-but-valid"]),
+        ("approval_manifest", "reviewer_id", "TEST-CHANGED-REVIEWER"),
+    ],
+)
+def test_compiled_pack_detects_manifest_mutation_after_hashing(
+    manifest_name: str, field: str, value: Any
+) -> None:
+    compiled = compile_pack(_valid_pack(), root=REFERENCE, as_of=AS_OF)
+    manifest = getattr(compiled, manifest_name)
+    manifest[0][field] = value
+
+    with pytest.raises(ContextSafeError) as raised:
+        validate_compiled_pack(compiled)
+
+    assert raised.value.code == "compiled_pack_hash_mismatch"
 
 
 def test_pack_cli_emits_unsigned_compilation(
@@ -368,6 +471,16 @@ def test_pack_parser_rejects_invalid_collection_contracts(
         parse_pack(pack)
 
     assert raised.value.code == expected_code
+
+
+def test_pack_rejects_more_source_limitations_than_the_schema_bound() -> None:
+    pack = _valid_pack()
+    pack["sources"][0]["limitations"] = [f"limit-{index}" for index in range(21)]
+
+    with pytest.raises(ContextSafeError) as raised:
+        parse_pack(pack)
+
+    assert raised.value.code == "invalid_limitation_count"
 
 
 @pytest.mark.parametrize(

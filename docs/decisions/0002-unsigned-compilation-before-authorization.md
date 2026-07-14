@@ -27,19 +27,19 @@ The pack compiler:
 - accepts only the exact supported pack, case, rule-set, and runner contracts;
 - validates lifecycle dates, withdrawal state, current source review metadata, and the complete declared-role set;
 - binds every approval declaration to a canonical hash of the pack content excluding the declarations themselves;
-- resolves component paths inside the pack directory, rejects symlink escape, parses components through their typed validators, and verifies semantic content hashes;
+- opens the pack root once, traverses component paths relative to retained directory descriptors without following links, accepts only regular files, parses the bytes read from those same descriptors through typed validators, and verifies semantic content hashes;
 - sorts semantically unordered collections before hashing and emitting manifests;
 - takes an explicit `as_of` date rather than consulting a wall clock;
-- emits a deterministic component, source, and approval manifest marked `valid_for_signing: true`, `signature_status: not_verified`, and `executable: false`.
+- retains a clearly named canonical source-pack hash, hashes the complete compiled payload including `as_of` and every manifest, and emits the deterministic artifact marked `valid_for_signing: true`, `signature_status: not_verified`, and `executable: false`.
 
 Approval declarations are machine-readable records, not signatures. Passing their checks means only that the declared controls are internally complete and current. It does not authenticate the reviewer or establish that a real review occurred.
 
 The plan validator:
 
-- pins the canonical engagement and compiled-pack hashes;
+- pins the canonical engagement hash and the exact compiled-payload hash, then recomputes the latter and validates its manifest relationships before using its case scope;
 - accepts only `sandbox`, `test`, or `staging` classifications with explicit non-production and production-prohibition attestations;
-- rejects URLs, wildcards, uppercase hosts, and IP addresses, then requires every target host to appear in the engagement allowlist;
-- requires the fixed synthetic namespace, all owner roles, an exact cleanup contract, all four bounded checkpoints, and the compiled pack's exact case-token scope;
+- rejects URLs, wildcards, uppercase hosts, IPv6 literals, and canonical or legacy numeric IPv4 forms (single-integer, abbreviated, octal, and hexadecimal), then requires every target host to appear in the engagement allowlist;
+- requires the fixed synthetic namespace, all owner roles, an exact cleanup contract whose deadline is current and covers the complete plan validity interval, all four bounded checkpoints, and the compiled pack's exact case-token scope;
 - validates engagement, plan, and pack dates against the same explicit `as_of` date;
 - performs no DNS lookup, connection, write, or other network action;
 - emits a deterministic artifact with the same unsigned, non-executable status.
@@ -71,7 +71,7 @@ Rejected. Heuristics can both miss production and reject legitimate non-producti
 ### Positive
 
 - Canonical output is reproducible across key and array ordering.
-- Expiry, withdrawal, compatibility, hash, role, namespace, owner, cleanup, host, and scope drift fail closed before signing.
+- Expiry, withdrawal, compatibility, compiled-payload or source hash, role, namespace, owner, cleanup, host, and scope drift fail closed before signing.
 - Source provenance is retained without copying source text into the pack manifest.
 - Test tooling can advance without fabricating a clinically approved pack.
 - A future signing layer has stable, content-addressed subjects to authorize.
@@ -93,4 +93,4 @@ Rejected. Heuristics can both miss production and reject legitimate non-producti
 
 ## Validation
 
-This decision is implemented correctly when permutation tests produce byte-identical canonical artifacts; expired, withdrawn, incomplete, incompatible, tampered, out-of-directory, production, unallowlisted, ownerless, or namespace-mismatched inputs fail closed; schemas validate every successful artifact; the committed reference pack cannot compile; and no validation command performs a network action.
+This decision is implemented correctly when permutation tests produce byte-identical canonical artifacts; expired, withdrawn, incomplete, incompatible, manifest-tampered, out-of-directory, symlinked, non-regular, production, numeric-IP, unallowlisted, ownerless, cleanup-expired, or namespace-mismatched inputs fail closed; schemas validate every successful artifact; the committed reference pack cannot compile; and no validation command performs a network action.

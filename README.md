@@ -26,12 +26,15 @@ Iteration 2 adds a machine-enforceable but deliberately unsigned control plane:
 
 - a strict [pack envelope](schemas/contextsafe-pack-v1.schema.json), deterministic
   compiler, semantic component hashes, compatibility rules, lifecycle and withdrawal
-  checks, declared-role completeness, and a canonical source manifest;
+  checks, descriptor-anchored no-follow component reads, declared-role completeness,
+  a canonical source manifest, and separate source-pack and compiled-payload hashes;
 - strict [engagement](schemas/contextsafe-engagement-v1.schema.json) and
   [execution-plan](schemas/contextsafe-plan-v1.schema.json) contracts;
 - fail-closed non-production attestations, exact host allowlisting, fixed synthetic
-  namespace, owner and cleanup matching, four-checkpoint scope, and engagement/pack
-  hash pinning;
+  namespace, owner and cleanup matching, four-checkpoint scope, and
+  engagement/compiled-pack hash pinning; the host guard rejects canonical and legacy
+  numeric IP forms, and the cleanup deadline must remain current through the complete
+  plan validity interval;
 - canonical compiled artifacts that always say `signature_status: not_verified`,
   `executable: false`, and `valid_for_signing: true`.
 

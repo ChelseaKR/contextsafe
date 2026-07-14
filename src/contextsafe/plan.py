@@ -20,7 +20,7 @@ from contextsafe.contract_validation import (
     unique_strings,
 )
 from contextsafe.models import Checkpoint
-from contextsafe.pack import PackCompilation
+from contextsafe.pack import PackCompilation, validate_compiled_pack
 
 ENGAGEMENT_SCHEMA_VERSION = "contextsafe.engagement/1.0.0"
 PLAN_SCHEMA_VERSION = "contextsafe.plan/1.0.0"
@@ -142,7 +142,7 @@ class ExecutionPlan:
     plan_id: str
     engagement_id: str
     engagement_sha256: str
-    pack_sha256: str
+    compiled_pack_sha256: str
     environment: EnvironmentContract
     target_hosts: tuple[str, ...]
     synthetic_namespace: SyntheticNamespace
@@ -164,7 +164,7 @@ class ExecutionPlan:
             "engagement_sha256": self.engagement_sha256,
             "environment": self.environment.to_dict(),
             "owners": self.owners.to_dict(),
-            "pack_sha256": self.pack_sha256,
+            "compiled_pack_sha256": self.compiled_pack_sha256,
             "plan_id": self.plan_id,
             "schema_version": self.schema_version,
             "synthetic_namespace": self.synthetic_namespace.to_dict(),
@@ -202,7 +202,7 @@ class PlanCompilation:
             ],
             "network_actions_performed": False,
             "owners": self.plan.owners.to_dict(),
-            "pack_sha256": self.plan.pack_sha256,
+            "compiled_pack_sha256": self.plan.compiled_pack_sha256,
             "plan_id": self.plan.plan_id,
             "plan_sha256": self.plan_sha256,
             "schema_version": COMPILED_PLAN_SCHEMA_VERSION,
@@ -437,7 +437,7 @@ def parse_plan(value: object) -> ExecutionPlan:
                 "plan_id",
                 "engagement_id",
                 "engagement_sha256",
-                "pack_sha256",
+                "compiled_pack_sha256",
                 "environment",
                 "target_hosts",
                 "synthetic_namespace",
@@ -521,8 +521,10 @@ def parse_plan(value: object) -> ExecutionPlan:
             "$.engagement_sha256",
             pattern=SHA256_PATTERN,
         ),
-        pack_sha256=bounded_string(
-            data["pack_sha256"], "$.pack_sha256", pattern=SHA256_PATTERN
+        compiled_pack_sha256=bounded_string(
+            data["compiled_pack_sha256"],
+            "$.compiled_pack_sha256",
+            pattern=SHA256_PATTERN,
         ),
         environment=_parse_environment(data["environment"], "$.environment"),
         target_hosts=target_hosts,
@@ -587,6 +589,19 @@ def _validate_dates(
         raise contract_error(
             "plan_not_current", "$", "plan is not current on the requested date"
         )
+    cleanup_deadlines = (engagement.cleanup.due_on, plan.cleanup.due_on)
+    if any(deadline < as_of for deadline in cleanup_deadlines):
+        raise contract_error(
+            "cleanup_deadline_expired",
+            "$.cleanup.due_on",
+            "cleanup deadline has already passed",
+        )
+    if any(deadline < plan.valid_until for deadline in cleanup_deadlines):
+        raise contract_error(
+            "cleanup_deadline_before_plan_end",
+            "$.cleanup.due_on",
+            "cleanup deadline must cover the complete plan validity interval",
+        )
 
 
 def _validate_pins(
@@ -606,10 +621,10 @@ def _validate_pins(
             "$.engagement_sha256",
             "plan does not bind the current engagement",
         )
-    if plan.pack_sha256 != pack.pack_sha256:
+    if plan.compiled_pack_sha256 != pack.compiled_pack_sha256:
         raise contract_error(
-            "pack_hash_mismatch",
-            "$.pack_sha256",
+            "compiled_pack_pin_mismatch",
+            "$.compiled_pack_sha256",
             "plan does not bind the compiled pack",
         )
 
@@ -660,6 +675,7 @@ def validate_plan(
 ) -> PlanCompilation:
     """Validate and compile a plan without connecting to any declared host."""
 
+    validate_compiled_pack(pack)
     engagement = parse_engagement(engagement_value)
     plan = parse_plan(plan_value)
     _validate_dates(engagement, plan, pack, as_of)

@@ -4,6 +4,7 @@ import copy
 import itertools
 import json
 import shutil
+from dataclasses import replace
 from datetime import date
 from pathlib import Path
 from typing import Any, cast
@@ -114,7 +115,7 @@ def _plan(engagement: dict[str, Any], pack: PackCompilation) -> dict[str, Any]:
         "engagement_sha256": engagement_sha256(parsed_engagement),
         "environment": copy.deepcopy(engagement["environment"]),
         "owners": copy.deepcopy(engagement["owners"]),
-        "pack_sha256": pack.pack_sha256,
+        "compiled_pack_sha256": pack.compiled_pack_sha256,
         "plan_id": "PLAN-SYNTHETIC-TEST",
         "schema_version": "contextsafe.plan/1.0.0",
         "synthetic_namespace": copy.deepcopy(engagement["synthetic_namespace"]),
@@ -201,6 +202,13 @@ def test_unallowlisted_host_is_blocked() -> None:
         "*.contextsafe.invalid",
         "Staging.contextsafe.invalid",
         "127.0.0.1",
+        "2130706433",
+        "127.1",
+        "0177.0.0.1",
+        "0x7f.0.0.1",
+        "::1",
+        "0:0:0:0:0:0:0:1",
+        "::ffff:127.0.0.1",
     ],
 )
 def test_noncanonical_or_ip_hosts_are_blocked(host: str) -> None:
@@ -240,7 +248,7 @@ def test_namespace_mismatch_is_blocked() -> None:
         ("owner", "owner_mismatch"),
         ("cleanup", "cleanup_mismatch"),
         ("engagement_hash", "engagement_hash_mismatch"),
-        ("pack_hash", "pack_hash_mismatch"),
+        ("pack_hash", "compiled_pack_pin_mismatch"),
         ("case_scope", "case_scope_mismatch"),
     ],
 )
@@ -257,7 +265,7 @@ def test_cross_document_pins_and_scope_fail_closed(
     elif mutation == "engagement_hash":
         plan["engagement_sha256"] = "0" * 64
     elif mutation == "pack_hash":
-        plan["pack_sha256"] = "0" * 64
+        plan["compiled_pack_sha256"] = "0" * 64
     else:
         plan["case_tokens"] = ["CSYN-CTP-Z99"]
 
@@ -466,3 +474,77 @@ def test_plan_rejects_additional_date_pin_and_namespace_drift(
         validate_plan(engagement, plan, pack=pack, as_of=AS_OF)
 
     assert raised.value.code == expected_code
+
+
+def test_plan_rejects_expired_cleanup_deadline_independently() -> None:
+    pack = _compiled_pack()
+    engagement = _engagement()
+    engagement["cleanup"]["due_on"] = "2026-07-12"
+    plan = _plan(engagement, pack)
+
+    with pytest.raises(ContextSafeError) as raised:
+        validate_plan(engagement, plan, pack=pack, as_of=AS_OF)
+
+    assert raised.value.code == "cleanup_deadline_expired"
+
+
+def test_plan_rejects_cleanup_deadline_before_plan_end() -> None:
+    pack = _compiled_pack()
+    engagement = _engagement()
+    engagement["cleanup"]["due_on"] = "2026-07-20"
+    plan = _plan(engagement, pack)
+
+    with pytest.raises(ContextSafeError) as raised:
+        validate_plan(engagement, plan, pack=pack, as_of=AS_OF)
+
+    assert raised.value.code == "cleanup_deadline_before_plan_end"
+
+
+def test_plan_pins_exact_compiled_pack_payload() -> None:
+    engagement, plan, pack = _values()
+    changed_sources = copy.deepcopy(pack.source_manifest)
+    changed_sources[0]["limitations"] = ["changed-but-valid"]
+    changed_pack = replace(pack, source_manifest=changed_sources)
+
+    with pytest.raises(ContextSafeError) as raised:
+        validate_plan(engagement, plan, pack=changed_pack, as_of=AS_OF)
+
+    assert raised.value.code == "compiled_pack_pin_mismatch"
+
+
+def test_plan_rejects_compiled_pack_mutated_after_hashing() -> None:
+    engagement, plan, pack = _values()
+    pack.case_manifest[0]["synthetic_identifier"]["value"] = "CSYN-CTP-Z99"
+
+    with pytest.raises(ContextSafeError) as raised:
+        validate_plan(engagement, plan, pack=pack, as_of=AS_OF)
+
+    assert raised.value.code == "compiled_pack_hash_mismatch"
+
+
+@pytest.mark.parametrize(
+    "host",
+    [
+        "127.0.0.1",
+        "2130706433",
+        "127.1",
+        "0177.0.0.1",
+        "0x7f.0.0.1",
+        "::1",
+        "0:0:0:0:0:0:0:1",
+        "::ffff:127.0.0.1",
+    ],
+)
+def test_plan_contract_schemas_reject_all_ip_literal_forms(host: str) -> None:
+    engagement, plan, pack = _values()
+    compiled = validate_plan(engagement, plan, pack=pack, as_of=AS_OF).to_dict()
+    engagement["allowed_hosts"] = [host]
+    plan["target_hosts"] = [host]
+    compiled["target_hosts"] = [host]
+
+    for schema_name, value in (
+        ("contextsafe-engagement-v1.schema.json", engagement),
+        ("contextsafe-plan-v1.schema.json", plan),
+        ("contextsafe-compiled-plan-v1.schema.json", compiled),
+    ):
+        assert not Draft202012Validator(_schema(schema_name)).is_valid(value)

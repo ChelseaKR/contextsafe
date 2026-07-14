@@ -11,6 +11,10 @@ DATE_PATTERN = re.compile(r"^[0-9]{4}-[0-9]{2}-[0-9]{2}$")
 HOST_PATTERN = re.compile(
     r"^(?=.{1,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)(?:\.(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?))*$"
 )
+LEGACY_IP_PATTERN = re.compile(
+    r"^(?:0x[0-9a-f]+|0[0-7]*|[0-9]+)"
+    r"(?:\.(?:0x[0-9a-f]+|0[0-7]*|[0-9]+)){0,3}$"
+)
 ID_PATTERN = re.compile(r"^[A-Z][A-Z0-9-]{2,63}$")
 RELATIVE_PATH_PATTERN = re.compile(r"^[A-Za-z0-9_.-]+(?:/[A-Za-z0-9_.-]+)*$")
 SAFE_TOKEN_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9:/_.-]{0,127}$")
@@ -135,12 +139,20 @@ def relative_path_value(value: object, path: str) -> str:
 def host_value(value: object, path: str) -> str:
     """Require a canonical lowercase DNS host, never a URL, wildcard, or IP."""
 
-    raw = bounded_string(value, path, pattern=HOST_PATTERN, max_length=253)
+    raw = bounded_string(value, path, max_length=253)
     try:
         ipaddress.ip_address(raw)
     except ValueError:
-        return raw
-    raise contract_error("invalid_host", path, "IP addresses are not allowed")
+        canonical_ip = False
+    else:
+        canonical_ip = True
+    if canonical_ip or LEGACY_IP_PATTERN.fullmatch(raw) is not None:
+        raise contract_error("invalid_host", path, "IP addresses are not allowed")
+    if HOST_PATTERN.fullmatch(raw) is None:
+        raise contract_error(
+            "invalid_format", path, "string does not match the required format"
+        )
+    return raw
 
 
 def unique_strings(values: tuple[str, ...], path: str, *, code: str) -> None:
