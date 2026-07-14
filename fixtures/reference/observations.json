@@ -1,0 +1,109 @@
+{
+  "schema_version": "contextsafe.observation-set/0.1.0",
+  "observations": [
+    {
+      "schema_version": "contextsafe.observation/0.1.0",
+      "observation_id": "OBS-I01-GI",
+      "case_id": "CTP-I01",
+      "checkpoint": "ehr",
+      "concept": "gender_identity",
+      "value": {
+        "status": "specified",
+        "value": "fixture-gender-1",
+        "code_system": "urn:contextsafe:fixture"
+      },
+      "evidence": {
+        "source_sha256": "1917d730c88ed0f6fd76487c7aeaf58635effb03dfd688d74d423fbcbd510b5a",
+        "source_pointer": "$.concepts.gender_identity"
+      },
+      "mapping": {
+        "source_concept": "gender_identity",
+        "target_concept": "gender_identity",
+        "mapping_version": "0.1.0"
+      }
+    },
+    {
+      "schema_version": "contextsafe.observation/0.1.0",
+      "observation_id": "OBS-I01-RSG",
+      "case_id": "CTP-I01",
+      "checkpoint": "registration",
+      "concept": "recorded_sex_or_gender",
+      "value": {
+        "value": "X",
+        "context": "government-id",
+        "source": "synthetic-fixture"
+      },
+      "evidence": {
+        "source_sha256": "6d5d64e81069467f1ecbdf94426227f1ce2f204c4b97d80150af378705d3e370",
+        "source_pointer": "$.concepts.recorded_sex_or_gender[0]"
+      },
+      "mapping": {
+        "source_concept": "recorded_sex_or_gender",
+        "target_concept": "recorded_sex_or_gender",
+        "mapping_version": "0.1.0"
+      }
+    },
+    {
+      "schema_version": "contextsafe.observation/0.1.0",
+      "observation_id": "OBS-I01-SPCU",
+      "case_id": "CTP-I01",
+      "checkpoint": "interface",
+      "concept": "sex_parameter_for_clinical_use",
+      "value": {
+        "value": "fixture-context-1",
+        "context_id": "ORDER-CSYN-I01-A",
+        "supporting_observation_ids": ["SUP-CSYN-I01-A"]
+      },
+      "evidence": {
+        "source_sha256": "99c6402adf255f4b2bff168ded95ba0493b30f707fa4a594329a70d2c5271260",
+        "source_pointer": "$.concepts.sex_parameter_for_clinical_use[0]"
+      },
+      "mapping": {
+        "source_concept": "sex_parameter_for_clinical_use",
+        "target_concept": "sex_parameter_for_clinical_use",
+        "mapping_version": "0.1.0"
+      }
+    },
+    {
+      "schema_version": "contextsafe.observation/0.1.0",
+      "observation_id": "OBS-I01-NTU",
+      "case_id": "CTP-I01",
+      "checkpoint": "ehr",
+      "concept": "name_to_use",
+      "value": {
+        "status": "specified",
+        "value": "CSYN-ASTER",
+        "use": "usual"
+      },
+      "evidence": {
+        "source_sha256": "2de2a32d6fe8f588139f503673d6f951204993186cf2f9af5701408452a2f46c",
+        "source_pointer": "$.concepts.name_to_use"
+      },
+      "mapping": {
+        "source_concept": "name_to_use",
+        "target_concept": "name_to_use",
+        "mapping_version": "0.1.0"
+      }
+    },
+    {
+      "schema_version": "contextsafe.observation/0.1.0",
+      "observation_id": "OBS-I01-PRONOUNS",
+      "case_id": "CTP-I01",
+      "checkpoint": "ehr",
+      "concept": "pronouns",
+      "value": {
+        "status": "specified",
+        "value": "they/them"
+      },
+      "evidence": {
+        "source_sha256": "973d21033137896dbf29e04c7dd65bd9b537f03b86feb0ec621573a89af097a8",
+        "source_pointer": "$.concepts.pronouns"
+      },
+      "mapping": {
+        "source_concept": "pronouns",
+        "target_concept": "pronouns",
+        "mapping_version": "0.1.0"
+      }
+    }
+  ]
+}

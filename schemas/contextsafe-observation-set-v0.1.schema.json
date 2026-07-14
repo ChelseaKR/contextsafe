@@ -1,0 +1,265 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://contextsafe.invalid/schemas/contextsafe-observation-set-v0.1.schema.json",
+  "title": "ContextSafe canonical observation set 0.1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "observations"],
+  "properties": {
+    "schema_version": { "const": "contextsafe.observation-set/0.1.0" },
+    "observations": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/observation" }
+    }
+  },
+  "$defs": {
+    "statusAndValue": {
+      "oneOf": [
+        {
+          "type": "object",
+          "required": ["status", "value"],
+          "properties": {
+            "status": { "const": "specified" },
+            "value": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128,
+              "pattern": "^[^\\uD800-\\uDFFF]*$"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "required": ["status", "value"],
+          "properties": {
+            "status": { "enum": ["declined", "unknown", "absent"] },
+            "value": { "type": "null" }
+          }
+        }
+      ]
+    },
+    "genderIdentity": {
+      "allOf": [
+        { "$ref": "#/$defs/statusAndValue" },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["status", "value", "code_system"],
+          "properties": {
+            "status": { "enum": ["specified", "declined", "unknown", "absent"] },
+            "value": { "type": ["string", "null"] },
+            "code_system": { "type": "string", "pattern": "^[A-Za-z0-9:/_.-]{1,96}$" }
+          }
+        }
+      ]
+    },
+    "recordedSexOrGender": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["value", "context", "source"],
+      "properties": {
+        "value": { "enum": ["F", "M", "X", "unknown"] },
+        "context": { "type": "string", "pattern": "^[A-Za-z0-9:/_.-]{1,96}$" },
+        "source": { "type": "string", "pattern": "^[A-Za-z0-9:/_.-]{1,96}$" }
+      }
+    },
+    "spcu": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["value", "context_id", "supporting_observation_ids"],
+      "properties": {
+        "value": { "type": "string", "pattern": "^[A-Za-z0-9:/_.-]{1,96}$" },
+        "context_id": {
+          "type": "string",
+          "maxLength": 96,
+          "pattern": "^ORDER-CSYN-[A-Za-z0-9:/_.-]+$"
+        },
+        "supporting_observation_ids": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "string",
+            "maxLength": 96,
+            "pattern": "^SUP-CSYN-[A-Za-z0-9:/_.-]+$"
+          }
+        }
+      }
+    },
+    "nameToUse": {
+      "allOf": [
+        { "$ref": "#/$defs/statusAndValue" },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["status", "value", "use"],
+          "properties": {
+            "status": { "enum": ["specified", "declined", "unknown", "absent"] },
+            "value": { "type": ["string", "null"], "pattern": "^CSYN-" },
+            "use": { "const": "usual" }
+          }
+        }
+      ]
+    },
+    "pronouns": {
+      "allOf": [
+        { "$ref": "#/$defs/statusAndValue" },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["status", "value"],
+          "properties": {
+            "status": { "enum": ["specified", "declined", "unknown", "absent"] },
+            "value": { "type": ["string", "null"] }
+          }
+        }
+      ]
+    },
+    "mapping": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["source_concept", "target_concept", "mapping_version"],
+      "properties": {
+        "source_concept": {
+          "enum": [
+            "gender_identity",
+            "recorded_sex_or_gender",
+            "sex_parameter_for_clinical_use",
+            "name_to_use",
+            "pronouns"
+          ]
+        },
+        "target_concept": {
+          "enum": [
+            "gender_identity",
+            "recorded_sex_or_gender",
+            "sex_parameter_for_clinical_use",
+            "name_to_use",
+            "pronouns"
+          ]
+        },
+        "mapping_version": {
+          "type": "string",
+          "maxLength": 128,
+          "pattern": "^(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)$"
+        }
+      }
+    },
+    "observation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "observation_id",
+        "case_id",
+        "checkpoint",
+        "concept",
+        "value",
+        "evidence",
+        "mapping"
+      ],
+      "properties": {
+        "schema_version": { "const": "contextsafe.observation/0.1.0" },
+        "observation_id": { "type": "string", "pattern": "^OBS-[A-Z0-9-]{3,48}$" },
+        "case_id": { "type": "string", "pattern": "^CTP-[A-Z0-9]{3,16}$" },
+        "checkpoint": { "enum": ["registration", "ehr", "interface", "lis_return"] },
+        "concept": {
+          "enum": [
+            "gender_identity",
+            "recorded_sex_or_gender",
+            "sex_parameter_for_clinical_use",
+            "name_to_use",
+            "pronouns"
+          ]
+        },
+        "value": { "type": "object" },
+        "evidence": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["source_sha256", "source_pointer"],
+          "properties": {
+            "source_sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+            "source_pointer": {
+              "type": "string",
+              "pattern": "^\\$[.\\[\\]A-Za-z0-9_-]{1,127}$"
+            }
+          }
+        },
+        "mapping": { "$ref": "#/$defs/mapping" }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "concept": { "const": "gender_identity" } } },
+          "then": {
+            "properties": {
+              "value": { "$ref": "#/$defs/genderIdentity" },
+              "mapping": {
+                "properties": {
+                  "source_concept": { "const": "gender_identity" },
+                  "target_concept": { "const": "gender_identity" }
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": { "properties": { "concept": { "const": "recorded_sex_or_gender" } } },
+          "then": {
+            "properties": {
+              "value": { "$ref": "#/$defs/recordedSexOrGender" },
+              "mapping": {
+                "properties": {
+                  "source_concept": { "const": "recorded_sex_or_gender" },
+                  "target_concept": { "const": "recorded_sex_or_gender" }
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": { "concept": { "const": "sex_parameter_for_clinical_use" } }
+          },
+          "then": {
+            "properties": {
+              "value": { "$ref": "#/$defs/spcu" },
+              "mapping": {
+                "properties": {
+                  "source_concept": { "const": "sex_parameter_for_clinical_use" },
+                  "target_concept": { "const": "sex_parameter_for_clinical_use" }
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": { "properties": { "concept": { "const": "name_to_use" } } },
+          "then": {
+            "properties": {
+              "value": { "$ref": "#/$defs/nameToUse" },
+              "mapping": {
+                "properties": {
+                  "source_concept": { "const": "name_to_use" },
+                  "target_concept": { "const": "name_to_use" }
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": { "properties": { "concept": { "const": "pronouns" } } },
+          "then": {
+            "properties": {
+              "value": { "$ref": "#/$defs/pronouns" },
+              "mapping": {
+                "properties": {
+                  "source_concept": { "const": "pronouns" },
+                  "target_concept": { "const": "pronouns" }
+                }
+              }
+            }
+          }
+        }
+      ]
+    }
+  }
+}

@@ -9,6 +9,7 @@ __pycache__/
 .mypy_cache/
 .ruff_cache/
 .coverage
+.cache/
 coverage.xml
 htmlcov/
 dist/
@@ -18,4 +19,3 @@ build/
 .vscode/
 artifacts/customer/
 receipts/private/
-
