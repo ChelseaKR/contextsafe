@@ -531,4 +531,20 @@ def parse_bundle(
         raise _error(
             "case_mismatch", "$.rules", "every rule must reference the case manifest"
         )
+    case_values: dict[ConceptKind, tuple[SemanticValue, ...]] = {
+        ConceptKind.GENDER_IDENTITY: (case.gender_identity,),
+        ConceptKind.RECORDED_SEX_OR_GENDER: case.recorded_sex_or_gender,
+        ConceptKind.SEX_PARAMETER_FOR_CLINICAL_USE: (
+            case.sex_parameter_for_clinical_use
+        ),
+        ConceptKind.NAME_TO_USE: (case.name_to_use,),
+        ConceptKind.PRONOUNS: (case.pronouns,),
+    }
+    for index, rule in enumerate(rule_set.rules):
+        if rule.expected not in case_values[rule.concept]:
+            raise _error(
+                "rule_expectation_mismatch",
+                f"$.rules[{index}].expected",
+                "rule expectation must be declared by the case manifest",
+            )
     return EvaluationBundle(case=case, observations=observations, rule_set=rule_set)

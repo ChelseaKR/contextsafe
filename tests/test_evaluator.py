@@ -114,6 +114,7 @@ def test_receipt_contains_hashes_but_no_semantic_or_source_values(
         assert prohibited not in rendered
     assert receipt["summary"]["pass"] == 5
     assert receipt["scope"]["clinical_oracle_approved"] is False
+    assert any("cannot prove" in item for item in receipt["limitations"])
 
 
 def test_hashes_change_with_inputs_rules_and_results(

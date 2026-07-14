@@ -14,6 +14,7 @@ from contextsafe.receipt import build_receipt, input_payload, render_receipt
 from contextsafe.validation import parse_bundle
 
 _MAX_INPUT_BYTES = 1_048_576
+_MAX_JSON_DEPTH = 64
 
 
 class _DuplicateKeyError(ValueError):
@@ -27,6 +28,20 @@ def _no_duplicate_keys(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
             raise _DuplicateKeyError
         result[key] = value
     return result
+
+
+def _reject_excessive_depth(value: object) -> None:
+    stack: list[tuple[object, int]] = [(value, 0)]
+    while stack:
+        item, depth = stack.pop()
+        if depth > _MAX_JSON_DEPTH:
+            raise ContextSafeError(
+                "input_too_deep", "$", "input exceeds the JSON nesting limit"
+            )
+        if isinstance(item, dict):
+            stack.extend((child, depth + 1) for child in item.values())
+        elif isinstance(item, list):
+            stack.extend((child, depth + 1) for child in item)
 
 
 def _load_json(path: Path) -> JsonValue:
@@ -49,8 +64,13 @@ def _load_json(path: Path) -> JsonValue:
         raise ContextSafeError(
             "duplicate_json_key", "$", "duplicate object key is forbidden"
         ) from exc
+    except RecursionError as exc:
+        raise ContextSafeError(
+            "input_too_deep", "$", "input exceeds the JSON nesting limit"
+        ) from exc
     except json.JSONDecodeError as exc:
         raise ContextSafeError("invalid_json", "$", "input is not valid JSON") from exc
+    _reject_excessive_depth(parsed)
     return as_json_value(parsed)
 
 

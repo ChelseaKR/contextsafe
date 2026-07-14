@@ -47,6 +47,27 @@ def test_published_schemas_accept_reference_fixtures(
         Draft202012Validator(schema).validate(instance)
 
 
+def test_published_schemas_enforce_runtime_spcu_token_bounds(
+    case_json: dict[str, Any], observations_json: dict[str, Any]
+) -> None:
+    overlong_context = "ORDER-CSYN-" + "A" * 100
+    case_json["concepts"]["sex_parameter_for_clinical_use"][0]["context_id"] = (
+        overlong_context
+    )
+    observations_json["observations"][2]["value"]["context_id"] = overlong_context
+
+    for schema_name, instance in (
+        ("contextsafe-case-v0.1.schema.json", case_json),
+        ("contextsafe-observation-set-v0.1.schema.json", observations_json),
+    ):
+        schema = json.loads(
+            (ROOT / "schemas" / schema_name).read_text(encoding="utf-8")
+        )
+        assert not Draft202012Validator(schema).is_valid(instance)
+    _assert_code("invalid_format", parse_case, case_json)
+    _assert_code("invalid_format", parse_observations, observations_json)
+
+
 def test_models_keep_all_five_concepts_as_distinct_types(
     case_json: dict[str, Any],
     observations_json: dict[str, Any],
@@ -235,4 +256,15 @@ def test_bundle_rejects_cross_document_case_mismatch(
     observations_json["observations"][0]["case_id"] = "CTP-I01"
     rules_json["rules"][0]["case_id"] = "CTP-X99"
     with pytest.raises(ContextSafeError, match="case_mismatch"):
+        parse_bundle(case_json, observations_json, rules_json)
+
+
+def test_bundle_rejects_rule_expectation_detached_from_case_manifest(
+    case_json: dict[str, Any],
+    observations_json: dict[str, Any],
+    rules_json: dict[str, Any],
+) -> None:
+    rules_json["rules"][-1]["expected"]["value"] = "she/her"
+
+    with pytest.raises(ContextSafeError, match="rule_expectation_mismatch"):
         parse_bundle(case_json, observations_json, rules_json)

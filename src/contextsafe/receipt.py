@@ -10,7 +10,8 @@ from contextsafe.models import RECEIPT_SCHEMA_VERSION, EvaluationBundle, Outcome
 _LIMITATIONS = [
     "Synthetic reference fixture only; not an approved clinical oracle.",
     "A passing result does not establish safety, compliance, or certification.",
-    "This iteration does not ingest FHIR, sign artifacts, or process patient data.",
+    "Patient data is prohibited; bounded checks cannot prove an input is synthetic.",
+    "This iteration does not ingest FHIR or sign artifacts.",
 ]
 
 
