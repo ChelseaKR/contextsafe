@@ -9,9 +9,11 @@ from contextsafe.canonical import JsonValue, as_json_value, canonical_json, sha2
 from contextsafe.contract_validation import date_value
 from contextsafe.errors import ContextSafeError
 from contextsafe.evaluator import evaluate
+from contextsafe.evidence import build_evidence_scope
 from contextsafe.jsonio import load_json
 from contextsafe.pack import compile_pack
-from contextsafe.plan import validate_plan
+from contextsafe.plan import parse_plan, validate_plan
+from contextsafe.preflight import preflight_source
 from contextsafe.receipt import build_receipt, input_payload, render_receipt
 from contextsafe.validation import parse_bundle
 
@@ -47,6 +49,19 @@ def _parser() -> argparse.ArgumentParser:
     plan_validate.add_argument("--pack", required=True, type=Path)
     plan_validate.add_argument("--as-of", required=True)
     plan_validate.add_argument("--output", type=Path)
+    evidence_parser = subparsers.add_parser(
+        "evidence", help="Run a read-only synthetic-evidence boundary check."
+    )
+    evidence_subparsers = evidence_parser.add_subparsers(
+        dest="evidence_command", required=True
+    )
+    evidence_preflight = evidence_subparsers.add_parser("preflight")
+    evidence_preflight.add_argument("--source", required=True, type=Path)
+    evidence_preflight.add_argument("--plan", required=True, type=Path)
+    evidence_preflight.add_argument("--case-token", required=True)
+    evidence_preflight.add_argument("--checkpoint", required=True)
+    evidence_preflight.add_argument("--source-type", required=True)
+    evidence_preflight.add_argument("--media-type", required=True)
     return parser
 
 
@@ -90,6 +105,21 @@ def _run(args: argparse.Namespace) -> str:
             as_of=as_of,
         )
         return f"{canonical_json(plan_compilation.to_dict())}\n"
+    if args.command == "evidence":
+        if args.evidence_command != "preflight":
+            raise ContextSafeError(
+                "unsupported_command", "$", "evidence command is unsupported"
+            )
+        plan = parse_plan(load_json(args.plan))
+        scope = build_evidence_scope(
+            plan,
+            case_token=args.case_token,
+            checkpoint=args.checkpoint,
+            source_type=args.source_type,
+            media_type=args.media_type,
+        )
+        result = preflight_source(args.source, scope)
+        return f"{canonical_json(result.to_dict())}\n"
     case_value, observation_value, rule_value = _validated_inputs(args)
     bundle = parse_bundle(case_value, observation_value, rule_value)
     if args.command == "validate":

@@ -1,5 +1,7 @@
 .PHONY: audit format format-fix hygiene lint sync test typecheck verify
 
+SAFETY_MODULES := src/contextsafe/models.py,src/contextsafe/validation.py,src/contextsafe/evaluator.py,src/contextsafe/receipt.py,src/contextsafe/contract_validation.py,src/contextsafe/jsonio.py,src/contextsafe/pack.py,src/contextsafe/plan.py,src/contextsafe/evidence.py,src/contextsafe/preflight.py,src/contextsafe/evidence_store.py
+
 verify: sync lint format typecheck test audit hygiene
 
 sync:
@@ -20,7 +22,7 @@ typecheck:
 
 test:
 	uv run pytest --cov=contextsafe --cov-branch --cov-report=term-missing --cov-fail-under=90
-	uv run coverage report --include='src/contextsafe/models.py,src/contextsafe/validation.py,src/contextsafe/evaluator.py,src/contextsafe/receipt.py,src/contextsafe/contract_validation.py,src/contextsafe/jsonio.py,src/contextsafe/pack.py,src/contextsafe/plan.py' --fail-under=95
+	uv run coverage report --include='$(SAFETY_MODULES)' --fail-under=95
 
 audit:
 	uv run pip-audit --skip-editable --cache-dir .cache/pip-audit

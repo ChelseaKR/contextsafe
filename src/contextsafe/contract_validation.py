@@ -2,12 +2,15 @@
 
 import ipaddress
 import re
-from datetime import date
+from datetime import UTC, date, datetime
 from typing import cast
 
 from contextsafe.errors import ContextSafeError
 
 DATE_PATTERN = re.compile(r"^[0-9]{4}-[0-9]{2}-[0-9]{2}$")
+TIMESTAMP_PATTERN = re.compile(
+    r"^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$"
+)
 HOST_PATTERN = re.compile(
     r"^(?=.{1,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)(?:\.(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?))*$"
 )
@@ -114,6 +117,23 @@ def nullable_date_value(value: object, path: str) -> date | None:
     if value is None:
         return None
     return date_value(value, path)
+
+
+def timestamp_value(value: object, path: str) -> datetime:
+    """Require a canonical UTC timestamp with whole-second precision."""
+
+    raw = bounded_string(value, path, pattern=TIMESTAMP_PATTERN)
+    try:
+        parsed = datetime.strptime(raw, "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=UTC)
+    except ValueError as exc:
+        raise contract_error(
+            "invalid_timestamp", path, "timestamp is not valid"
+        ) from exc
+    if parsed.strftime("%Y-%m-%dT%H:%M:%SZ") != raw:
+        raise contract_error(
+            "invalid_timestamp", path, "timestamp is not canonical UTC"
+        )
+    return parsed
 
 
 def enum_string(value: object, path: str, supported: frozenset[str]) -> str:

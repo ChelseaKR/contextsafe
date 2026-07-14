@@ -97,6 +97,25 @@ F-001–F-036 are reviewed by an independent fault author before the evaluation 
 
 Fixtures are authored from synthetic primitives. Never copy and redact a real patient record.
 
+### Evidence-boundary safety matrix
+
+The iteration-3 gate covers reference-shape schema/runtime agreement and separately
+tests the documented runtime-only semantic constraints; unknown and prohibited fields;
+plan, case, checkpoint, source/media-type, and namespace mismatch; direct-identifier
+patterns; PHI canaries; prose, boundary whitespace, Unicode control/format characters,
+invalid UTF-8/JSON, duplicate keys, excessive depth/size, final symlinks, directories,
+descriptor mutation, and first/second-pass hash mismatch. A rejection test asserts that
+no workspace exists and that structured errors do not echo content or a source path.
+
+Store tests cover private modes, deterministic IDs, content deduplication, idempotency,
+concurrent writers, append-only update/delete triggers, ordinary rollback, staged-copy
+failure, orphan/staging recovery, missing/corrupt objects, read-only access, exact
+schema/header/version enforcement, non-repair of missing tables/metadata/triggers,
+canonical parity for every index column, record-count bounds, and unsafe filesystem
+entries. The safety-module coverage manifest in the Makefile includes `evidence.py`,
+`preflight.py`, and `evidence_store.py`; the combined safety gate remains at least 95%
+branch coverage.
+
 ## 6. Clinical oracle evaluation
 
 For each clinical assertion:

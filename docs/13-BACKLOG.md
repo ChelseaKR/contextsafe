@@ -69,6 +69,15 @@ The week-21 `E` reserve is six days. No additional pre-pilot engineering scope m
 | B-020 | P0-14 | Implement CLI shell, stable JSON errors, exit codes, quiet/no-color modes | F/A11Y | B-014/B-016 | 4d |
 | B-021 | P0-14, R-10 | Implement normalized deterministic payload and timestamp/signature envelope separation | F | B-019/B-020 | 4d |
 
+Implementation note (2026-07-13): internal risk-reduction code now exercises B-017
+for one strict canonical JSON envelope, B-018 through a non-executable local store, and
+part of B-019 through published raw-evidence and ambiguity-preserving observation
+contracts. These backlog items are not closed: authorized import still depends on
+B-035; normalization and mapping/version binding remain B-019/B-021/B-026;
+FHIR/HL7/LIS and canonical adapter acceptance remain B-022–B-026; governed cleanup is
+B-046; and independent security, privacy, interoperability, clinical/community, and
+pilot gates remain outstanding.
+
 ## Phase 3 — adapters and evaluator
 
 | ID | Trace | Deliverable and acceptance | Owner | Dependency | Estimate |

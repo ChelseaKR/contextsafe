@@ -113,10 +113,14 @@ No evidence may be imported against an invalid, unsigned, or partially signed pl
 
 1. The customer passes a read-only, seekable file descriptor outside the ContextSafe workspace. The runner opens a path at most once and retains that descriptor; it never reopens by pathname. Before reading, it records descriptor metadata needed to detect mutation. A non-seekable source is rejected before content read in V1 unless the caller supplies an immutable in-memory byte buffer within the configured maximum.
 2. First pass over the same open descriptor validates format/parser limits, synthetic namespace, field allowlist, free-text prohibition and PHI canaries while computing hash H1 in memory. For FHIR, any narrative, contained resource, unrelated field/resource, or unapproved free text rejects the entire source; the adapter never strips prohibited content and accepts the remainder. The runner creates no inbox, quarantine copy, temporary file, index row or content-bearing log during this pass.
-3. On any failure, close the descriptor and persist only the non-sensitive rejection category. Do not retain a hash, prefix, filename, path, byte count or rejected content.
-4. On success, seek the same still-open descriptor to the start, verify descriptor metadata is unchanged, stream it to a private content-addressed staging object while computing H2, and commit the object/evidence row atomically only if H2 equals H1 and end metadata remains unchanged. Any mismatch destroys the staging object and records only a non-sensitive mutation category. No pathname reopen or accepted record can race the validated bytes.
+3. On any first-pass boundary failure, attempt to close the descriptor and persist at most the non-sensitive rejection category. Do not create a ContextSafe workspace or retain a hash, prefix, filename, path, byte count, or rejected content.
+4. On first-pass success, seek the same still-open descriptor to the start, verify descriptor metadata is unchanged, and stream it to a private content-addressed staging object while computing H2. Promote/register it only if H2 equals H1 and end metadata remains unchanged. A mismatch fails before promotion or indexing and triggers staging cleanup. If the filesystem denies that cleanup, the structured mutation error remains primary and the private `.part` file may remain for the next permitted exclusive recovery or explicit operator remediation. No pathname reopen or accepted record can race the validated bytes.
+
+The filesystem object and SQLite row cannot be committed by one portable atomic primitive. A new index is therefore initialized and verified in an owner-only temporary database, then published by no-overwrite hard link; an existing index is never created or repaired on open. V1 uses a recoverable protocol under `BEGIN IMMEDIATE`: first validate SQLite integrity, the exact schema/header, every denormalized row column, and every referenced object; only then remove abandoned staging/unindexed objects, create and `fsync` an owner-only staging file, hard-link it without overwrite to its SHA-256 address, append and revalidate the deterministic index row, and commit SQLite with full synchronous durability. Read APIs use SQLite read-only/query-only mode. An ordinary failure before the commit attempt rolls back the row and removes a newly promoted object. A process/power failure can leave an unindexed content object, never a passing/indexed result; the next exclusive transaction removes that orphan before proceeding. A commit whose outcome is uncertain leaves the object in place so recovery can retain it if the row committed or remove it if it did not. This is recoverable consistency, not a cross-resource atomicity claim.
 
 Heuristic detection supplements—not replaces—the namespace and allowlist. A detector miss is possible, so operator training and staging controls remain mandatory.
+
+Implementation slice as of 2026-07-13: only the strict code-only `canonical_json` boundary envelope is enabled, at one MiB per file. The first pass reads bounded chunks from the retained descriptor into an at-most-one-MiB immutable memory buffer, then performs the strict JSON/profile checks; this is not yet a general incremental FHIR/HL7/LIS parser. `contextsafe evidence preflight` is read-only and may inspect an unsigned plan-shaped contract because it cannot copy or index evidence. The content store exists only as an internal synthetic-test primitive; all records are permanently non-executable. FHIR, HL7, LIS, signatures, authorized import, cleanup, and incident-approved use remain gated work.
 
 ### 6.3 Normalize
 
@@ -167,6 +171,7 @@ Customer and engagement-specific reviewer public keys are enrolled in the immuta
 | contextsafe plan validate | engagement and verified pack | canonical unsigned plan/hash; nonzero for production/namespace/scope/enrollment failure |
 | contextsafe plan sign | canonical validated plan and authorized customer-sponsor or ContextSafe-delivery-owner key | detached `plan` role/purpose signature; refuses noncanonical or invalid plan |
 | contextsafe plan verify | canonical plan, detached signatures, trust state | verification report; nonzero unless both required plan roles and the referenced verified pack pass |
+| contextsafe evidence preflight | unsigned plan-shaped contract, one canonical JSON source, case/checkpoint/type | read-only boundary result; never copies, indexes, logs, or authorizes execution |
 | contextsafe evidence import | plan, checkpoint, caller-owned files | evidence IDs; fail before any ContextSafe copy/index/log on boundary violation |
 | contextsafe normalize | evidence IDs, mapping | canonical evidence; never overwrites |
 | contextsafe mapping sign | canonical mapping profile and authorized signer key | detached role/purpose signature |
@@ -189,6 +194,7 @@ Publish versioned schemas:
 - contextsafe-case-v1.schema.json
 - contextsafe-assertion-v1.schema.json
 - contextsafe-plan-v1.schema.json
+- contextsafe-evidence-source-v1.schema.json
 - contextsafe-evidence-v1.schema.json
 - contextsafe-observation-v1.schema.json
 - contextsafe-review-v1.schema.json
