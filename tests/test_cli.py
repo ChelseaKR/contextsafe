@@ -72,6 +72,34 @@ def test_cli_rejects_invalid_json_duplicate_keys_and_utf8(
     assert json.loads(capsys.readouterr().err)["error"]["code"] == "invalid_utf8"
 
 
+def test_cli_rejects_nonstandard_and_oversized_numbers(
+    tmp_path: Path, capsys: object
+) -> None:
+    args = _args("validate")
+    invalid = tmp_path / "invalid-number.json"
+    args[2] = str(invalid)
+    for numeric_literal in ("NaN", "1" * 5_000):
+        invalid.write_text(f'{{"value":{numeric_literal}}}', encoding="utf-8")
+        assert main(args) == 2
+        error = json.loads(capsys.readouterr().err)["error"]
+        assert error["code"] == "invalid_json"
+
+
+def test_cli_rejects_non_scalar_unicode_without_crashing(
+    tmp_path: Path, capsys: object
+) -> None:
+    case = json.loads((REFERENCE / "case.json").read_text(encoding="utf-8"))
+    case["concepts"]["pronouns"]["value"] = json.loads('"\\ud800"')
+    path = tmp_path / "case.json"
+    path.write_text(json.dumps(case), encoding="utf-8")
+    args = _args("validate")
+    args[2] = str(path)
+
+    assert main(args) == 2
+    error = json.loads(capsys.readouterr().err)["error"]
+    assert error["code"] == "invalid_unicode"
+
+
 def test_cli_rejects_unreadable_and_oversized_inputs(
     tmp_path: Path, capsys: object
 ) -> None:

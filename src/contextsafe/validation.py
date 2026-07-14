@@ -80,9 +80,9 @@ def _array(value: object, path: str) -> list[object]:
 
 
 def _exact_keys(data: dict[str, object], expected: frozenset[str], path: str) -> None:
-    unexpected = sorted(data.keys() - expected)
+    unexpected = data.keys() - expected
     if unexpected:
-        raise _error("unknown_field", f"{path}.{unexpected[0]}", "field is not allowed")
+        raise _error("unknown_field", path, "field is not allowed")
     missing = sorted(expected - data.keys())
     if missing:
         raise _error(
@@ -93,6 +93,10 @@ def _exact_keys(data: dict[str, object], expected: frozenset[str], path: str) ->
 def _string(value: object, path: str, *, pattern: re.Pattern[str] | None = None) -> str:
     if not isinstance(value, str) or not value or len(value) > 128:
         raise _error("invalid_string", path, "expected a bounded non-empty string")
+    if any(0xD800 <= ord(character) <= 0xDFFF for character in value):
+        raise _error(
+            "invalid_unicode", path, "string must contain only Unicode scalar values"
+        )
     if pattern is not None and pattern.fullmatch(value) is None:
         raise _error(
             "invalid_format", path, "string does not match the required format"
@@ -121,21 +125,23 @@ def _enum[T: StrEnum](enum_type: type[T], value: object, path: str) -> T:
         raise _error("invalid_enum", path, "value is not supported") from exc
 
 
-def _reject_prohibited_fields(value: object, path: str = "$") -> None:
-    if isinstance(value, dict):
-        for raw_key, item in value.items():
-            key = str(raw_key)
-            normalized = key.lower().replace("-", "_")
-            if normalized in _PROHIBITED_KEYS:
-                raise _error(
-                    "prohibited_field",
-                    f"{path}.{key}",
-                    "prohibited free-text or identifying field",
-                )
-            _reject_prohibited_fields(item, f"{path}.{key}")
-    elif isinstance(value, list):
-        for index, item in enumerate(value):
-            _reject_prohibited_fields(item, f"{path}[{index}]")
+def _reject_prohibited_fields(value: object) -> None:
+    pending = [value]
+    while pending:
+        item = pending.pop()
+        if isinstance(item, dict):
+            for raw_key, child in item.items():
+                if isinstance(raw_key, str):
+                    normalized = raw_key.lower().replace("-", "_")
+                    if normalized in _PROHIBITED_KEYS:
+                        raise _error(
+                            "prohibited_field",
+                            "$",
+                            "prohibited free-text or identifying field",
+                        )
+                pending.append(child)
+        elif isinstance(item, list):
+            pending.extend(item)
 
 
 def _status_value(

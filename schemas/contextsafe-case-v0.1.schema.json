@@ -69,7 +69,12 @@
           "required": ["status", "value"],
           "properties": {
             "status": { "const": "specified" },
-            "value": { "type": "string", "minLength": 1, "maxLength": 128 }
+            "value": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128,
+              "pattern": "^[^\\uD800-\\uDFFF]*$"
+            }
           }
         },
         {

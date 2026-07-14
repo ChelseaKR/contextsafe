@@ -30,6 +30,10 @@ def _no_duplicate_keys(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
     return result
 
 
+def _reject_nonstandard_number(_value: str) -> None:
+    raise ValueError
+
+
 def _reject_excessive_depth(value: object) -> None:
     stack: list[tuple[object, int]] = [(value, 0)]
     while stack:
@@ -57,7 +61,11 @@ def _load_json(path: Path) -> JsonValue:
             "input_too_large", "$", "input exceeds the one MiB limit"
         )
     try:
-        parsed = json.loads(raw.decode("utf-8"), object_pairs_hook=_no_duplicate_keys)
+        parsed = json.loads(
+            raw.decode("utf-8"),
+            object_pairs_hook=_no_duplicate_keys,
+            parse_constant=_reject_nonstandard_number,
+        )
     except UnicodeDecodeError as exc:
         raise ContextSafeError("invalid_utf8", "$", "input must be UTF-8") from exc
     except _DuplicateKeyError as exc:
@@ -69,6 +77,8 @@ def _load_json(path: Path) -> JsonValue:
             "input_too_deep", "$", "input exceeds the JSON nesting limit"
         ) from exc
     except json.JSONDecodeError as exc:
+        raise ContextSafeError("invalid_json", "$", "input is not valid JSON") from exc
+    except ValueError as exc:
         raise ContextSafeError("invalid_json", "$", "input is not valid JSON") from exc
     _reject_excessive_depth(parsed)
     return as_json_value(parsed)

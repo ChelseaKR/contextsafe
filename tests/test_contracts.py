@@ -68,6 +68,45 @@ def test_published_schemas_enforce_runtime_spcu_token_bounds(
     _assert_code("invalid_format", parse_observations, observations_json)
 
 
+def test_published_schemas_and_runtime_reject_non_scalar_unicode(
+    case_json: dict[str, Any], observations_json: dict[str, Any]
+) -> None:
+    non_scalar = json.loads('"\\ud800"')
+    case_json["concepts"]["pronouns"]["value"] = non_scalar
+    observations_json["observations"][4]["value"]["value"] = non_scalar
+
+    for schema_name, instance in (
+        ("contextsafe-case-v0.1.schema.json", case_json),
+        ("contextsafe-observation-set-v0.1.schema.json", observations_json),
+    ):
+        schema = json.loads(
+            (ROOT / "schemas" / schema_name).read_text(encoding="utf-8")
+        )
+        assert not Draft202012Validator(schema).is_valid(instance)
+    _assert_code("invalid_unicode", parse_case, case_json)
+    _assert_code("invalid_unicode", parse_observations, observations_json)
+
+
+def test_errors_never_echo_unknown_or_ancestor_keys(
+    case_json: dict[str, Any],
+) -> None:
+    private_key = "person@example.invalid"
+    case_json[private_key] = True
+    with pytest.raises(ContextSafeError) as caught:
+        parse_case(case_json)
+    assert caught.value.code == "unknown_field"
+    assert caught.value.path == "$"
+    assert private_key not in str(caught.value)
+
+    case_json.pop(private_key)
+    case_json[private_key] = {"email": "private-value"}
+    with pytest.raises(ContextSafeError) as caught:
+        parse_case(case_json)
+    assert caught.value.code == "prohibited_field"
+    assert caught.value.path == "$"
+    assert private_key not in str(caught.value)
+
+
 def test_models_keep_all_five_concepts_as_distinct_types(
     case_json: dict[str, Any],
     observations_json: dict[str, Any],
