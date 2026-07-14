@@ -1,0 +1,53 @@
+{
+  "schema_version": "contextsafe.pack/1.0.0",
+  "pack_id": "PACK-SYNTHETIC-REFERENCE-DRAFT",
+  "version": "0.1.0",
+  "compatibility": {
+    "runner_contract": "contextsafe.runner/0.1",
+    "case_schema": "contextsafe.case/0.1.0",
+    "rule_set_schema": "contextsafe.rule-set/0.1.0"
+  },
+  "lifecycle": {
+    "status": "draft",
+    "valid_from": "2026-07-13",
+    "review_by": "2026-12-31",
+    "withdrawn_on": null
+  },
+  "components": {
+    "cases": [
+      {
+        "component_id": "CTP-I01",
+        "path": "case.json",
+        "sha256": "b3fd75fbda98f2f4d983757f4f1470915bf353d731283d692ea0fcda6d47b867",
+        "mandatory": true
+      }
+    ],
+    "rule_sets": [
+      {
+        "component_id": "RULESET-SYNTHETIC-REFERENCE",
+        "path": "rules.json",
+        "sha256": "aa81475440694f69bf6a819e9119678bcae6e8ff25adf9b8f4f69a7efc8d5b12",
+        "mandatory": true
+      }
+    ]
+  },
+  "sources": [
+    {
+      "source_id": "SRC-SYNTHETIC-REFERENCE",
+      "version": "0.1.0",
+      "uri": "urn:contextsafe:source:synthetic-reference",
+      "sha256": "aa81475440694f69bf6a819e9119678bcae6e8ff25adf9b8f4f69a7efc8d5b12",
+      "status": "draft",
+      "retrieved_on": "2026-07-13",
+      "reviewed_on": null,
+      "review_by": null,
+      "withdrawn_on": null,
+      "limitations": [
+        "synthetic-reference-only",
+        "not-clinically-reviewed",
+        "not-community-approved"
+      ]
+    }
+  ],
+  "approvals": []
+}

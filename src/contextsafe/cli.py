@@ -1,87 +1,19 @@
 """Offline CLI for validating and evaluating synthetic fixture files."""
 
 import argparse
-import json
 import sys
 from collections.abc import Sequence
 from pathlib import Path
-from typing import Any
 
 from contextsafe.canonical import JsonValue, as_json_value, canonical_json, sha256_json
+from contextsafe.contract_validation import date_value
 from contextsafe.errors import ContextSafeError
 from contextsafe.evaluator import evaluate
+from contextsafe.jsonio import load_json
+from contextsafe.pack import compile_pack
+from contextsafe.plan import validate_plan
 from contextsafe.receipt import build_receipt, input_payload, render_receipt
 from contextsafe.validation import parse_bundle
-
-_MAX_INPUT_BYTES = 1_048_576
-_MAX_JSON_DEPTH = 64
-
-
-class _DuplicateKeyError(ValueError):
-    """Signal that JSON contained a duplicate object member."""
-
-
-def _no_duplicate_keys(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
-    result: dict[str, Any] = {}
-    for key, value in pairs:
-        if key in result:
-            raise _DuplicateKeyError
-        result[key] = value
-    return result
-
-
-def _reject_nonstandard_number(_value: str) -> None:
-    raise ValueError
-
-
-def _reject_excessive_depth(value: object) -> None:
-    stack: list[tuple[object, int]] = [(value, 0)]
-    while stack:
-        item, depth = stack.pop()
-        if depth > _MAX_JSON_DEPTH:
-            raise ContextSafeError(
-                "input_too_deep", "$", "input exceeds the JSON nesting limit"
-            )
-        if isinstance(item, dict):
-            stack.extend((child, depth + 1) for child in item.values())
-        elif isinstance(item, list):
-            stack.extend((child, depth + 1) for child in item)
-
-
-def _load_json(path: Path) -> JsonValue:
-    try:
-        with path.open("rb") as handle:
-            raw = handle.read(_MAX_INPUT_BYTES + 1)
-    except OSError as exc:
-        raise ContextSafeError(
-            "input_io_error", "$", "input could not be read"
-        ) from exc
-    if len(raw) > _MAX_INPUT_BYTES:
-        raise ContextSafeError(
-            "input_too_large", "$", "input exceeds the one MiB limit"
-        )
-    try:
-        parsed = json.loads(
-            raw.decode("utf-8"),
-            object_pairs_hook=_no_duplicate_keys,
-            parse_constant=_reject_nonstandard_number,
-        )
-    except UnicodeDecodeError as exc:
-        raise ContextSafeError("invalid_utf8", "$", "input must be UTF-8") from exc
-    except _DuplicateKeyError as exc:
-        raise ContextSafeError(
-            "duplicate_json_key", "$", "duplicate object key is forbidden"
-        ) from exc
-    except RecursionError as exc:
-        raise ContextSafeError(
-            "input_too_deep", "$", "input exceeds the JSON nesting limit"
-        ) from exc
-    except json.JSONDecodeError as exc:
-        raise ContextSafeError("invalid_json", "$", "input is not valid JSON") from exc
-    except ValueError as exc:
-        raise ContextSafeError("invalid_json", "$", "input is not valid JSON") from exc
-    _reject_excessive_depth(parsed)
-    return as_json_value(parsed)
 
 
 def _parser() -> argparse.ArgumentParser:
@@ -97,6 +29,24 @@ def _parser() -> argparse.ArgumentParser:
         subparser.add_argument("--rules", required=True, type=Path)
         if command == "evaluate":
             subparser.add_argument("--output", type=Path)
+    pack_parser = subparsers.add_parser(
+        "pack", help="Compile and validate an unsigned governed pack."
+    )
+    pack_subparsers = pack_parser.add_subparsers(dest="pack_command", required=True)
+    pack_validate = pack_subparsers.add_parser("validate")
+    pack_validate.add_argument("--pack", required=True, type=Path)
+    pack_validate.add_argument("--as-of", required=True)
+    pack_validate.add_argument("--output", type=Path)
+    plan_parser = subparsers.add_parser(
+        "plan", help="Validate an unsigned non-production execution plan."
+    )
+    plan_subparsers = plan_parser.add_subparsers(dest="plan_command", required=True)
+    plan_validate = plan_subparsers.add_parser("validate")
+    plan_validate.add_argument("--engagement", required=True, type=Path)
+    plan_validate.add_argument("--plan", required=True, type=Path)
+    plan_validate.add_argument("--pack", required=True, type=Path)
+    plan_validate.add_argument("--as-of", required=True)
+    plan_validate.add_argument("--output", type=Path)
     return parser
 
 
@@ -104,13 +54,42 @@ def _validated_inputs(
     args: argparse.Namespace,
 ) -> tuple[JsonValue, JsonValue, JsonValue]:
     return (
-        _load_json(args.case),
-        _load_json(args.observations),
-        _load_json(args.rules),
+        load_json(args.case),
+        load_json(args.observations),
+        load_json(args.rules),
     )
 
 
 def _run(args: argparse.Namespace) -> str:
+    if args.command == "pack":
+        if args.pack_command != "validate":
+            raise ContextSafeError(
+                "unsupported_command", "$", "pack command is unsupported"
+            )
+        pack_path: Path = args.pack
+        compilation = compile_pack(
+            load_json(pack_path),
+            root=pack_path.parent,
+            as_of=date_value(args.as_of, "$.as_of"),
+        )
+        return f"{canonical_json(compilation.to_dict())}\n"
+    if args.command == "plan":
+        if args.plan_command != "validate":
+            raise ContextSafeError(
+                "unsupported_command", "$", "plan command is unsupported"
+            )
+        as_of = date_value(args.as_of, "$.as_of")
+        plan_pack_path: Path = args.pack
+        pack = compile_pack(
+            load_json(plan_pack_path), root=plan_pack_path.parent, as_of=as_of
+        )
+        plan_compilation = validate_plan(
+            load_json(args.engagement),
+            load_json(args.plan),
+            pack=pack,
+            as_of=as_of,
+        )
+        return f"{canonical_json(plan_compilation.to_dict())}\n"
     case_value, observation_value, rule_value = _validated_inputs(args)
     bundle = parse_bundle(case_value, observation_value, rule_value)
     if args.command == "validate":
