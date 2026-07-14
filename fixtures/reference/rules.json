@@ -1,0 +1,69 @@
+{
+  "schema_version": "contextsafe.rule-set/0.1.0",
+  "rules": [
+    {
+      "rule_id": "A-I01",
+      "version": "0.1.0",
+      "case_id": "CTP-I01",
+      "checkpoint": "ehr",
+      "concept": "gender_identity",
+      "expected": {
+        "status": "specified",
+        "value": "fixture-gender-1",
+        "code_system": "urn:contextsafe:fixture"
+      },
+      "required": true
+    },
+    {
+      "rule_id": "A-I02",
+      "version": "0.1.0",
+      "case_id": "CTP-I01",
+      "checkpoint": "registration",
+      "concept": "recorded_sex_or_gender",
+      "expected": {
+        "value": "X",
+        "context": "government-id",
+        "source": "synthetic-fixture"
+      },
+      "required": true
+    },
+    {
+      "rule_id": "A-I03",
+      "version": "0.1.0",
+      "case_id": "CTP-I01",
+      "checkpoint": "interface",
+      "concept": "sex_parameter_for_clinical_use",
+      "expected": {
+        "value": "fixture-context-1",
+        "context_id": "ORDER-CSYN-I01-A",
+        "supporting_observation_ids": ["SUP-CSYN-I01-A"]
+      },
+      "required": true
+    },
+    {
+      "rule_id": "A-I04",
+      "version": "0.1.0",
+      "case_id": "CTP-I01",
+      "checkpoint": "ehr",
+      "concept": "name_to_use",
+      "expected": {
+        "status": "specified",
+        "value": "CSYN-ASTER",
+        "use": "usual"
+      },
+      "required": true
+    },
+    {
+      "rule_id": "A-I05",
+      "version": "0.1.0",
+      "case_id": "CTP-I01",
+      "checkpoint": "ehr",
+      "concept": "pronouns",
+      "expected": {
+        "status": "specified",
+        "value": "they/them"
+      },
+      "required": true
+    }
+  ]
+}

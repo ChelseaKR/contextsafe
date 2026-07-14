@@ -1,0 +1,17 @@
+* @ChelseaKR
+
+# Merge-gate and dependency changes require explicit owner review.
+/.github/ @ChelseaKR
+/Makefile @ChelseaKR
+/pyproject.toml @ChelseaKR
+/uv.lock @ChelseaKR
+/DEFINITION_OF_DONE.md @ChelseaKR
+
+# Contracts, canonicalization, evaluation, and receipts are safety-critical.
+/schemas/ @ChelseaKR
+/fixtures/reference/ @ChelseaKR
+/src/contextsafe/models.py @ChelseaKR
+/src/contextsafe/validation.py @ChelseaKR
+/src/contextsafe/canonical.py @ChelseaKR
+/src/contextsafe/evaluator.py @ChelseaKR
+/src/contextsafe/receipt.py @ChelseaKR
