@@ -1,0 +1,157 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://contextsafe.invalid/schemas/contextsafe-case-v0.1.schema.json",
+  "title": "ContextSafe synthetic case 0.1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "case_id",
+    "synthetic_identifier",
+    "concepts",
+    "prohibited_inferences"
+  ],
+  "properties": {
+    "schema_version": { "const": "contextsafe.case/0.1.0" },
+    "case_id": { "type": "string", "pattern": "^CTP-[A-Z0-9]{3,16}$" },
+    "synthetic_identifier": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["system", "value"],
+      "properties": {
+        "system": { "const": "urn:contextsafe:synthetic" },
+        "value": { "type": "string", "pattern": "^CSYN-CTP-[A-Z0-9]{3,16}$" }
+      }
+    },
+    "concepts": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "gender_identity",
+        "recorded_sex_or_gender",
+        "sex_parameter_for_clinical_use",
+        "name_to_use",
+        "pronouns"
+      ],
+      "properties": {
+        "gender_identity": { "$ref": "#/$defs/genderIdentity" },
+        "recorded_sex_or_gender": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/recordedSexOrGender" }
+        },
+        "sex_parameter_for_clinical_use": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/spcu" }
+        },
+        "name_to_use": { "$ref": "#/$defs/nameToUse" },
+        "pronouns": { "$ref": "#/$defs/pronouns" }
+      }
+    },
+    "prohibited_inferences": {
+      "type": "array",
+      "minItems": 2,
+      "maxItems": 2,
+      "uniqueItems": true,
+      "contains": { "const": "gender_identity_to_spcu" },
+      "allOf": [
+        { "contains": { "const": "recorded_sex_or_gender_to_spcu" } }
+      ],
+      "items": {
+        "enum": ["gender_identity_to_spcu", "recorded_sex_or_gender_to_spcu"]
+      }
+    }
+  },
+  "$defs": {
+    "statusAndValue": {
+      "oneOf": [
+        {
+          "type": "object",
+          "required": ["status", "value"],
+          "properties": {
+            "status": { "const": "specified" },
+            "value": { "type": "string", "minLength": 1, "maxLength": 128 }
+          }
+        },
+        {
+          "type": "object",
+          "required": ["status", "value"],
+          "properties": {
+            "status": { "enum": ["declined", "unknown", "absent"] },
+            "value": { "type": "null" }
+          }
+        }
+      ]
+    },
+    "genderIdentity": {
+      "allOf": [
+        { "$ref": "#/$defs/statusAndValue" },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["status", "value", "code_system"],
+          "properties": {
+            "status": { "enum": ["specified", "declined", "unknown", "absent"] },
+            "value": { "type": ["string", "null"] },
+            "code_system": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9:/_.-]{1,96}$"
+            }
+          }
+        }
+      ]
+    },
+    "recordedSexOrGender": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["value", "context", "source"],
+      "properties": {
+        "value": { "enum": ["F", "M", "X", "unknown"] },
+        "context": { "type": "string", "pattern": "^[A-Za-z0-9:/_.-]{1,96}$" },
+        "source": { "type": "string", "pattern": "^[A-Za-z0-9:/_.-]{1,96}$" }
+      }
+    },
+    "spcu": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["value", "context_id", "supporting_observation_ids"],
+      "properties": {
+        "value": { "type": "string", "pattern": "^[A-Za-z0-9:/_.-]{1,96}$" },
+        "context_id": { "type": "string", "pattern": "^ORDER-CSYN-[A-Za-z0-9:/_.-]+$" },
+        "supporting_observation_ids": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "type": "string", "pattern": "^SUP-CSYN-[A-Za-z0-9:/_.-]+$" }
+        }
+      }
+    },
+    "nameToUse": {
+      "allOf": [
+        { "$ref": "#/$defs/statusAndValue" },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["status", "value", "use"],
+          "properties": {
+            "status": { "enum": ["specified", "declined", "unknown", "absent"] },
+            "value": { "type": ["string", "null"], "pattern": "^CSYN-" },
+            "use": { "const": "usual" }
+          }
+        }
+      ]
+    },
+    "pronouns": {
+      "allOf": [
+        { "$ref": "#/$defs/statusAndValue" },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["status", "value"],
+          "properties": {
+            "status": { "enum": ["specified", "declined", "unknown", "absent"] },
+            "value": { "type": ["string", "null"] }
+          }
+        }
+      ]
+    }
+  }
+}

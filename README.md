@@ -2,9 +2,49 @@
 
 **A proposed clinically and community-governed release-gate plan for transgender and nonbinary patient safety across registration, EHR, HL7/FHIR, and laboratory systems.**
 
-Status: product and delivery plan for v1.0; no executable product exists yet.
+Status: product and delivery plan for v1.0 plus an internal iteration-1 synthetic
+reference evaluator. No clinically governed or externally validated product exists yet.
 
-The planned ContextSafe service would run a fixed, versioned pack of synthetic patients through a health system's non-production workflow, evaluate whether identity and clinical-context data survive each boundary, and produce a signed evidence receipt. Its intended capability is to detect data loss, coercion, unsafe defaults, missing reference ranges, and patient-facing misidentification before a release reaches care; none of those capabilities is implemented or clinically approved yet.
+The planned ContextSafe service would run a fixed, versioned pack of synthetic patients through a health system's non-production workflow, evaluate whether identity and clinical-context data survive each boundary, and produce a signed evidence receipt. Its intended capability is to detect data loss, coercion, unsafe defaults, missing reference ranges, and patient-facing misidentification before a release reaches care. The current code proves only a small offline fixture-validation and exact-comparison path; it is not clinically approved and does not establish those product capabilities.
+
+## Internal implementation slice
+
+Iteration 1 implements a deliberately narrow Python 3.12 path:
+
+- strict, versioned [case](schemas/contextsafe-case-v0.1.schema.json) and
+  [observation](schemas/contextsafe-observation-set-v0.1.schema.json) contracts;
+- separately typed GI, RSG, SPCU, name-to-use, and pronoun values;
+- fail-closed rejection of every cross-concept assignment, with an explicit
+  GI/RSG-to-SPCU prohibition;
+- a pure exact-match evaluator where missing or ambiguous evidence is indeterminate;
+- a deterministic, value-minimized JSON receipt with input, rule-set, and result hashes;
+- offline `validate` and `evaluate` commands plus a small synthetic
+  [reference fixture](fixtures/reference/case.json).
+
+This slice has no signatures, FHIR/HL7/LIS ingestion, clinical oracle, HTML report,
+network access, persistence, hosted service, or patient-data pathway. Its fixture
+rules use invented tokens and are not medical guidance. It was built ahead of the
+plan's discovery and governance gates as internal risk-reduction work, so it cannot
+be represented as pack approval, pilot evidence, or V1 progress through those gates.
+
+With `uv` installed:
+
+```bash
+make verify
+uv run contextsafe validate \
+  --case fixtures/reference/case.json \
+  --observations fixtures/reference/observations.json \
+  --rules fixtures/reference/rules.json
+uv run contextsafe evaluate \
+  --case fixtures/reference/case.json \
+  --observations fixtures/reference/observations.json \
+  --rules fixtures/reference/rules.json \
+  --output receipt.json
+```
+
+`make verify` uses the frozen lockfile and gates lint, format, strict typing,
+90% overall branch coverage, 95% safety-module branch coverage, dependency audit,
+and repository hygiene.
 
 The v1 product is deliberately a **service with a small local tool**, not a universal integration platform:
 
