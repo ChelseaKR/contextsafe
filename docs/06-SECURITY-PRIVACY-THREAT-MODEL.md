@@ -72,7 +72,7 @@ TB-01 incoming customer evidence; TB-02 optional staging FHIR connection; TB-03 
 - Reject unapproved identifiers and free-text-bearing resources/segments.
 - Check email domain, phone range, names, MRN pattern, account numbers, dates, URLs, and known canaries.
 - Reject any unexpected FHIR resource type or HL7 segment/field.
-- Store nothing on rejection except a non-sensitive error class; do not retain source hash/prefix, filename/path, byte count, or rejected bytes.
+- During the complete first pass, store nothing on rejection except at most a non-sensitive error class; do not create a workspace or retain source hash/prefix, filename/path, byte count, or rejected bytes.
 
 ### After acceptance
 
@@ -84,6 +84,20 @@ TB-01 incoming customer evidence; TB-02 optional staging FHIR connection; TB-03 
 
 The scanner must say “boundary check passed,” not “contains no PHI.” Human and system controls remain necessary.
 
+Implementation note (2026-07-13): the first enabled boundary profile is a strict,
+code-only canonical JSON envelope. It rejects unknown/prohibited fields, non-plan
+case/checkpoint/namespace values, arbitrary prose, leading/trailing whitespace,
+Unicode control/format characters, configured canaries, and bounded patterns for
+email, SSN-like values, phone numbers, URLs, dates, MRN/account labels, and long
+numeric identifiers. These patterns can miss identifiers and can produce false
+positives. The result therefore says `boundary-check-is-not-proof-of-no-phi`; no
+approved operating process may treat scanner success as privacy authorization.
+Only after that complete first pass succeeds may the internal-test primitive write a
+private second-pass staging file. A concurrent source mutation fails before promotion
+or indexing. Staging cleanup is attempted, but filesystem denial can leave partial
+second-pass bytes for permitted exclusive recovery or explicit operator remediation;
+that residual is an incident condition, not a successful boundary result.
+
 ## 7. Data minimization by format
 
 - FHIR: allowlist Patient identifiers/name/pronouns/GI/RSG/SPCU extensions as required, ServiceRequest, relevant Observation, DiagnosticReport, and Encounter references. Any narrative, contained resource, unrelated field/resource, or unapproved free text rejects the entire source before persistence. Never strip prohibited content and accept the remainder.
@@ -91,7 +105,7 @@ The scanner must say “boundary check passed,” not “contains no PHI.” Hum
 - LIS: constrained columns only: synthetic case/order/accession tokens, analyte code, value, unit, range fields, flag, status, timestamps.
 - UI observation: structured observer form; no screenshot by default.
 
-An adapter performs only the bounded streaming parse needed to enforce format, namespace, and field allowlists against a caller-owned read-only source. No ContextSafe copy, temporary file, index row, or content-bearing log exists until the entire boundary check succeeds.
+An adapter performs only the bounded streaming parse needed to enforce format, namespace, and field allowlists against a caller-owned read-only source. No ContextSafe copy, temporary file, index row, or content-bearing log exists until the entire first-pass boundary check succeeds.
 
 ## 8. Identity, access, and secrets
 

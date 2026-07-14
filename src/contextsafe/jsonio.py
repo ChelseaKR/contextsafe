@@ -86,6 +86,12 @@ def _parse_json_bytes(raw: bytes) -> JsonValue:
     return as_json_value(parsed)
 
 
+def parse_json_bytes(raw: bytes) -> JsonValue:
+    """Parse one immutable, bounded JSON byte buffer."""
+
+    return _parse_json_bytes(raw)
+
+
 def _read_bounded(handle: BinaryIO) -> bytes:
     return handle.read(MAX_INPUT_BYTES + 1)
 

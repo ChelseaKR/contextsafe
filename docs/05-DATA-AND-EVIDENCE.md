@@ -210,6 +210,36 @@ Raw source bytes receive SHA-256 content IDs. Normalized observations reference 
 
 The signed receipt can omit raw evidence while proving which bytes produced it. A hash proves integrity, not truth or clinical correctness.
 
+### 9.1 Implemented evidence-core contract boundary
+
+The published JSON Schemas are structural exchange contracts, not substitutes for
+the ContextSafe semantic parsers. Schema consumers must enable JSON Schema format
+checking for calendar-valid timestamps and then run the runtime semantic checks for
+content-derived IDs, cross-field/cross-scope equality, and pointer uniqueness. The
+source and observation schemas mark the latter with `x-contextsafe-unique-by`; a
+standard validator may treat that extension as an annotation, so schema success alone
+must never authorize persistence or evaluation.
+
+The iteration-3 boundary profile accepts only `contextsafe.evidence-source/1.0.0`:
+one plan ID, one synthetic case token, one checkpoint, the fixed synthetic identifier
+system, and 1–2,000 code-only records. Record values are null, a small reviewed enum,
+or `CSYN-` tokens; arbitrary prose is not an accepted transport. FHIR narratives,
+HL7 free-text segments, LIS adapters, screenshots, and general JSON are not silently
+treated as this profile.
+
+Accepted raw bytes are addressed by their complete SHA-256 digest. The deterministic
+evidence ID additionally binds the plan/case/checkpoint, source/media type, byte count,
+capture time, opaque collector and system/version IDs, boundary-profile version, and
+non-executable authorization state. Neither source paths nor rejected hashes, prefixes,
+byte counts, filenames, or values enter the index.
+
+`contextsafe.observation/1.0.0` binds a normalized observation to an evidence ID,
+case/checkpoint, exact canonical path, concept-preserving mapping version, optional
+code-like context, and one or more typed candidates. `ambiguity=unambiguous` requires
+exactly one candidate; `ambiguity=ambiguous` requires at least two and retains every
+distinct source pointer. This contract does not implement normalization or allow an
+ambiguous observation to pass evaluation.
+
 ## 10. Receipt claim taxonomy
 
 | Claim ID | Permitted claim | Required support |
@@ -229,6 +259,18 @@ Forbidden claims include “the hospital is safe,” “the system is compliant/
 - Internal: draft assertions, reviewer roster, product operations.
 - Confidential: customer system map, mappings, receipts, findings, contracts.
 - Prohibited: real patient data, production exports, credentials, unrelated free text.
+
+Iteration-3 raw objects and index rows are confidential customer-local synthetic test
+artifacts. Inputs rejected by the complete first pass have no retention record because
+that pass creates no workspace, copy, index, quarantine file, or content-bearing log.
+After a first-pass success, a source mutation during the staged second pass fails before
+promotion or indexing; cleanup is attempted, but a filesystem cleanup denial can leave
+a private `.part` containing partial second-pass bytes until permitted recovery or
+explicit operator remediation. The internal store is append-only and does not yet
+implement governed cleanup/deletion; it is therefore unsuitable for a pilot or
+contractual retention workflow until B-035/B-046 and the signed plan/cleanup path exist.
+Internal test workspaces are disposable and cannot be converted into pilot evidence by
+changing a status field.
 
 Raw evidence remains at the customer by default. If transferred under exception, it is encrypted, access logged, and deleted no later than 30 days after final receipt. ContextSafe may retain a mutually approved redacted receipt for the contract term plus 90 days. Research notes follow [Research](02-USER-RESEARCH-AND-PILOT.md). Legal/financial records exclude evidence and follow counsel/accounting retention.
 

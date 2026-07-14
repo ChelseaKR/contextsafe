@@ -98,6 +98,17 @@ V1 sends no usage, crash, or analytics telemetry. Support metrics come from enga
 
 Abort on production endpoint, namespace mismatch, suspected PHI, stale mandatory oracle, invalid signature, or synthetic-record downstream leakage.
 
+Iteration-3 operating boundary: only `evidence preflight` is a supported CLI surface,
+and it never persists. The internal evidence-store primitive is for synthetic automated
+tests only. A complete new index is published atomically; existing indexes are never
+repaired on open, and reads use SQLite read-only mode. Its write transaction serializes
+writers, validates the exact index and all referenced objects before removing abandoned
+staging and unindexed content objects, then performs the same-descriptor second pass. A
+crash can leave a recoverable orphan but cannot create an indexed pass. There is no
+supported import, cleanup, backup, support-bundle, or pilot recovery workflow for these
+internal records yet; do not preserve or transfer an iteration-3 workspace as customer
+evidence.
+
 ## 7. Runbook: suspected PHI
 
 1. Stop command and disconnect optional endpoint.

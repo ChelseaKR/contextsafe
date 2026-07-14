@@ -37,6 +37,8 @@ _SEMVER = re.compile(r"^(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)$
 _SHA256 = re.compile(r"^[0-9a-f]{64}$")
 _SOURCE_POINTER = re.compile(r"^\$[.\[\]A-Za-z0-9_-]{1,127}$")
 _SAFE_TOKEN = re.compile(r"^[A-Za-z0-9:/_.-]{1,96}$")
+_ORDER_CONTEXT_TOKEN = re.compile(r"^ORDER-CSYN-[A-Za-z0-9:/_.-]+$")
+_SUPPORT_OBSERVATION_TOKEN = re.compile(r"^SUP-CSYN-[A-Za-z0-9:/_.-]+$")
 _PROHIBITED_KEYS = frozenset(
     {
         "address",
@@ -191,7 +193,7 @@ def _spcu(value: object, path: str) -> SexParameterForClinicalUse:
         path,
     )
     context_id = _string(data["context_id"], f"{path}.context_id", pattern=_SAFE_TOKEN)
-    if not context_id.startswith("ORDER-CSYN-"):
+    if _ORDER_CONTEXT_TOKEN.fullmatch(context_id) is None:
         raise _error(
             "non_synthetic_context",
             f"{path}.context_id",
@@ -206,7 +208,9 @@ def _spcu(value: object, path: str) -> SexParameterForClinicalUse:
         )
         for index, item in enumerate(support_raw)
     )
-    if not support or any(not item.startswith("SUP-CSYN-") for item in support):
+    if not support or any(
+        _SUPPORT_OBSERVATION_TOKEN.fullmatch(item) is None for item in support
+    ):
         raise _error(
             "invalid_support",
             f"{path}.supporting_observation_ids",
@@ -255,6 +259,14 @@ _SEMANTIC_PARSERS: dict[ConceptKind, Callable[[object, str], SemanticValue]] = {
 
 def _semantic_value(concept: ConceptKind, value: object, path: str) -> SemanticValue:
     return _SEMANTIC_PARSERS[concept](value, path)
+
+
+def parse_semantic_value(
+    concept: ConceptKind, value: object, path: str
+) -> SemanticValue:
+    """Parse one typed canonical value for a previously validated concept."""
+
+    return _semantic_value(concept, value, path)
 
 
 def parse_case(value: object) -> SyntheticCase:
@@ -383,6 +395,14 @@ def _mapping(value: object, path: str, concept: ConceptKind) -> MappingDescripto
             data["mapping_version"], f"{path}.mapping_version", pattern=_SEMVER
         ),
     )
+
+
+def parse_mapping_descriptor(
+    value: object, path: str, concept: ConceptKind
+) -> MappingDescriptor:
+    """Parse a mapping while enforcing concept separation."""
+
+    return _mapping(value, path, concept)
 
 
 def _observation(value: object, path: str) -> Observation:

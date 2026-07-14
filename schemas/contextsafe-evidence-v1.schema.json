@@ -1,0 +1,56 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://contextsafe.invalid/schemas/contextsafe-evidence-v1.schema.json",
+  "title": "ContextSafe accepted evidence record v1",
+  "$comment": "JSON Schema validates structure and calendar-valid timestamps when format checking is enabled. ContextSafe runtime validation additionally verifies the content-derived evidence_id and cross-field case scope.",
+  "x-contextsafe-semantic-constraints": [
+    "case_token equals CSYN- concatenated with case_id",
+    "evidence_id equals EVD- concatenated with the SHA-256 of the canonical identity payload"
+  ],
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "evidence_id",
+    "plan_id",
+    "case_id",
+    "case_token",
+    "checkpoint",
+    "source_type",
+    "media_type",
+    "raw_sha256",
+    "raw_byte_count",
+    "captured_at",
+    "collector_id",
+    "system_id",
+    "system_version",
+    "boundary_profile_version",
+    "boundary_check_status",
+    "authorization_status",
+    "usable_for_execution"
+  ],
+  "properties": {
+    "schema_version": {"const": "contextsafe.evidence/1.0.0"},
+    "evidence_id": {"type": "string", "pattern": "^EVD-[0-9a-f]{64}$"},
+    "plan_id": {"type": "string", "pattern": "^[A-Z][A-Z0-9-]{2,63}$"},
+    "case_id": {"type": "string", "pattern": "^CTP-[A-Z0-9]{3,16}$"},
+    "case_token": {"type": "string", "pattern": "^CSYN-CTP-[A-Z0-9]{3,16}$"},
+    "checkpoint": {"enum": ["registration", "ehr", "interface", "lis_return"]},
+    "source_type": {"const": "canonical_json"},
+    "media_type": {"const": "application/vnd.contextsafe.evidence+json"},
+    "raw_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "raw_byte_count": {"type": "integer", "minimum": 1, "maximum": 1048576},
+    "captured_at": {
+      "type": "string",
+      "format": "date-time",
+      "pattern": "^(?:[0-9]{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12][0-9]|3[01])|(?:0[469]|11)-(?:0[1-9]|[12][0-9]|30)|02-(?:0[1-9]|1[0-9]|2[0-9])))T(?:[01][0-9]|2[0-3]):[0-5][0-9]:[0-5][0-9]Z$"
+    },
+    "collector_id": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9:/_.-]{0,127}$"},
+    "system_id": {"type": "string", "pattern": "^[A-Z][A-Z0-9-]{2,63}$"},
+    "system_version": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9:/_.-]{0,127}$"},
+    "boundary_profile_version": {"const": "contextsafe.preflight/canonical-json-1.0.0"},
+    "boundary_check_status": {"const": "passed"},
+    "authorization_status": {"const": "not_verified_internal_test_only"},
+    "usable_for_execution": {"const": false}
+  }
+}
