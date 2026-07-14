@@ -1,0 +1,87 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://contextsafe.invalid/schemas/contextsafe-evidence-source-v1.schema.json",
+  "title": "ContextSafe code-only evidence boundary envelope v1",
+  "$comment": "JSON Schema validates structure. ContextSafe runtime validation additionally enforces the x-contextsafe-unique-by annotation and plan-bound scope equality.",
+  "x-contextsafe-semantic-constraints": [
+    "records[*].source_pointer values are unique",
+    "plan_id, case_token, checkpoint, source_type, and synthetic_identifier match the requested EvidenceScope"
+  ],
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "plan_id",
+    "case_token",
+    "checkpoint",
+    "source_type",
+    "synthetic_identifier",
+    "records"
+  ],
+  "properties": {
+    "schema_version": {"const": "contextsafe.evidence-source/1.0.0"},
+    "plan_id": {"type": "string", "pattern": "^[A-Z][A-Z0-9-]{2,63}$"},
+    "case_token": {"type": "string", "pattern": "^CSYN-CTP-[A-Z0-9]{3,16}$"},
+    "checkpoint": {"enum": ["registration", "ehr", "interface", "lis_return"]},
+    "source_type": {"const": "canonical_json"},
+    "synthetic_identifier": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["system", "value"],
+      "properties": {
+        "system": {"const": "urn:contextsafe:synthetic"},
+        "value": {"type": "string", "pattern": "^CSYN-CTP-[A-Z0-9]{3,16}$"}
+      }
+    },
+    "records": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 2000,
+      "uniqueItems": true,
+      "x-contextsafe-unique-by": "source_pointer",
+      "description": "Exact duplicate records are structurally invalid. The ContextSafe runtime also requires source_pointer uniqueness when other record fields differ.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["field_code", "value_code", "context_code", "source_pointer"],
+        "properties": {
+          "field_code": {
+            "enum": [
+              "abnormal_flag",
+              "gender_identity",
+              "name_to_use",
+              "order",
+              "pronouns",
+              "recorded_sex_or_gender",
+              "reference_range",
+              "result",
+              "sex_parameter_for_clinical_use",
+              "status"
+            ]
+          },
+          "value_code": {"$ref": "#/$defs/codeOrNull"},
+          "context_code": {"$ref": "#/$defs/contextOrNull"},
+          "source_pointer": {
+            "type": "string",
+            "pattern": "^\\$[.\\[\\]A-Za-z0-9_-]{1,127}$"
+          }
+        }
+      }
+    }
+  },
+  "$defs": {
+    "codeOrNull": {
+      "oneOf": [
+        {"type": "null"},
+        {"enum": ["F", "M", "X", "absent", "abnormal", "corrected", "declined", "final", "normal", "preliminary", "specified", "unknown"]},
+        {"type": "string", "pattern": "^CSYN-[A-Z0-9][A-Z0-9_.:-]{0,95}$"}
+      ]
+    },
+    "contextOrNull": {
+      "oneOf": [
+        {"type": "null"},
+        {"type": "string", "pattern": "^(CSYN|ORDER-CSYN|SUP-CSYN)-[A-Za-z0-9][A-Za-z0-9:/_.-]{0,95}$"}
+      ]
+    }
+  }
+}

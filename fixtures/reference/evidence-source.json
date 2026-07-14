@@ -1,0 +1,19 @@
+{
+  "schema_version": "contextsafe.evidence-source/1.0.0",
+  "plan_id": "PLAN-SYNTHETIC-TEST",
+  "case_token": "CSYN-CTP-I01",
+  "checkpoint": "ehr",
+  "source_type": "canonical_json",
+  "synthetic_identifier": {
+    "system": "urn:contextsafe:synthetic",
+    "value": "CSYN-CTP-I01"
+  },
+  "records": [
+    {
+      "field_code": "pronouns",
+      "value_code": "CSYN-PRONOUN-THEY-THEM",
+      "context_code": "CSYN-EHR-DISPLAY",
+      "source_pointer": "$.records[0]"
+    }
+  ]
+}

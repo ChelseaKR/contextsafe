@@ -15,3 +15,6 @@
 /src/contextsafe/canonical.py @ChelseaKR
 /src/contextsafe/evaluator.py @ChelseaKR
 /src/contextsafe/receipt.py @ChelseaKR
+/src/contextsafe/evidence.py @ChelseaKR
+/src/contextsafe/preflight.py @ChelseaKR
+/src/contextsafe/evidence_store.py @ChelseaKR
