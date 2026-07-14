@@ -22,10 +22,12 @@ Iteration 1 implements a deliberately narrow Python 3.12 path:
   [reference fixture](fixtures/reference/case.json).
 
 This slice has no signatures, FHIR/HL7/LIS ingestion, clinical oracle, HTML report,
-network access, persistence, hosted service, or patient-data pathway. Its fixture
-rules use invented tokens and are not medical guidance. It was built ahead of the
-plan's discovery and governance gates as internal risk-reduction work, so it cannot
-be represented as pack approval, pilot evidence, or V1 progress through those gates.
+network access, persistence, hosted service, or approved patient-data pathway.
+Patient data is prohibited, but bounded checks cannot prove an input is synthetic.
+Its fixture rules use invented tokens and are not medical guidance. It was built
+ahead of the plan's discovery and governance gates as internal risk-reduction work,
+so it cannot be represented as pack approval, pilot evidence, or V1 progress through
+those gates.
 
 With `uv` installed:
 
