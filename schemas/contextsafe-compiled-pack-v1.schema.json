@@ -1,0 +1,207 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://contextsafe.dev/schemas/contextsafe-compiled-pack-v1.schema.json",
+  "title": "ContextSafe deterministic unsigned compiled pack v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "as_of",
+    "pack_id",
+    "pack_version",
+    "pack_sha256",
+    "approval_subject_sha256",
+    "case_manifest",
+    "rule_set_manifest",
+    "source_manifest",
+    "approval_manifest",
+    "declared_controls_status",
+    "valid_for_signing",
+    "signature_status",
+    "executable",
+    "limitations"
+  ],
+  "properties": {
+    "schema_version": {"const": "contextsafe.compiled-pack/1.0.0"},
+    "as_of": {"$ref": "#/$defs/date"},
+    "pack_id": {"$ref": "#/$defs/id"},
+    "pack_version": {"$ref": "#/$defs/semver"},
+    "pack_sha256": {"$ref": "#/$defs/sha256"},
+    "approval_subject_sha256": {"$ref": "#/$defs/sha256"},
+    "case_manifest": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 50,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "case_id",
+          "mandatory",
+          "path",
+          "schema_version",
+          "sha256",
+          "synthetic_identifier"
+        ],
+        "properties": {
+          "case_id": {"$ref": "#/$defs/id"},
+          "mandatory": {"type": "boolean"},
+          "path": {"$ref": "#/$defs/path"},
+          "schema_version": {"const": "contextsafe.case/0.1.0"},
+          "sha256": {"$ref": "#/$defs/sha256"},
+          "synthetic_identifier": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["system", "value"],
+            "properties": {
+              "system": {"const": "urn:contextsafe:synthetic"},
+              "value": {
+                "type": "string",
+                "pattern": "^CSYN-CTP-[A-Z0-9]{3,16}$"
+              }
+            }
+          }
+        }
+      }
+    },
+    "rule_set_manifest": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 50,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "rule_set_id",
+          "mandatory",
+          "path",
+          "schema_version",
+          "sha256",
+          "rule_ids"
+        ],
+        "properties": {
+          "rule_set_id": {"$ref": "#/$defs/id"},
+          "mandatory": {"type": "boolean"},
+          "path": {"$ref": "#/$defs/path"},
+          "schema_version": {"const": "contextsafe.rule-set/0.1.0"},
+          "sha256": {"$ref": "#/$defs/sha256"},
+          "rule_ids": {
+            "type": "array",
+            "minItems": 1,
+            "uniqueItems": true,
+            "items": {"type": "string", "pattern": "^A-I[0-9]{2}$"}
+          }
+        }
+      }
+    },
+    "source_manifest": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 100,
+      "items": {"$ref": "#/$defs/source"}
+    },
+    "approval_manifest": {
+      "type": "array",
+      "minItems": 3,
+      "maxItems": 3,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "role",
+          "reviewer_id",
+          "decided_on",
+          "review_by",
+          "subject_sha256"
+        ],
+        "properties": {
+          "role": {
+            "enum": [
+              "clinical_safety_chair",
+              "community_co_chair",
+              "technical_release_owner"
+            ]
+          },
+          "reviewer_id": {"$ref": "#/$defs/safe_token"},
+          "decided_on": {"$ref": "#/$defs/date"},
+          "review_by": {"$ref": "#/$defs/date"},
+          "subject_sha256": {"$ref": "#/$defs/sha256"}
+        }
+      }
+    },
+    "declared_controls_status": {"const": "pass"},
+    "valid_for_signing": {"const": true},
+    "signature_status": {"const": "not_verified"},
+    "executable": {"const": false},
+    "limitations": {
+      "type": "array",
+      "minItems": 2,
+      "maxItems": 2,
+      "prefixItems": [
+        {"const": "approval-declarations-are-not-signatures"},
+        {"const": "cryptographic-authorization-requires-b-035"}
+      ],
+      "items": false
+    }
+  },
+  "$defs": {
+    "id": {"type": "string", "pattern": "^[A-Z][A-Z0-9-]{2,63}$"},
+    "semver": {
+      "type": "string",
+      "pattern": "^(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)$"
+    },
+    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "date": {
+      "type": "string",
+      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"
+    },
+    "path": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 256,
+      "pattern": "^[A-Za-z0-9_.-]+(/[A-Za-z0-9_.-]+)*$"
+    },
+    "safe_token": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128,
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9:/_.-]{0,127}$"
+    },
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "source_id",
+        "version",
+        "uri",
+        "sha256",
+        "status",
+        "retrieved_on",
+        "reviewed_on",
+        "review_by",
+        "withdrawn_on",
+        "limitations"
+      ],
+      "properties": {
+        "source_id": {"$ref": "#/$defs/id"},
+        "version": {"$ref": "#/$defs/semver"},
+        "uri": {"$ref": "#/$defs/safe_token"},
+        "sha256": {"$ref": "#/$defs/sha256"},
+        "status": {"const": "active"},
+        "retrieved_on": {"$ref": "#/$defs/date"},
+        "reviewed_on": {"$ref": "#/$defs/date"},
+        "review_by": {"$ref": "#/$defs/date"},
+        "withdrawn_on": {"type": "null"},
+        "limitations": {
+          "type": "array",
+          "maxItems": 20,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "pattern": "^[a-z0-9][a-z0-9-]{0,63}$"
+          }
+        }
+      }
+    }
+  }
+}

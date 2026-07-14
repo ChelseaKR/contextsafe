@@ -3,7 +3,7 @@
 from dataclasses import dataclass
 
 
-@dataclass(frozen=True, slots=True)
+@dataclass(slots=True)
 class ContextSafeError(Exception):
     """A stable error that never includes an input value."""
 

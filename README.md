@@ -2,10 +2,11 @@
 
 **A proposed clinically and community-governed release-gate plan for transgender and nonbinary patient safety across registration, EHR, HL7/FHIR, and laboratory systems.**
 
-Status: product and delivery plan for v1.0 plus an internal iteration-1 synthetic
-reference evaluator. No clinically governed or externally validated product exists yet.
+Status: product and delivery plan for v1.0 plus internal iteration-1 synthetic
+evaluation and iteration-2 unsigned governance-contract tooling. No clinically
+governed, cryptographically authorized, or externally validated product exists yet.
 
-The planned ContextSafe service would run a fixed, versioned pack of synthetic patients through a health system's non-production workflow, evaluate whether identity and clinical-context data survive each boundary, and produce a signed evidence receipt. Its intended capability is to detect data loss, coercion, unsafe defaults, missing reference ranges, and patient-facing misidentification before a release reaches care. The current code proves only a small offline fixture-validation and exact-comparison path; it is not clinically approved and does not establish those product capabilities.
+The planned ContextSafe service would run a fixed, versioned pack of synthetic patients through a health system's non-production workflow, evaluate whether identity and clinical-context data survive each boundary, and produce a signed evidence receipt. Its intended capability is to detect data loss, coercion, unsafe defaults, missing reference ranges, and patient-facing misidentification before a release reaches care. The current code proves only bounded offline fixture validation, exact comparison, and unsigned contract compilation; it is not clinically approved and does not establish those product capabilities.
 
 ## Internal implementation slice
 
@@ -21,7 +22,26 @@ Iteration 1 implements a deliberately narrow Python 3.12 path:
 - offline `validate` and `evaluate` commands plus a small synthetic
   [reference fixture](fixtures/reference/case.json).
 
-This slice has no signatures, FHIR/HL7/LIS ingestion, clinical oracle, HTML report,
+Iteration 2 adds a machine-enforceable but deliberately unsigned control plane:
+
+- a strict [pack envelope](schemas/contextsafe-pack-v1.schema.json), deterministic
+  compiler, semantic component hashes, compatibility rules, lifecycle and withdrawal
+  checks, declared-role completeness, and a canonical source manifest;
+- strict [engagement](schemas/contextsafe-engagement-v1.schema.json) and
+  [execution-plan](schemas/contextsafe-plan-v1.schema.json) contracts;
+- fail-closed non-production attestations, exact host allowlisting, fixed synthetic
+  namespace, owner and cleanup matching, four-checkpoint scope, and engagement/pack
+  hash pinning;
+- canonical compiled artifacts that always say `signature_status: not_verified`,
+  `executable: false`, and `valid_for_signing: true`.
+
+Declared approvals are not authenticated signatures and do not establish that a
+real clinical or community review occurred. The committed
+[reference pack](fixtures/reference/pack-draft.json) is intentionally `draft`, has
+no approvals, and must fail compilation. Tests construct visibly test-only approval
+declarations in memory solely to exercise the state machine.
+
+These slices have no signatures, FHIR/HL7/LIS ingestion, clinical oracle, HTML report,
 network access, persistence, hosted service, or approved patient-data pathway.
 Patient data is prohibited, but bounded checks cannot prove an input is synthetic.
 Its fixture rules use invented tokens and are not medical guidance. It was built
@@ -42,6 +62,21 @@ uv run contextsafe evaluate \
   --observations fixtures/reference/observations.json \
   --rules fixtures/reference/rules.json \
   --output receipt.json
+
+# Requires current approval declarations but still emits an unsigned artifact.
+# The committed draft intentionally fails.
+uv run contextsafe pack validate \
+  --pack path/to/pack.json \
+  --as-of 2026-07-13 \
+  --output compiled-pack.json
+
+# Revalidates the pack, then validates an unsigned plan without network access.
+uv run contextsafe plan validate \
+  --engagement path/to/engagement.json \
+  --plan path/to/plan.json \
+  --pack path/to/pack.json \
+  --as-of 2026-07-13 \
+  --output compiled-plan.json
 ```
 
 `make verify` uses the frozen lockfile and gates lint, format, strict typing,
@@ -109,6 +144,7 @@ A successful v1 allows one design partner to:
 - [V1 release checklist](docs/15-V1-RELEASE-CHECKLIST.md)
 - [Research sources](docs/16-RESEARCH-SOURCES.md)
 - [ADR 0001: v1 boundary](docs/decisions/0001-v1-boundary.md)
+- [ADR 0002: unsigned compilation before authorization](docs/decisions/0002-unsigned-compilation-before-authorization.md)
 
 ## Working principles
 

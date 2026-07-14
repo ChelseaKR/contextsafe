@@ -1,0 +1,113 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://contextsafe.dev/schemas/contextsafe-engagement-v1.schema.json",
+  "title": "ContextSafe non-production engagement contract v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "engagement_id",
+    "partner_profile_id",
+    "environment",
+    "allowed_hosts",
+    "synthetic_namespace",
+    "owners",
+    "cleanup",
+    "valid_from",
+    "review_by"
+  ],
+  "properties": {
+    "schema_version": {"const": "contextsafe.engagement/1.0.0"},
+    "engagement_id": {"$ref": "#/$defs/id"},
+    "partner_profile_id": {"$ref": "#/$defs/id"},
+    "environment": {"$ref": "#/$defs/environment"},
+    "allowed_hosts": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 50,
+      "uniqueItems": true,
+      "items": {"$ref": "#/$defs/host"}
+    },
+    "synthetic_namespace": {"$ref": "#/$defs/namespace"},
+    "owners": {"$ref": "#/$defs/owners"},
+    "cleanup": {"$ref": "#/$defs/cleanup"},
+    "valid_from": {"$ref": "#/$defs/date"},
+    "review_by": {"$ref": "#/$defs/date"}
+  },
+  "$defs": {
+    "id": {"type": "string", "pattern": "^[A-Z][A-Z0-9-]{2,63}$"},
+    "safe_token": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128,
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9:/_.-]{0,127}$"
+    },
+    "date": {
+      "type": "string",
+      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"
+    },
+    "host": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 253,
+      "pattern": "^(?=.{1,253}$)([a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?)(\\.([a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?))*$"
+    },
+    "environment": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "classification",
+        "name",
+        "non_production_attested",
+        "production_access_prohibited"
+      ],
+      "properties": {
+        "classification": {"enum": ["sandbox", "staging", "test"]},
+        "name": {"$ref": "#/$defs/safe_token"},
+        "non_production_attested": {"const": true},
+        "production_access_prohibited": {"const": true}
+      }
+    },
+    "namespace": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["system", "value_prefix"],
+      "properties": {
+        "system": {"const": "urn:contextsafe:synthetic"},
+        "value_prefix": {"const": "CSYN-"}
+      }
+    },
+    "owners": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "technical_owner_id",
+        "clinical_owner_id",
+        "privacy_owner_id",
+        "cleanup_owner_id"
+      ],
+      "properties": {
+        "technical_owner_id": {"$ref": "#/$defs/safe_token"},
+        "clinical_owner_id": {"$ref": "#/$defs/safe_token"},
+        "privacy_owner_id": {"$ref": "#/$defs/safe_token"},
+        "cleanup_owner_id": {"$ref": "#/$defs/safe_token"}
+      }
+    },
+    "cleanup": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["owner_id", "system_ids", "due_on"],
+      "properties": {
+        "owner_id": {"$ref": "#/$defs/safe_token"},
+        "system_ids": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 20,
+          "uniqueItems": true,
+          "items": {"$ref": "#/$defs/id"}
+        },
+        "due_on": {"$ref": "#/$defs/date"}
+      }
+    }
+  }
+}
