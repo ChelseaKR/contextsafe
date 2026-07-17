@@ -1,0 +1,23 @@
+cff-version: 1.2.0
+message: "If you use ContextSafe, please cite it as below."
+title: "ContextSafe — offline synthetic fixture validator and deterministic evaluator for transgender and nonbinary patient-safety release gating"
+abstract: >-
+  A clinically and community-governed release-gate plan, with a bounded offline
+  implementation slice: strict versioned schemas for synthetic patient cases and
+  observations, a fail-closed deterministic evaluator where missing or ambiguous
+  evidence is indeterminate, unsigned governance-contract compilation, and a
+  recoverable synthetic-evidence store producing hash-covered JSON receipts.
+type: software
+authors:
+  - given-names: Chelsea
+    family-names: Kelly-Reif
+license: Apache-2.0
+repository-code: "https://github.com/ChelseaKR/contextsafe"
+keywords:
+  - patient-safety
+  - transgender-health
+  - health-informatics
+  - hl7-fhir
+  - synthetic-data
+  - release-gating
+  - deterministic-evaluation
