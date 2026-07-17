@@ -3,7 +3,11 @@
 import json
 from pathlib import Path
 
-from contextsafe.cli import main
+import pytest
+
+from contextsafe.cli import EXIT_USAGE_ERROR, main
+from contextsafe.evidence import CANONICAL_JSON_MEDIA_TYPE, CANONICAL_JSON_SOURCE_TYPE
+from contextsafe.plan import ExecutionPlan
 
 ROOT = Path(__file__).resolve().parents[1]
 REFERENCE = ROOT / "fixtures" / "reference"
@@ -130,3 +134,132 @@ def test_cli_rejects_excessively_nested_json_without_crashing(
 def test_cli_reports_output_failure(tmp_path: Path, capsys: object) -> None:
     assert main([*_args("evaluate"), "--output", str(tmp_path)]) == 2
     assert json.loads(capsys.readouterr().err)["error"]["code"] == "output_io_error"
+
+
+def test_quiet_suppresses_stdout_success_payload(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    assert main([*_args("validate"), "--quiet"]) == 0
+    captured = capsys.readouterr()
+    assert captured.out == ""
+    assert captured.err == ""
+
+
+def test_quiet_still_writes_output_file(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    output = tmp_path / "receipt.json"
+    assert main([*_args("evaluate"), "--quiet", "--output", str(output)]) == 0
+    captured = capsys.readouterr()
+    assert captured.out == ""
+    assert captured.err == ""
+    receipt = json.loads(output.read_text(encoding="utf-8"))
+    assert receipt["summary"]["pass"] == 5
+
+
+def test_quiet_preserves_structured_stderr_error(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    args = _args("validate")
+    args[2] = str(tmp_path / "missing.json")
+    assert main([*args, "--quiet"]) == 2
+    captured = capsys.readouterr()
+    assert captured.out == ""
+    assert json.loads(captured.err)["error"]["code"] == "input_io_error"
+
+
+def test_usage_errors_exit_with_dedicated_code(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    usage_errors: list[list[str]] = [
+        [],
+        ["validate"],
+        [*_args("validate"), "--unknown-flag"],
+        ["pack"],
+        ["evidence", "preflight"],
+    ]
+    for argv in usage_errors:
+        with pytest.raises(SystemExit) as raised:
+            main(argv)
+        assert raised.value.code == EXIT_USAGE_ERROR
+        captured = capsys.readouterr()
+        assert captured.out == ""
+        assert "error:" in captured.err
+
+
+def test_help_exits_zero_and_documents_exit_codes(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    with pytest.raises(SystemExit) as raised:
+        main(["--help"])
+    assert raised.value.code == 0
+    help_text = capsys.readouterr().out
+    assert "exit codes" in help_text
+    assert "64" in help_text
+
+
+def test_no_color_accepted_and_output_never_contains_ansi(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+    execution_plan: ExecutionPlan,
+) -> None:
+    plan_path = tmp_path / "plan.json"
+    plan_path.write_text(json.dumps(execution_plan.to_dict()), encoding="utf-8")
+    draft_pack = str(REFERENCE / "pack-draft.json")
+    invocations: list[tuple[int, list[str]]] = [
+        (0, [*_args("validate"), "--no-color"]),
+        (0, [*_args("evaluate"), "--no-color"]),
+        (
+            2,
+            [
+                "pack",
+                "validate",
+                "--no-color",
+                "--pack",
+                draft_pack,
+                "--as-of",
+                "2026-07-13",
+            ],
+        ),
+        (
+            2,
+            [
+                "plan",
+                "validate",
+                "--no-color",
+                "--engagement",
+                draft_pack,
+                "--plan",
+                str(plan_path),
+                "--pack",
+                draft_pack,
+                "--as-of",
+                "2026-07-13",
+            ],
+        ),
+        (
+            0,
+            [
+                "evidence",
+                "preflight",
+                "--no-color",
+                "--source",
+                str(REFERENCE / "evidence-source.json"),
+                "--plan",
+                str(plan_path),
+                "--case-token",
+                "CSYN-CTP-I01",
+                "--checkpoint",
+                "ehr",
+                "--source-type",
+                CANONICAL_JSON_SOURCE_TYPE,
+                "--media-type",
+                CANONICAL_JSON_MEDIA_TYPE,
+            ],
+        ),
+    ]
+    for expected_exit, argv in invocations:
+        assert main(argv) == expected_exit
+        captured = capsys.readouterr()
+        assert "\x1b" not in captured.out
+        assert "\x1b" not in captured.err

@@ -118,6 +118,14 @@ uv run contextsafe evidence preflight \
   --media-type application/vnd.contextsafe.evidence+json
 ```
 
+Every command also accepts `--quiet`, which suppresses the stdout success
+payload while leaving exit codes, `--output` files, and stderr JSON errors
+unchanged, and `--no-color`, which pins the plain-output contract: contextsafe
+output never contains ANSI escape sequences, with or without the flag. Exit
+codes are stable and documented: `0` success (including `--help`), `2`
+fail-closed contract rejection with one JSON error object on stderr, and `64`
+command-line usage error.
+
 `make verify` uses the frozen lockfile and gates lint, format, strict typing,
 90% overall branch coverage, 95% safety-module branch coverage, dependency audit,
 and repository hygiene.
