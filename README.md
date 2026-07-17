@@ -182,9 +182,10 @@ A successful v1 allows one design partner to:
 - [Risk register](docs/14-RISK-REGISTER.md)
 - [V1 release checklist](docs/15-V1-RELEASE-CHECKLIST.md)
 - [Research sources](docs/16-RESEARCH-SOURCES.md)
-- [ADR 0001: v1 boundary](docs/decisions/0001-v1-boundary.md)
-- [ADR 0002: unsigned compilation before authorization](docs/decisions/0002-unsigned-compilation-before-authorization.md)
-- [ADR 0003: recoverable evidence commit](docs/decisions/0003-recoverable-evidence-commit.md)
+- [ADR 0000: record architecture decisions](docs/adr/0000-record-architecture-decisions.md)
+- [ADR 0001: v1 boundary](docs/adr/0001-v1-boundary.md)
+- [ADR 0002: unsigned compilation before authorization](docs/adr/0002-unsigned-compilation-before-authorization.md)
+- [ADR 0003: recoverable evidence commit](docs/adr/0003-recoverable-evidence-commit.md)
 
 ## Working principles
 
@@ -201,5 +202,26 @@ A successful v1 allows one design partner to:
 The recommended implementation is Python 3.12, typed schemas, a command-line runner, a local SQLite evidence index, and generated static HTML/JSON. V1 has no hosted database, multi-tenant control plane, universal EHR writer, production agent, real-patient ingestion, AI classifier, or automated clinical recommendation.
 
 When implementation begins, this repository should inherit the portfolio standards in ../STANDARDS. The planning documents specify ContextSafe's project-specific values; they do not replace those standards.
+
+## Standards Conformance
+
+Status against the portfolio standards (per the portfolio applicability manifest;
+current code is an offline synthetic fixture validator/evaluator CLI):
+
+| Standard | Status |
+| --- | --- |
+| Responsible-Tech Framework | Applies — governance, community accountability, and fail-closed safety posture documented in `docs/07-GOVERNANCE-LEGAL-SAFETY.md` |
+| Code Quality | Applies — ruff (incl. bandit rules, complexity ≤10), mypy `--strict`, branch coverage ≥90% (≥95% on safety-critical modules) via `make verify` |
+| Security & Supply-Chain | Applies — Semgrep SAST, gitleaks secret scan, pip-audit dependency audit (`.github/workflows/security.yml` + `make audit`), pinned `uv.lock`, SHA-pinned actions, `SECURITY.md` |
+| CI/CD | Applies — `ci.yml` runs the identical `make verify` gate on every push/PR |
+| Observability | Applies — deterministic, hash-covered JSON receipts and evidence records are the audit/observability surface of this offline CLI |
+| Accessibility | N/A — offline CLI/library with no human-facing HTML |
+| Internationalization | N/A — synthetic non-production validation CLI; English-only operator output by design (see `docs/I18N.md`) |
+| AI Evaluation | N/A — deterministic fixture evaluator; no LLM/model component |
+| Quality & Metrics | Applies — coverage floors enforced in `pyproject.toml` and `make test`; hygiene gate bans TODO/FIXME/HACK |
+| Documentation | Applies — planning corpus `docs/00`–`16`, ADR log in `docs/adr/`, `CONTRIBUTING.md`, `CHANGELOG.md` |
+| Release & Versioning | Applies — tag-triggered `release.yml` re-runs `make verify` at the tag and gates on a matching CHANGELOG section; no tag exists yet |
+
+Licensed under [Apache-2.0](LICENSE). Cite via [CITATION.cff](CITATION.cff).
 
 Last reviewed: 2026-07-13. Re-review before implementation and at every material clinical, standards, or regulatory change.
