@@ -8,6 +8,15 @@ release yet, so everything to date lives under Unreleased.
 
 ### Added
 
+- B-027 slice: Hypothesis-based property tests seeding the documented property
+  layer (`docs/09-TEST-AND-EVALUATION.md` section 2) for the machine-checkable
+  status-algebra invariants — no pass without exactly one affirmative evidence
+  match, not-applicable only from a predeclared rule, fail-closed cross-concept
+  rejection, order-independent byte-identical receipts, and value-minimized
+  receipts that never echo generated semantic values. Invariants needing pack
+  lifecycle, review signatures, HTML, or signature verification remain untested
+  because those components do not exist yet.
+
 - V1 planning corpus (`docs/00`–`16`): PRD, service design, architecture, data and
   evidence model, security/privacy threat model, governance, test strategy,
   operations, GTM, roadmap, backlog, risk register, and release checklist.
