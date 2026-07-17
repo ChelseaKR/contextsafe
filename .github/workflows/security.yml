@@ -39,6 +39,10 @@ jobs:
     timeout-minutes: 15
     permissions:
       contents: read
+      # gitleaks-action lists the PR's commits via the REST API on pull_request
+      # events to compute the scan range; without this it fails with a 403
+      # "Resource not accessible by integration" before scanning anything.
+      pull-requests: read
     steps:
       - name: Checkout (full history — gitleaks scans the diff/range)
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
