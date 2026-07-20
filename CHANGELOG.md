@@ -16,6 +16,13 @@ release yet, so everything to date lives under Unreleased.
   receipts that never echo generated semantic values. Invariants needing pack
   lifecycle, review signatures, HTML, or signature verification remain untested
   because those components do not exist yet.
+- B-020 slice: every CLI command accepts `--quiet` (suppress the stdout success
+  payload; exit codes, `--output` files, and stderr JSON errors unchanged) and
+  `--no-color` (an explicit pin of the always-plain contract — output never
+  contains ANSI escape sequences), and exit codes are documented and stable:
+  `0` success, `2` fail-closed contract rejection, `64` command-line usage
+  error (previously argparse's default `2`, which collided with contract
+  rejections).
 
 - V1 planning corpus (`docs/00`–`16`): PRD, service design, architecture, data and
   evidence model, security/privacy threat model, governance, test strategy,
@@ -33,6 +40,14 @@ release yet, so everything to date lives under Unreleased.
   namespace pins, PHI canaries, and direct-identifier checks; read-only
   `evidence preflight`; recoverable two-pass persistence into a SHA-256 object
   store with an update/delete-protected SQLite index.
+- Iteration 4 (B-021 slice): receipt payload/envelope separation. `contextsafe
+  evaluate` now emits a receipt document instead of the bare iteration-1
+  receipt — the byte-identical deterministic payload plus `payload_sha256`
+  over the payload only, and an untrusted envelope with caller-declared
+  `claimed_generated_at` (optional canonical whole-second UTC, via
+  `--claimed-generated-at`), `signature_status: not_signed`, and
+  `trusted_time: false`. Timestamps and signatures stay outside the
+  deterministic payload (P0-14); no signing or trusted-time path exists.
 - Standards-conformance baseline (2026-07-16 sweep): LICENSE (Apache-2.0),
   SECURITY.md, CONTRIBUTING.md, CITATION.cff, CHANGELOG, pre-commit config,
   Semgrep/gitleaks/pip-audit security workflow, tag-triggered release workflow,

@@ -10,6 +10,7 @@ OBSERVATION_SCHEMA_VERSION = "contextsafe.observation/0.1.0"
 OBSERVATION_SET_SCHEMA_VERSION = "contextsafe.observation-set/0.1.0"
 RULE_SET_SCHEMA_VERSION = "contextsafe.rule-set/0.1.0"
 RECEIPT_SCHEMA_VERSION = "contextsafe.receipt/0.1.0"
+RECEIPT_DOCUMENT_SCHEMA_VERSION = "contextsafe.receipt-document/0.1.0"
 
 
 class ConceptKind(StrEnum):

@@ -3,11 +3,29 @@
 **A proposed clinically and community-governed release-gate plan for transgender and nonbinary patient safety across registration, EHR, HL7/FHIR, and laboratory systems.**
 
 Status: product and delivery plan for v1.0 plus internal iteration-1 synthetic
-evaluation, iteration-2 unsigned governance-contract tooling, and iteration-3
-privacy/evidence-core risk reduction. No clinically governed, cryptographically
-authorized, or externally validated product exists yet.
+evaluation, iteration-2 unsigned governance-contract tooling, iteration-3
+privacy/evidence-core risk reduction, and iteration-4 receipt payload/envelope
+separation. No clinically governed, cryptographically authorized, or externally
+validated product exists yet.
 
 The planned ContextSafe service would run a fixed, versioned pack of synthetic patients through a health system's non-production workflow, evaluate whether identity and clinical-context data survive each boundary, and produce a signed evidence receipt. Its intended capability is to detect data loss, coercion, unsafe defaults, missing reference ranges, and patient-facing misidentification before a release reaches care. The current code proves only bounded offline fixture evaluation, unsigned contract compilation, a read-only code-envelope boundary check, and an internal-test evidence-store primitive; it is not clinically approved and does not establish those product capabilities.
+
+## Quickstart
+
+With [`uv`](https://docs.astral.sh/uv/) installed:
+
+```sh
+make verify                       # frozen sync, lint, format, strict typing, coverage, audit, hygiene
+uv run contextsafe evaluate \
+  --case fixtures/reference/case.json \
+  --observations fixtures/reference/observations.json \
+  --rules fixtures/reference/rules.json \
+  --output receipt.json           # offline synthetic fixtures; unsigned receipt
+```
+
+Everything runs offline against the committed synthetic reference fixtures;
+the full command walkthrough, including pack, plan, and evidence-preflight
+validation, is under [Internal implementation slice](#internal-implementation-slice).
 
 ## Internal implementation slice
 
@@ -57,6 +75,20 @@ Iteration 3 adds a deliberately non-executable evidence-core slice:
   [ambiguity-preserving observation](schemas/contextsafe-observation-v1.schema.json)
   contracts. Ambiguous candidates retain every typed value and source pointer.
 
+Iteration 4 separates the evaluation receipt into a deterministic payload and
+an explicitly untrusted envelope (the B-021 payload/envelope slice):
+
+- `contextsafe evaluate` emits a receipt document whose `payload_sha256` covers
+  only the deterministic payload; the payload itself still contains hashes,
+  statuses, and limitations rather than semantic values;
+- the envelope carries an optional caller-declared `claimed_generated_at`
+  (canonical whole-second UTC), `signature_status: not_signed`, and
+  `trusted_time: false`; the runner never reads a clock, and no timestamp or
+  signature can enter the payload or its hash;
+- `claimed_generated_at` is unauthenticated metadata that proves nothing about
+  when evaluation ran, and a future signing layer may not relabel these
+  unsigned documents.
+
 The durable primitive has no CLI import route. Every iteration-3 evidence record says
 `authorization_status: not_verified_internal_test_only` and
 `usable_for_execution: false`; a future signature-verification layer may not relabel
@@ -87,10 +119,14 @@ uv run contextsafe validate \
   --case fixtures/reference/case.json \
   --observations fixtures/reference/observations.json \
   --rules fixtures/reference/rules.json
+# Emits a receipt document: deterministic payload plus untrusted, unsigned
+# envelope. --claimed-generated-at is optional caller-declared envelope-only
+# metadata and never changes the payload or payload_sha256.
 uv run contextsafe evaluate \
   --case fixtures/reference/case.json \
   --observations fixtures/reference/observations.json \
   --rules fixtures/reference/rules.json \
+  --claimed-generated-at 2026-07-17T00:00:00Z \
   --output receipt.json
 
 # Requires current approval declarations but still emits an unsigned artifact.
@@ -117,6 +153,14 @@ uv run contextsafe evidence preflight \
   --source-type canonical_json \
   --media-type application/vnd.contextsafe.evidence+json
 ```
+
+Every command also accepts `--quiet`, which suppresses the stdout success
+payload while leaving exit codes, `--output` files, and stderr JSON errors
+unchanged, and `--no-color`, which pins the plain-output contract: contextsafe
+output never contains ANSI escape sequences, with or without the flag. Exit
+codes are stable and documented: `0` success (including `--help`), `2`
+fail-closed contract rejection with one JSON error object on stderr, and `64`
+command-line usage error.
 
 `make verify` uses the frozen lockfile and gates lint, format, strict typing,
 90% overall branch coverage, 95% safety-module branch coverage, dependency audit,
@@ -224,4 +268,4 @@ current code is an offline synthetic fixture validator/evaluator CLI):
 
 Licensed under [Apache-2.0](LICENSE). Cite via [CITATION.cff](CITATION.cff).
 
-Last reviewed: 2026-07-13. Re-review before implementation and at every material clinical, standards, or regulatory change.
+Last reviewed: 2026-07-17. Re-review before implementation and at every material clinical, standards, or regulatory change.
