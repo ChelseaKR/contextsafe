@@ -15,13 +15,6 @@ V1.0 is not complete because a CLI exists. It is complete only when one external
 
 Health systems can implement demographic fields correctly in one product and still lose, coerce, or misuse the information at an interface boundary. The first wedge is a small, clinically governed pack that exposes those integration failures and leaves a durable receipt.
 
-The commercial thesis is service-first:
-
-- customers buy an expert implementation and safety review;
-- the local runner makes delivery consistent and repeatable;
-- an annual subscription maintains the pack, reruns it after releases, and records deltas;
-- productization follows repeated evidence, not speculative integration work.
-
 The novelty claim is intentionally narrow. Synthetic patients, FHIR conformance tools, and quality-assurance frameworks already exist. The differentiated hypothesis is that no established offering packages transgender/nonbinary clinical-context assertions, cross-system execution, clinical/community adjudication, and release evidence into this focused workflow. Validate that claim continuously; do not publish “no competitors.”
 
 ## 3. V1 contract
@@ -62,7 +55,6 @@ The rationale and change rule are in [ADR 0001](decisions/0001-v1-boundary.md).
 | Inclusion | WCAG 2.2 AA and viable EN/ES output | [Accessibility and i18n](08-ACCESSIBILITY-I18N.md) |
 | Quality | Reproducibility and safety-property gates | [Test strategy](09-TEST-AND-EVALUATION.md) |
 | Reliability | Supported local execution and incident handling | [Operations](10-OPERATIONS-SRE.md) |
-| Business | Paid pilot, pricing, channel, and renewal hypothesis | [GTM](11-GTM-BUSINESS-MODEL.md) |
 
 ## 5. Stage plan
 
@@ -74,7 +66,7 @@ The rationale and change rule are in [ADR 0001](decisions/0001-v1-boundary.md).
 | 3. Workflow adapters | Weeks 11–17 | FHIR R4 parser, HL7 v2 parser, LIS mapping template, static report | Twelve cases can be evaluated from fixture evidence at all four checkpoints |
 | 4. Internal validation | Weeks 16–21 | Security review, accessibility review, red-team pack, operations runbooks | All P0 safety gates pass; no open critical/high issue |
 | 5. Design-partner pilot | Weeks 22–33 | Twelve-week staging pilot from safety setup through release-decision observation, utility study, remediation rerun, and signed pilot receipt | Pilot success thresholds in section 7 pass or the one-time evidence extension is explicitly invoked |
-| 6. V1 hardening | Weeks 33–40 | Versioned pack 1.0, migration notes, support package, pricing, release | Every item in [release checklist](15-V1-RELEASE-CHECKLIST.md) has evidence |
+| 6. V1 hardening | Weeks 33–40 | Versioned pack 1.0, migration notes, support package, release | Every item in [release checklist](15-V1-RELEASE-CHECKLIST.md) has evidence |
 
 Stages overlap only when their prerequisites are satisfied. Weeks 20–21 may contain contracting, scheduling, and partner preparation, but no pilot dry run, evidence import, case execution, or measured pilot activity begins before DG-04 passes at the end of week 21. Non-pilot-dependent hardening may overlap the pilot closeout in week 33; release-dossier work that consumes pilot evidence cannot. A discovery failure pauses engineering. The founder must not compensate for missing clinical governance with more code.
 

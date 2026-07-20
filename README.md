@@ -220,7 +220,6 @@ A successful v1 allows one design partner to:
 - [Accessibility and internationalization](docs/08-ACCESSIBILITY-I18N.md)
 - [Test and evaluation strategy](docs/09-TEST-AND-EVALUATION.md)
 - [Operations and SRE](docs/10-OPERATIONS-SRE.md)
-- [Go-to-market and business model](docs/11-GTM-BUSINESS-MODEL.md)
 - [Roadmap](docs/12-ROADMAP.md)
 - [Prioritized backlog](docs/13-BACKLOG.md)
 - [Risk register](docs/14-RISK-REGISTER.md)
