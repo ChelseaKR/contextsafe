@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import NoReturn
 
 from contextsafe.canonical import JsonValue, as_json_value, canonical_json, sha256_json
-from contextsafe.contract_validation import date_value
+from contextsafe.contract_validation import date_value, timestamp_value
 from contextsafe.errors import ContextSafeError
 from contextsafe.evaluator import evaluate
 from contextsafe.evidence import build_evidence_scope
@@ -15,7 +15,7 @@ from contextsafe.jsonio import load_json
 from contextsafe.pack import compile_pack
 from contextsafe.plan import parse_plan, validate_plan
 from contextsafe.preflight import preflight_source
-from contextsafe.receipt import build_receipt, input_payload, render_receipt
+from contextsafe.receipt import build_receipt_document, input_payload, render_receipt
 from contextsafe.validation import parse_bundle
 
 EXIT_SUCCESS = 0
@@ -77,6 +77,14 @@ def _parser() -> argparse.ArgumentParser:
         subparser.add_argument("--rules", required=True, type=Path)
         if command == "evaluate":
             subparser.add_argument("--output", type=Path)
+            subparser.add_argument(
+                "--claimed-generated-at",
+                help=(
+                    "Optional caller-declared whole-second UTC timestamp "
+                    "(YYYY-MM-DDThh:mm:ssZ) recorded only in the untrusted "
+                    "receipt envelope, never in the deterministic payload."
+                ),
+            )
     pack_parser = subparsers.add_parser(
         "pack", help="Compile and validate an unsigned governed pack."
     )
@@ -180,8 +188,16 @@ def _run(args: argparse.Namespace) -> str:
             "valid": True,
         }
         return f"{canonical_json(report)}\n"
-    receipt = build_receipt(bundle, evaluate(bundle))
-    return render_receipt(receipt)
+    claimed_raw: str | None = args.claimed_generated_at
+    claimed = (
+        None
+        if claimed_raw is None
+        else timestamp_value(claimed_raw, "$.claimed_generated_at")
+    )
+    document = build_receipt_document(
+        bundle, evaluate(bundle), claimed_generated_at=claimed
+    )
+    return render_receipt(document)
 
 
 def main(argv: Sequence[str] | None = None) -> int:

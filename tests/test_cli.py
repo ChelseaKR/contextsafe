@@ -39,8 +39,53 @@ def test_evaluate_cli_can_write_receipt(tmp_path: Path, capsys: object) -> None:
     assert main([*_args("evaluate"), "--output", str(output)]) == 0
     captured = capsys.readouterr()
     assert captured.out == ""
-    receipt = json.loads(output.read_text(encoding="utf-8"))
-    assert receipt["summary"]["pass"] == 5
+    document = json.loads(output.read_text(encoding="utf-8"))
+    assert set(document) == {"envelope", "payload", "payload_sha256", "schema_version"}
+    assert document["payload"]["summary"]["pass"] == 5
+    assert document["envelope"]["claimed_generated_at"] is None
+    assert document["envelope"]["signature_status"] == "not_signed"
+
+
+def test_evaluate_cli_claimed_time_stays_outside_the_payload(
+    tmp_path: Path, capsys: object
+) -> None:
+    baseline = tmp_path / "baseline.json"
+    claimed = tmp_path / "claimed.json"
+    assert main([*_args("evaluate"), "--output", str(baseline)]) == 0
+    assert (
+        main(
+            [
+                *_args("evaluate"),
+                "--output",
+                str(claimed),
+                "--claimed-generated-at",
+                "2026-07-17T01:02:03Z",
+            ]
+        )
+        == 0
+    )
+    baseline_document = json.loads(baseline.read_text(encoding="utf-8"))
+    claimed_document = json.loads(claimed.read_text(encoding="utf-8"))
+    assert claimed_document["envelope"]["claimed_generated_at"] == (
+        "2026-07-17T01:02:03Z"
+    )
+    assert claimed_document["payload"] == baseline_document["payload"]
+    assert claimed_document["payload_sha256"] == baseline_document["payload_sha256"]
+
+
+def test_evaluate_cli_rejects_noncanonical_claimed_time_without_echo(
+    capsys: object,
+) -> None:
+    for value, code in (
+        ("2026-07-17T01:02:03+00:00", "invalid_format"),
+        ("2026-07-17T01:02:03.500Z", "invalid_format"),
+        ("2026-13-17T01:02:03Z", "invalid_timestamp"),
+    ):
+        assert main([*_args("evaluate"), "--claimed-generated-at", value]) == 2
+        captured = capsys.readouterr()
+        assert json.loads(captured.err)["error"]["code"] == code
+        assert value not in captured.err
+        assert captured.out == ""
 
 
 def test_cli_prohibited_field_fails_without_echoing_value(
