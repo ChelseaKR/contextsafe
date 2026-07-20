@@ -109,6 +109,15 @@ and cross-platform three-run reproducibility evidence remains outstanding.
 | B-030 | P0-07 | Implement result/range/flag predicates A-025..A-031 | F/LAB | B-025/B-027 | 6d + 8h lab |
 | B-031 | P0-08/P0-12 | Implement first-observed-divergence and evidence trace A-032..A-035 | F | B-027..030 | 4d |
 
+Implementation note (2026-07-17, B-027): the property-test layer from
+[Test and evaluation §2](09-TEST-AND-EVALUATION.md) is now seeded with
+Hypothesis suites covering the machine-checkable status-algebra invariants
+(§3 items 1, 3, 4, 9, 10) against the iteration-1 evaluator and receipt.
+B-027 is not closed: the governed status algebra over approved assertions
+still depends on B-010/B-019/B-026, and invariants 2, 5, 6, 7, and 8 need
+pack-lifecycle execution blocking, review signatures, HTML rendering, and
+signature verification that do not exist yet.
+
 ## Phase 4 — review and receipts
 
 | ID | Trace | Deliverable and acceptance | Owner | Dependency | Estimate |

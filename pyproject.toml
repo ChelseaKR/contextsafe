@@ -16,6 +16,7 @@ contextsafe = "contextsafe.cli:main"
 [dependency-groups]
 dev = [
   "coverage>=7.10",
+  "hypothesis>=6.100",
   "jsonschema>=4.23",
   "mypy>=1.18",
   "pip-audit>=2.9",
