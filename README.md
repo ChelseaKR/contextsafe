@@ -10,6 +10,23 @@ validated product exists yet.
 
 The planned ContextSafe service would run a fixed, versioned pack of synthetic patients through a health system's non-production workflow, evaluate whether identity and clinical-context data survive each boundary, and produce a signed evidence receipt. Its intended capability is to detect data loss, coercion, unsafe defaults, missing reference ranges, and patient-facing misidentification before a release reaches care. The current code proves only bounded offline fixture evaluation, unsigned contract compilation, a read-only code-envelope boundary check, and an internal-test evidence-store primitive; it is not clinically approved and does not establish those product capabilities.
 
+## Quickstart
+
+With [`uv`](https://docs.astral.sh/uv/) installed:
+
+```sh
+make verify                       # frozen sync, lint, format, strict typing, coverage, audit, hygiene
+uv run contextsafe evaluate \
+  --case fixtures/reference/case.json \
+  --observations fixtures/reference/observations.json \
+  --rules fixtures/reference/rules.json \
+  --output receipt.json           # offline synthetic fixtures; unsigned receipt
+```
+
+Everything runs offline against the committed synthetic reference fixtures;
+the full command walkthrough, including pack, plan, and evidence-preflight
+validation, is under [Internal implementation slice](#internal-implementation-slice).
+
 ## Internal implementation slice
 
 Iteration 1 implements a deliberately narrow Python 3.12 path:
