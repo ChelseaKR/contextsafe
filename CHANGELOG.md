@@ -8,6 +8,14 @@ release yet, so everything to date lives under Unreleased.
 
 ### Added
 
+- B-027 slice: Hypothesis-based property tests seeding the documented property
+  layer (`docs/09-TEST-AND-EVALUATION.md` section 2) for the machine-checkable
+  status-algebra invariants — no pass without exactly one affirmative evidence
+  match, not-applicable only from a predeclared rule, fail-closed cross-concept
+  rejection, order-independent byte-identical receipts, and value-minimized
+  receipts that never echo generated semantic values. Invariants needing pack
+  lifecycle, review signatures, HTML, or signature verification remain untested
+  because those components do not exist yet.
 - B-020 slice: every CLI command accepts `--quiet` (suppress the stdout success
   payload; exit codes, `--output` files, and stderr JSON errors unchanged) and
   `--no-color` (an explicit pin of the always-plain contract — output never
