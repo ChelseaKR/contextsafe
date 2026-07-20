@@ -8,6 +8,14 @@ release yet, so everything to date lives under Unreleased.
 
 ### Added
 
+- B-020 slice: every CLI command accepts `--quiet` (suppress the stdout success
+  payload; exit codes, `--output` files, and stderr JSON errors unchanged) and
+  `--no-color` (an explicit pin of the always-plain contract — output never
+  contains ANSI escape sequences), and exit codes are documented and stable:
+  `0` success, `2` fail-closed contract rejection, `64` command-line usage
+  error (previously argparse's default `2`, which collided with contract
+  rejections).
+
 - V1 planning corpus (`docs/00`–`16`): PRD, service design, architecture, data and
   evidence model, security/privacy threat model, governance, test strategy,
   operations, GTM, roadmap, backlog, risk register, and release checklist.
