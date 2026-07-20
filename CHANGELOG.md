@@ -26,7 +26,7 @@ release yet, so everything to date lives under Unreleased.
 
 - V1 planning corpus (`docs/00`–`16`): PRD, service design, architecture, data and
   evidence model, security/privacy threat model, governance, test strategy,
-  operations, GTM, roadmap, backlog, risk register, and release checklist.
+  operations, roadmap, backlog, risk register, and release checklist.
 - Iteration 1: strict versioned case and observation-set schemas; separately typed
   GI, RSG, SPCU, name-to-use, and pronoun values; fail-closed cross-concept
   rejection; pure exact-match evaluator (missing/ambiguous evidence is

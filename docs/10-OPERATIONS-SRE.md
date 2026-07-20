@@ -187,11 +187,11 @@ Per standard pilot:
 - evaluation under 60 seconds;
 - support under 20 `F`-pool hours after mapping;
 - `F`-pool delivery under 80 hours and `E`-pool delivery under 120 hours;
-- total core-team delivery under 200 hours, matching B-049–B-052 and the USD 75,000–125,000 pilot hypothesis;
-- if B-057 is invoked, separately meter at most 32 `F`-pool hours, 48 `E`-pool hours and 8 paid reviewer hours against the USD 15,000–25,000 extension change order; do not blend them into base-pilot margin;
+- total core-team delivery under 200 hours, matching B-049–B-052;
+- if B-057 is invoked, separately meter at most 32 `F`-pool hours, 48 `E`-pool hours and 8 paid reviewer hours against the extension change order; do not blend them into base-pilot delivery;
 - external reviewer work planned, paid, and capped by SOW.
 
-If three engagements exceed these, stop sales and redesign the service or pricing. Do not hide custom consulting inside subscription economics.
+If three engagements exceed these, stop and redesign the service. Custom integration work is classified and reported separately, never absorbed into the standard delivery envelope.
 
 ## 15. Operations review
 

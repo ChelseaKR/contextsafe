@@ -51,22 +51,22 @@ RIS/DICOM, pharmacy, CDS, hosted collaboration, and production canaries remain b
 | M4 Trust beta | week 21 | security/a11y/i18n/ops gates and hidden faults pass |
 | M5 External pilot baseline | week 27 | after six elapsed pilot weeks, at least 10 cases complete the partner pathway |
 | M6 Remediation receipt | week 33 | after the full 12-week pilot, partner uses verified P0 delta and utility/control-value evidence in release decision |
-| M7 v1.0 | week 40 | release checklist and commercial conversion gate pass |
+| M7 v1.0 | week 40 | release checklist passes |
 
 ## 3. Workstream sequence
 
-| Weeks | Product/research | Governance/evidence | Engineering | Trust/operations | Commercial |
-|---:|---|---|---|---|---|
-| 1–4 | interviews, workflow, buyer | recruit reviewers | paper schemas only | initial threat/legal boundary | LOI/readiness offer |
-| 3–8 | pilot design | pack 0.1, oracle protocol | architecture spikes | privacy/a11y plan | SOW/security packet |
-| 7–12 | usability prototype | assertions reviewed | vertical slice | base CI/security | paid pilot close |
-| 11–17 | operator tests | pack beta | all file adapters/evaluator | logs/signing | partner mapping |
-| 16–21 | comprehension tests | hidden fault authors | hardening/P0 delta | a11y/EN-ES/runbooks | pilot prep |
-| 20–21 | contracting and calendar preparation only; no measured pilot activity | final gate review | no partner execution | finish DG-04 evidence | sponsor scheduling |
-| 22–27 | pilot phases A–C: safety setup, mapping, dry run, baseline | baseline adjudication | partner-local execution and adapter fixes only | incident/cleanup exercises | time-study baseline |
-| 28–33 | pilot phases D–E: remediation, rerun, closeout | finding disposition | delta and compatibility evidence | closeout/cleanup evidence | renewal proposal |
-| 33–37 | release feedback or frozen extension measures | pack 1.0 | unaffected hardening; B-057 only in weeks 34–37 if invoked | independent reviews continue | conversion or priced extension |
-| 38–40 | final decision | pack 1.0 freeze | release candidate | independent dossier close | conversion/reference |
+| Weeks | Product/research | Governance/evidence | Engineering | Trust/operations |
+|---:|---|---|---|---|
+| 1–4 | interviews, workflow, buyer | recruit reviewers | paper schemas only | initial threat/legal boundary |
+| 3–8 | pilot design | pack 0.1, oracle protocol | architecture spikes | privacy/a11y plan |
+| 7–12 | usability prototype | assertions reviewed | vertical slice | base CI/security |
+| 11–17 | operator tests | pack beta | all file adapters/evaluator | logs/signing |
+| 16–21 | comprehension tests | hidden fault authors | hardening/P0 delta | a11y/EN-ES/runbooks |
+| 20–21 | contracting and calendar preparation only; no measured pilot activity | final gate review | no partner execution | finish DG-04 evidence |
+| 22–27 | pilot phases A–C: safety setup, mapping, dry run, baseline | baseline adjudication | partner-local execution and adapter fixes only | incident/cleanup exercises |
+| 28–33 | pilot phases D–E: remediation, rerun, closeout | finding disposition | delta and compatibility evidence | closeout/cleanup evidence |
+| 33–37 | release feedback or frozen extension measures | pack 1.0 | unaffected hardening; B-057 only in weeks 34–37 if invoked | independent reviews continue |
+| 38–40 | final decision | pack 1.0 freeze | release candidate | independent dossier close |
 
 ## 4. Decision gates
 

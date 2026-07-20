@@ -78,7 +78,6 @@ Select one partner with:
 - permission to create clearly synthetic records and export evidence;
 - a material release within 12 weeks;
 - willingness to remediate and rerun;
-- a procurement path for a USD 75,000–125,000 pilot and USD 30,000–60,000 annual continuation;
 - agreement that results remain confidential unless both parties approve publication.
 
 Avoid a first partner whose only interest is publicity, a broad enterprise rollout, production monitoring, or a custom one-off interface.
@@ -146,9 +145,8 @@ Exit: pilot decision memo and conversion proposal.
 | Receipt comprehension | 5-question task test | at least 90% | below 70% |
 | Remediation verification | rerun | 100% of closed findings | below 80% |
 | Sponsor use | observation/attestation | used in release decision | never reviewed |
-| Commercial signal | proposal | annual conversion or specific objection | no buyer/next step |
 
-Before execution, the partner selects at least three recent comparable release-assurance tasks and records the roles, artifacts, scope, and staff time used. Pilot time uses the same role/task boundaries. **Net hours saved** equals comparable baseline hours minus partner hours spent producing equivalent evidence and release decisions; training, ContextSafe product development, seeded-fault authoring, and remediation work outside the comparison are reported separately. Natural defects are outcomes, not product-success requirements. The measured pilot begins only after DG-04 at the start of global week 22; its relative weeks 1–12 map to global weeks 22–33. If all safety/technical gates pass but utility evidence is incomplete or between 10 and 19 hours with a credible control-value signal, the joint release authority may approve one four-week, evidence-only extension with frozen measures; there is no second extension. B-057 reserves at most 32 `F`-pool hours, 48 `E`-pool hours and 8 paid reviewer hours, funded by a USD 15,000–25,000 change order. The extension occupies global weeks 34–37 while unaffected hardening continues; if it consumes a release-critical owner or reduces remaining hardening below its gate, the week-40 release moves.
+Before execution, the partner selects at least three recent comparable release-assurance tasks and records the roles, artifacts, scope, and staff time used. Pilot time uses the same role/task boundaries. **Net hours saved** equals comparable baseline hours minus partner hours spent producing equivalent evidence and release decisions; training, ContextSafe product development, seeded-fault authoring, and remediation work outside the comparison are reported separately. Natural defects are outcomes, not product-success requirements. The measured pilot begins only after DG-04 at the start of global week 22; its relative weeks 1–12 map to global weeks 22–33. If all safety/technical gates pass but utility evidence is incomplete or between 10 and 19 hours with a credible control-value signal, the joint release authority may approve one four-week, evidence-only extension with frozen measures; there is no second extension. B-057 reserves at most 32 `F`-pool hours, 48 `E`-pool hours and 8 paid reviewer hours, funded by a separate change order. The extension occupies global weeks 34–37 while unaffected hardening continues; if it consumes a release-critical owner or reduces remaining hardening below its gate, the week-40 release moves.
 
 ## 8. Research and pilot safety
 
