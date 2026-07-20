@@ -78,6 +78,22 @@ FHIR/HL7/LIS and canonical adapter acceptance remain B-022–B-026; governed cle
 B-046; and independent security, privacy, interoperability, clinical/community, and
 pilot gates remain outstanding.
 
+Implementation note (2026-07-17, B-020): the shipped commands now share `--quiet`
+and `--no-color` modes, documented stable exit codes (0 success, 2 contract
+rejection, 64 usage error), and an ANSI-free output regression test. B-020 is not
+closed: most of the command surface in [Architecture §7](04-ARCHITECTURE.md)
+(sign/verify, import, normalize, review, render, diff, cleanup) does not exist
+yet, and independent accessibility review of operator-facing CLI conventions is
+outstanding.
+
+Implementation note (2026-07-17): the payload/envelope-separation part of B-021 is
+now exercised: `contextsafe evaluate` emits a receipt document whose deterministic
+payload is hashed separately (`payload_sha256`) from an untrusted envelope carrying
+caller-declared `claimed_generated_at`, `signature_status: not_signed`, and
+`trusted_time: false` (P0-14, R-10). B-021 is not closed: observation normalization
+and mapping/version binding remain with B-019/B-026, no signing path exists (B-035),
+and cross-platform three-run reproducibility evidence remains outstanding.
+
 ## Phase 3 — adapters and evaluator
 
 | ID | Trace | Deliverable and acceptance | Owner | Dependency | Estimate |
