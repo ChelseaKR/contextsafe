@@ -199,7 +199,7 @@ def test_quiet_still_writes_output_file(
     assert captured.out == ""
     assert captured.err == ""
     receipt = json.loads(output.read_text(encoding="utf-8"))
-    assert receipt["summary"]["pass"] == 5
+    assert receipt["payload"]["summary"]["pass"] == 5
 
 
 def test_quiet_preserves_structured_stderr_error(
