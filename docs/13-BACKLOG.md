@@ -134,7 +134,8 @@ Implementation note (2026-08-04, B-033): the receipt schema named in
 [Architecture §8](04-ARCHITECTURE.md) is now published as
 `schemas/contextsafe-receipt-v0.1.schema.json`, the pre-1.0 shape of the planned
 `contextsafe-receipt-v1.schema.json`. It closes every object, pins the unsigned
-envelope constants, bounds the payload to hashes/statuses/counts/limitations, and
+envelope constants and the mandated disclosure set, bounds the payload to
+hashes/statuses/counts/limitations with no unbounded free-text field, and
 publishes closed status, reason, checkpoint, and concept enums; the
 schema/runtime agreement, claim-minimality, mandated-limitation (F-030), and
 enum-parity gates are in `tests/test_receipt_schema.py` plus a generated-bundle

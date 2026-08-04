@@ -5,8 +5,9 @@ receipt schema that `docs/04-ARCHITECTURE.md` section 8 requires ContextSafe to
 publish. These tests are the schema/runtime agreement gate named in
 `docs/09-TEST-AND-EVALUATION.md` section 8 (T-RECEIPT schema) and section 9
 gate 6: the emitted document must validate, the published enums must equal the
-runtime types, an added claim or a stripped limitation must fail closed, and
-the unsigned envelope constants may not be relabelled by hand.
+runtime types, an added claim or a stripped, reworded, or padded limitation
+must fail closed, and the unsigned envelope constants may not be relabelled by
+hand.
 
 The runtime has no dependencies and does not validate its own output against
 the schema at run time; the published contract is enforced here, exactly as the
@@ -52,7 +53,8 @@ MANDATED_LIMITATIONS = (
 
 F-030 in `docs/09-TEST-AND-EVALUATION.md` section 4 is "strip limitations from
 report template", detected by the receipt schema/presentation gate. Reading the
-runner's own constant here would make that gate tautological.
+runner's own constant — or the schema's pinned one — here would make that gate
+tautological, so this restatement holds both to the same wording.
 """
 
 
@@ -60,6 +62,60 @@ def _schema() -> dict[str, Any]:
     value = json.loads(SCHEMA_PATH.read_text(encoding="utf-8"))
     assert isinstance(value, dict)
     return value
+
+
+def _declared_required_count(node: Any) -> int:
+    """Count every entry in every `required` list the contract declares."""
+
+    if isinstance(node, dict):
+        required = node.get("required")
+        counted = len(required) if isinstance(required, list) else 0
+        return counted + sum(_declared_required_count(value) for value in node.values())
+    if isinstance(node, list):
+        return sum(_declared_required_count(value) for value in node)
+    return 0
+
+
+def _required_field_cases() -> list[tuple[tuple[str | int, ...], str]]:
+    """Return every (object location, required field) pair the contract declares.
+
+    Derived by walking the published schema rather than listed by hand, so a
+    required field added to the contract later cannot silently escape the
+    negative gate.
+    """
+
+    schema = _schema()
+    defs = schema["$defs"]
+    cases: list[tuple[tuple[str | int, ...], str]] = []
+
+    def resolve(node: dict[str, Any]) -> dict[str, Any]:
+        while "$ref" in node:
+            resolved = defs[node["$ref"].removeprefix("#/$defs/")]
+            assert isinstance(resolved, dict)
+            node = resolved
+        return node
+
+    def walk(node: dict[str, Any], path: tuple[str | int, ...]) -> None:
+        node = resolve(node)
+        for key in node.get("required", []):
+            cases.append((path, key))
+        for key, subschema in node.get("properties", {}).items():
+            walk(subschema, (*path, key))
+        for index, subschema in enumerate(node.get("prefixItems", [])):
+            walk(subschema, (*path, index))
+        items = node.get("items")
+        if isinstance(items, dict):
+            walk(items, (*path, 0))
+
+    walk(schema, ())
+    return cases
+
+
+REQUIRED_FIELD_CASES = _required_field_cases()
+
+REQUIRED_FIELD_IDS = [
+    "-".join(str(part) for part in (*path, key)) for path, key in REQUIRED_FIELD_CASES
+]
 
 
 def _validator() -> Draft202012Validator:
@@ -278,6 +334,19 @@ def test_runtime_publishes_every_mandated_limitation(
     assert tuple(document["payload"]["limitations"]) == MANDATED_LIMITATIONS
 
 
+def test_contract_pins_every_mandated_limitation_in_publication_order() -> None:
+    """F-030: the published contract, not only the runner, fixes the wording."""
+
+    limitations = _schema()["$defs"]["deterministic_payload"]["properties"][
+        "limitations"
+    ]
+    assert tuple(item["const"] for item in limitations["prefixItems"]) == (
+        MANDATED_LIMITATIONS
+    )
+    assert limitations["minItems"] == len(MANDATED_LIMITATIONS)
+    assert limitations["maxItems"] == len(MANDATED_LIMITATIONS)
+
+
 @pytest.mark.parametrize(
     "limitations",
     [
@@ -293,6 +362,37 @@ def test_stripped_or_padded_limitations_fail_the_contract(
     """F-030: a report template may not drop a mandated disclosure."""
 
     document["payload"]["limitations"] = limitations
+    assert not _validator().is_valid(document)
+
+
+@pytest.mark.parametrize("index", range(len(MANDATED_LIMITATIONS)))
+def test_a_mandated_disclosure_cannot_be_reworded(
+    document: dict[str, Any], index: int
+) -> None:
+    """Replacing a disclosure with plausible filler is the F-030 fault itself."""
+
+    limitations = list(MANDATED_LIMITATIONS)
+    limitations[index] = "This evaluation was reviewed and found satisfactory."
+    document["payload"]["limitations"] = limitations
+    assert not _validator().is_valid(document)
+
+
+def test_mandated_disclosures_cannot_be_reordered(document: dict[str, Any]) -> None:
+    """Publication order is fixed, so receipt bytes stay comparable."""
+
+    reordered = list(MANDATED_LIMITATIONS)
+    reordered[0], reordered[1] = reordered[1], reordered[0]
+    document["payload"]["limitations"] = reordered
+    assert not _validator().is_valid(document)
+
+
+@pytest.mark.parametrize("extra", ["Reviewed by the vendor.", "", "A" * 512])
+def test_limitations_are_bounded_against_free_text(
+    document: dict[str, Any], extra: str
+) -> None:
+    """The payload carries hashes, statuses, and counts — not a prose channel."""
+
+    document["payload"]["limitations"] = [*MANDATED_LIMITATIONS, extra]
     assert not _validator().is_valid(document)
 
 
@@ -335,26 +435,17 @@ def test_claimed_time_must_be_whole_second_utc_or_absent(
     assert not _validator().is_valid(document)
 
 
-@pytest.mark.parametrize(
-    ("path", "key"),
-    [
-        ((), "schema_version"),
-        ((), "envelope"),
-        ((), "payload"),
-        ((), "payload_sha256"),
-        (("envelope",), "claimed_generated_at"),
-        (("envelope",), "signature_status"),
-        (("envelope",), "trusted_time"),
-        (("payload",), "limitations"),
-        (("payload",), "results"),
-        (("payload",), "scope"),
-        (("payload",), "summary"),
-        (("payload", "hashes"), "result_sha256"),
-        (("payload", "summary"), "blocked"),
-        (("payload", "results", 0), "reason"),
-        (("payload", "results", 0), "expected_sha256"),
-    ],
-)
+def test_every_required_field_the_contract_declares_is_exercised() -> None:
+    """The negative gate is parametrized from the contract, so it cannot drift.
+
+    A lower count means the walk never reached a declared `required` list; a
+    higher one means one definition is counted from two references.
+    """
+
+    assert len(REQUIRED_FIELD_CASES) == _declared_required_count(_schema())
+
+
+@pytest.mark.parametrize(("path", "key"), REQUIRED_FIELD_CASES, ids=REQUIRED_FIELD_IDS)
 def test_missing_required_fields_fail_closed(
     document: dict[str, Any], path: tuple[str | int, ...], key: str
 ) -> None:
