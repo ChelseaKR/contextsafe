@@ -107,6 +107,23 @@ invalid UTF-8/JSON, duplicate keys, excessive depth/size, final symlinks, direct
 descriptor mutation, and first/second-pass hash mismatch. A rejection test asserts that
 no workspace exists and that structured errors do not echo content or a source path.
 
+### Receipt contract matrix
+
+The published receipt contract is validated against the reference document, the
+`evaluate --output` artifact, and generated bundles from the property layer.
+Negative cases cover an unknown field at every level of the document, envelope,
+payload, hashes, scope, summary, and outcome; a relabelled `signature_status` or
+`trusted_time`; timestamp, signature, reviewer, and run-environment fields added
+to the payload; semantic or source values added to an outcome; stripped,
+short-of-mandate, duplicated, and empty limitations (F-030); a scope that claims
+clinical approval or permitted patient data; a non-canonical payload hash; a
+claimed time that is not whole-second UTC; every missing required field; and an
+empty result set. Enum parity is asserted against the runtime status, reason,
+checkpoint, and concept types, and version constants against the runtime schema
+versions, so a new value cannot enter a receipt without a contract change. A
+final test records the boundary honestly: structural validity is not tamper
+detection, because hash, approval, and signature verification are separate work.
+
 Store tests cover private modes, deterministic IDs, content deduplication, idempotency,
 concurrent writers, append-only update/delete triggers, ordinary rollback, staged-copy
 failure, orphan/staging recovery, missing/corrupt objects, read-only access, exact
