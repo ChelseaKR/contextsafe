@@ -14,9 +14,11 @@ release yet, so everything to date lives under Unreleased.
   The contract closes every object (`additionalProperties: false`), pins the
   unsigned envelope constants so a signing layer cannot relabel these documents
   in place, keeps the payload claim-minimal by rejecting timestamp, signature,
-  reviewer, run-environment, and semantic-value fields, requires the mandated
-  limitation set (F-030), and publishes closed status, reason, checkpoint, and
-  concept enums. Tests enforce schema/runtime agreement on the reference
+  reviewer, run-environment, and semantic-value fields, pins the mandated
+  limitation set as a closed ordered list so a stripped, reworded, reordered, or
+  padded disclosure fails validation (F-030) and the payload carries no
+  unbounded free-text channel, and publishes closed status, reason, checkpoint,
+  and concept enums. Tests enforce schema/runtime agreement on the reference
   document, the `evaluate --output` artifact, and every Hypothesis-generated
   bundle; a companion test asserts that every file in `schemas/` is a valid,
   self-consistent Draft 2020-12 contract. Outcome reasons are now the typed

@@ -2,10 +2,10 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://contextsafe.invalid/schemas/contextsafe-receipt-v0.1.schema.json",
   "title": "ContextSafe evaluation receipt document 0.1",
-  "$comment": "Pre-1.0 shape of the contextsafe-receipt-v1.schema.json listed in docs/04-ARCHITECTURE.md section 8; the published payload is the iteration-4 claim-minimal payload, not a reviewed pilot receipt. The document root carries the untrusted envelope, the deterministic payload, and the payload hash. #/$defs/deterministic_payload is the standalone contract for the hashed payload. JSON Schema validates structure only; ContextSafe tests additionally verify payload_sha256 agreement, the mandated limitation set, and enum parity with the runtime status, reason, checkpoint, and concept types.",
+  "$comment": "Pre-1.0 shape of the contextsafe-receipt-v1.schema.json listed in docs/04-ARCHITECTURE.md section 8; the published payload is the iteration-4 claim-minimal payload, not a reviewed pilot receipt. The document root carries the untrusted envelope, the deterministic payload, and the payload hash. #/$defs/deterministic_payload is the standalone contract for the hashed payload. JSON Schema validates structure only; ContextSafe tests additionally verify payload_sha256 agreement and enum parity with the runtime status, reason, checkpoint, and concept types.",
   "x-contextsafe-semantic-constraints": [
     "payload_sha256 equals the SHA-256 of the canonical JSON encoding of payload",
-    "limitations carries every mandated disclosure published by the runner; the schema bounds the count, not the wording",
+    "the pinned limitations bound this document only; F-030 also requires every rendered report derived from it to present each disclosure, which no JSON Schema can check",
     "envelope fields are unauthenticated caller-declared metadata that never enter payload or payload_sha256",
     "a valid document proves structure and claim minimality only; it proves no signature, trusted time, clinical approval, or external validation"
   ],
@@ -84,10 +84,17 @@
           }
         },
         "limitations": {
+          "$comment": "The mandated disclosure set, pinned in publication order (F-030, docs/09-TEST-AND-EVALUATION.md section 4), and closed exactly like the compiled-plan and compiled-pack limitation sets. A report template may not drop, reword, reorder, or pad these disclosures, and this is the only free-text-shaped field in the payload, so closing it keeps the payload hash-and-count minimal: changing the disclosures requires a new contract version.",
           "type": "array",
           "minItems": 4,
-          "uniqueItems": true,
-          "items": {"type": "string", "minLength": 1, "maxLength": 512}
+          "maxItems": 4,
+          "prefixItems": [
+            {"const": "Synthetic reference fixture only; not an approved clinical oracle."},
+            {"const": "A passing result does not establish safety, compliance, or certification."},
+            {"const": "Patient data is prohibited; bounded checks cannot prove an input is synthetic."},
+            {"const": "This iteration does not ingest FHIR or sign artifacts."}
+          ],
+          "items": false
         },
         "results": {
           "type": "array",

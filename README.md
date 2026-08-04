@@ -93,7 +93,8 @@ payload/envelope and B-033 receipt-schema slices):
   [receipt contract](schemas/contextsafe-receipt-v0.1.schema.json), the pre-1.0
   shape of the receipt schema in [Architecture §8](docs/04-ARCHITECTURE.md).
   Every object is closed, the unsigned envelope constants are pinned, the
-  payload may carry only hashes, statuses, counts, and limitations, and status,
+  payload may carry only hashes, statuses, counts, and the mandated disclosure
+  set — pinned wording, in order, with no room for extra free text — and status,
   reason, checkpoint, and concept are closed sets. A document that validates has
   proved shape and claim minimality only: not a signature, trusted time,
   clinical approval, or receipt verification, and not that the payload hash

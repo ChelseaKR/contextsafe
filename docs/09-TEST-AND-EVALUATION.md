@@ -115,14 +115,22 @@ Negative cases cover an unknown field at every level of the document, envelope,
 payload, hashes, scope, summary, and outcome; a relabelled `signature_status` or
 `trusted_time`; timestamp, signature, reviewer, and run-environment fields added
 to the payload; semantic or source values added to an outcome; stripped,
-short-of-mandate, duplicated, and empty limitations (F-030); a scope that claims
-clinical approval or permitted patient data; a non-canonical payload hash; a
-claimed time that is not whole-second UTC; every missing required field; and an
-empty result set. Enum parity is asserted against the runtime status, reason,
-checkpoint, and concept types, and version constants against the runtime schema
-versions, so a new value cannot enter a receipt without a contract change. A
-final test records the boundary honestly: structural validity is not tamper
-detection, because hash, approval, and signature verification are separate work.
+duplicated, empty, reworded, reordered, and padded limitations (F-030); a scope
+that claims clinical approval or permitted patient data; a non-canonical payload
+hash; a claimed time that is not whole-second UTC; every missing required field;
+and an empty result set. The missing-field cases are parametrized from the
+contract's own `required` lists and a companion test asserts that the
+parametrization reaches every one of them, so a required field added later
+cannot escape the gate. Enum parity is asserted against the runtime status,
+reason, checkpoint, and concept types, and version constants against the runtime
+schema versions, so a new value cannot enter a receipt without a contract
+change. The mandated disclosure set is pinned in the contract itself — a closed,
+ordered list, as in the compiled-plan and compiled-pack contracts — and the test
+suite restates the same wording independently of both the runner and the schema,
+so a stripped or reworded disclosure fails validation rather than a comparison
+against itself. A final test records the boundary honestly: structural validity
+is not tamper detection, because hash, approval, and signature verification are
+separate work.
 
 Store tests cover private modes, deterministic IDs, content deduplication, idempotency,
 concurrent writers, append-only update/delete triggers, ordinary rollback, staged-copy
