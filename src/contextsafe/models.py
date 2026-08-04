@@ -51,6 +51,20 @@ class OutcomeStatus(StrEnum):
     NOT_APPLICABLE = "not_applicable"
 
 
+class OutcomeReason(StrEnum):
+    """The closed set of reason codes a receipt outcome may publish.
+
+    The published receipt contract repeats this set, so an unreviewed reason
+    string cannot reach a receipt without a schema change.
+    """
+
+    AFFIRMATIVE_EVIDENCE_MATCH = "affirmative_evidence_match"
+    AMBIGUOUS_EVIDENCE = "ambiguous_evidence"
+    MISSING_EVIDENCE = "missing_evidence"
+    PREDECLARED_NOT_APPLICABLE = "predeclared_not_applicable"
+    SEMANTIC_MISMATCH = "semantic_mismatch"
+
+
 @dataclass(frozen=True, slots=True)
 class GenderIdentity:
     """A gender identity value with explicit presence semantics."""

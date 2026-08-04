@@ -7,6 +7,7 @@ from contextsafe.models import (
     ConceptKind,
     EvaluationBundle,
     Observation,
+    OutcomeReason,
     OutcomeStatus,
     Rule,
 )
@@ -22,7 +23,7 @@ class Outcome:
     checkpoint: str
     concept: ConceptKind
     status: OutcomeStatus
-    reason: str
+    reason: OutcomeReason
     expected_sha256: str
     observed_sha256s: tuple[str, ...]
     evidence_sha256s: tuple[str, ...]
@@ -37,7 +38,7 @@ class Outcome:
             "evidence_sha256s": list(self.evidence_sha256s),
             "expected_sha256": self.expected_sha256,
             "observed_sha256s": list(self.observed_sha256s),
-            "reason": self.reason,
+            "reason": self.reason.value,
             "rule_id": self.rule_id,
             "rule_version": self.rule_version,
             "status": self.status.value,
@@ -64,19 +65,19 @@ def _outcome(rule: Rule, matches: tuple[Observation, ...]) -> Outcome:
     evidence_sha256s = tuple(sorted(item.evidence.source_sha256 for item in matches))
     if not rule.required:
         status = OutcomeStatus.NOT_APPLICABLE
-        reason = "predeclared_not_applicable"
+        reason = OutcomeReason.PREDECLARED_NOT_APPLICABLE
     elif not matches:
         status = OutcomeStatus.INDETERMINATE
-        reason = "missing_evidence"
+        reason = OutcomeReason.MISSING_EVIDENCE
     elif len(matches) > 1:
         status = OutcomeStatus.INDETERMINATE
-        reason = "ambiguous_evidence"
+        reason = OutcomeReason.AMBIGUOUS_EVIDENCE
     elif observed_sha256s[0] == expected_sha256:
         status = OutcomeStatus.PASSED
-        reason = "affirmative_evidence_match"
+        reason = OutcomeReason.AFFIRMATIVE_EVIDENCE_MATCH
     else:
         status = OutcomeStatus.FAIL
-        reason = "semantic_mismatch"
+        reason = OutcomeReason.SEMANTIC_MISMATCH
     return Outcome(
         rule_id=rule.rule_id,
         rule_version=rule.version,

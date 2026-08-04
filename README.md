@@ -76,7 +76,8 @@ Iteration 3 adds a deliberately non-executable evidence-core slice:
   contracts. Ambiguous candidates retain every typed value and source pointer.
 
 Iteration 4 separates the evaluation receipt into a deterministic payload and
-an explicitly untrusted envelope (the B-021 payload/envelope slice):
+an explicitly untrusted envelope and publishes its contract (the B-021
+payload/envelope and B-033 receipt-schema slices):
 
 - `contextsafe evaluate` emits a receipt document whose `payload_sha256` covers
   only the deterministic payload; the payload itself still contains hashes,
@@ -87,7 +88,16 @@ an explicitly untrusted envelope (the B-021 payload/envelope slice):
   signature can enter the payload or its hash;
 - `claimed_generated_at` is unauthenticated metadata that proves nothing about
   when evaluation ran, and a future signing layer may not relabel these
-  unsigned documents.
+  unsigned documents;
+- the document has a published
+  [receipt contract](schemas/contextsafe-receipt-v0.1.schema.json), the pre-1.0
+  shape of the receipt schema in [Architecture §8](docs/04-ARCHITECTURE.md).
+  Every object is closed, the unsigned envelope constants are pinned, the
+  payload may carry only hashes, statuses, counts, and limitations, and status,
+  reason, checkpoint, and concept are closed sets. A document that validates has
+  proved shape and claim minimality only: not a signature, trusted time,
+  clinical approval, or receipt verification, and not that the payload hash
+  still matches its payload.
 
 The durable primitive has no CLI import route. Every iteration-3 evidence record says
 `authorization_status: not_verified_internal_test_only` and
