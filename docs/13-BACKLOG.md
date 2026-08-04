@@ -130,6 +130,23 @@ signature verification that do not exist yet.
 | B-037 | P0-12 | Implement deterministic receipt delta for compatible partner profiles; incompatible profiles fail with reason | E | B-036 | 4d |
 | B-038 | P0-13 | Implement print stylesheet and evidence-minimized presentation A-036 | F/A11Y | B-034 | 3d |
 
+Implementation note (2026-08-04, B-033): the receipt schema named in
+[Architecture §8](04-ARCHITECTURE.md) is now published as
+`schemas/contextsafe-receipt-v0.1.schema.json`, the pre-1.0 shape of the planned
+`contextsafe-receipt-v1.schema.json`. It closes every object, pins the unsigned
+envelope constants and the mandated disclosure set, bounds the payload to
+hashes/statuses/counts/limitations with no unbounded free-text field, and
+publishes closed status, reason, checkpoint, and concept enums; the
+schema/runtime agreement, claim-minimality, mandated-limitation (F-030), and
+enum-parity gates are in `tests/test_receipt_schema.py` plus a generated-bundle
+property check. B-033 is not closed: the payload is still the iteration-1
+fixture result, not a reviewed run, so receipt_id, coverage, findings,
+dispositions, reviewer identities, and signature envelopes from
+[Architecture §9](04-ARCHITECTURE.md) are absent pending B-031/B-032/B-035, no
+independent security review of the receipt contract has happened, and structural
+validity is not verification — hash, approval, and signature checking remain
+B-036.
+
 ## Phase 5 — trust and operations
 
 | ID | Trace | Deliverable and acceptance | Owner | Dependency | Estimate |
