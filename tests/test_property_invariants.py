@@ -9,6 +9,11 @@ deterministic identical payloads for identical inputs (10). Invariants
 that need pack lifecycle, review signatures, HTML rendering, or
 signature verification (2, 5, 6, 7, 8) have no shipped component yet and
 are deliberately absent here.
+
+The same generated bundles also feed the property-layer half of the
+published receipt contract (B-033): every receipt document a generated
+bundle produces must validate against
+``schemas/contextsafe-receipt-v0.1.schema.json``.
 """
 
 import json
@@ -17,6 +22,7 @@ from typing import Any
 
 from hypothesis import given, settings
 from hypothesis import strategies as st
+from jsonschema import Draft202012Validator, FormatChecker
 
 from contextsafe.canonical import sha256_json
 from contextsafe.errors import ContextSafeError
@@ -43,11 +49,16 @@ from contextsafe.models import (
     SyntheticIdentifier,
     ValueStatus,
 )
-from contextsafe.receipt import build_receipt, render_receipt
+from contextsafe.receipt import build_receipt, build_receipt_document, render_receipt
 from contextsafe.validation import parse_bundle
 
 ROOT = Path(__file__).resolve().parents[1]
 REFERENCE = ROOT / "fixtures" / "reference"
+RECEIPT_SCHEMA = json.loads(
+    (ROOT / "schemas" / "contextsafe-receipt-v0.1.schema.json").read_text(
+        encoding="utf-8"
+    )
+)
 
 _VALUE_MARKER = "CSYNPROPVAL"
 _TOKENS = st.text(alphabet="ABCDEFGH", min_size=1, max_size=6).map(
@@ -245,6 +256,17 @@ def test_receipt_never_echoes_generated_semantic_values(
 
     rendered = render_receipt(build_receipt(bundle, evaluate(bundle)))
     assert _VALUE_MARKER not in rendered
+
+
+@settings(max_examples=200, deadline=None)
+@given(bundle=_bundles())
+def test_generated_receipts_match_the_published_receipt_contract(
+    bundle: EvaluationBundle,
+) -> None:
+    """B-033: every emitted document conforms to the published contract."""
+
+    validator = Draft202012Validator(RECEIPT_SCHEMA, format_checker=FormatChecker())
+    validator.validate(build_receipt_document(bundle, evaluate(bundle)))
 
 
 @settings(max_examples=100, deadline=None)

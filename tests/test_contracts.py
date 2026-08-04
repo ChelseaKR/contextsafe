@@ -32,6 +32,19 @@ def _assert_code(code: str, call: Any, value: object) -> None:
     assert "fixture-gender-1" not in str(caught.value)
 
 
+def test_every_published_schema_is_a_valid_draft_2020_12_contract() -> None:
+    """Every file in `schemas/` is a self-consistent published contract."""
+
+    published = sorted((ROOT / "schemas").glob("*.schema.json"))
+    assert published
+    for path in published:
+        schema = json.loads(path.read_text(encoding="utf-8"))
+        Draft202012Validator.check_schema(schema)
+        assert schema["$schema"] == "https://json-schema.org/draft/2020-12/schema"
+        assert schema["$id"].endswith(f"/schemas/{path.name}")
+        assert schema["title"].startswith("ContextSafe ")
+
+
 def test_published_schemas_accept_reference_fixtures(
     case_json: dict[str, Any], observations_json: dict[str, Any]
 ) -> None:
