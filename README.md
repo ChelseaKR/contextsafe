@@ -155,14 +155,18 @@ uv run contextsafe plan validate \
   --as-of 2026-07-13 \
   --output compiled-plan.json
 
-# Read-only: validates an unsigned plan-shaped scope and never persists input.
+# Read-only: validates an unsigned plan-shaped scope and never persists the
+# evidence source. --output is optional and writes only the non-sensitive
+# result document (boundary-check status, hashes, scope) that would otherwise
+# print to stdout; it still never copies, indexes, or logs the source itself.
 uv run contextsafe evidence preflight \
   --source fixtures/reference/evidence-source.json \
   --plan path/to/plan.json \
   --case-token CSYN-CTP-I01 \
   --checkpoint ehr \
   --source-type canonical_json \
-  --media-type application/vnd.contextsafe.evidence+json
+  --media-type application/vnd.contextsafe.evidence+json \
+  --output preflight-result.json
 ```
 
 Every command also accepts `--quiet`, which suppresses the stdout success
