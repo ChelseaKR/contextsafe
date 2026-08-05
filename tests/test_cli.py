@@ -25,6 +25,25 @@ def _args(command: str) -> list[str]:
     ]
 
 
+def _evidence_preflight_args(plan_path: Path) -> list[str]:
+    return [
+        "evidence",
+        "preflight",
+        "--source",
+        str(REFERENCE / "evidence-source.json"),
+        "--plan",
+        str(plan_path),
+        "--case-token",
+        "CSYN-CTP-I01",
+        "--checkpoint",
+        "ehr",
+        "--source-type",
+        CANONICAL_JSON_SOURCE_TYPE,
+        "--media-type",
+        CANONICAL_JSON_MEDIA_TYPE,
+    ]
+
+
 def test_validate_cli_emits_machine_readable_summary(capsys: object) -> None:
     assert main(_args("validate")) == 0
     captured = capsys.readouterr()
@@ -181,6 +200,19 @@ def test_cli_reports_output_failure(tmp_path: Path, capsys: object) -> None:
     assert json.loads(capsys.readouterr().err)["error"]["code"] == "output_io_error"
 
 
+def test_evidence_preflight_reports_output_failure(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+    execution_plan: ExecutionPlan,
+) -> None:
+    plan_path = tmp_path / "plan.json"
+    plan_path.write_text(json.dumps(execution_plan.to_dict()), encoding="utf-8")
+    args = [*_evidence_preflight_args(plan_path), "--output", str(tmp_path)]
+    assert main(args) == 2
+    error = json.loads(capsys.readouterr().err)["error"]
+    assert error["code"] == "output_io_error"
+
+
 def test_quiet_suppresses_stdout_success_payload(
     capsys: pytest.CaptureFixture[str],
 ) -> None:
@@ -200,6 +232,56 @@ def test_quiet_still_writes_output_file(
     assert captured.err == ""
     receipt = json.loads(output.read_text(encoding="utf-8"))
     assert receipt["payload"]["summary"]["pass"] == 5
+
+
+def test_evidence_preflight_cli_can_write_result(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+    execution_plan: ExecutionPlan,
+) -> None:
+    plan_path = tmp_path / "plan.json"
+    plan_path.write_text(json.dumps(execution_plan.to_dict()), encoding="utf-8")
+    output = tmp_path / "preflight-result.json"
+    args = [*_evidence_preflight_args(plan_path), "--output", str(output)]
+    assert main(args) == 0
+    captured = capsys.readouterr()
+    assert captured.out == ""
+    assert captured.err == ""
+    result = json.loads(output.read_text(encoding="utf-8"))
+    assert result["boundary_check_status"] == "passed"
+    assert result["persisted"] is False
+    assert result["raw_sha256"]
+
+
+def test_evidence_preflight_quiet_still_writes_output_file(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+    execution_plan: ExecutionPlan,
+) -> None:
+    plan_path = tmp_path / "plan.json"
+    plan_path.write_text(json.dumps(execution_plan.to_dict()), encoding="utf-8")
+    output = tmp_path / "preflight-result.json"
+    args = [*_evidence_preflight_args(plan_path), "--quiet", "--output", str(output)]
+    assert main(args) == 0
+    captured = capsys.readouterr()
+    assert captured.out == ""
+    assert captured.err == ""
+    result = json.loads(output.read_text(encoding="utf-8"))
+    assert result["boundary_check_status"] == "passed"
+
+
+def test_evidence_preflight_without_output_still_prints_result(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+    execution_plan: ExecutionPlan,
+) -> None:
+    plan_path = tmp_path / "plan.json"
+    plan_path.write_text(json.dumps(execution_plan.to_dict()), encoding="utf-8")
+    assert main(_evidence_preflight_args(plan_path)) == 0
+    captured = capsys.readouterr()
+    assert captured.err == ""
+    result = json.loads(captured.out)
+    assert result["boundary_check_status"] == "passed"
 
 
 def test_quiet_preserves_structured_stderr_error(
@@ -282,26 +364,7 @@ def test_no_color_accepted_and_output_never_contains_ansi(
                 "2026-07-13",
             ],
         ),
-        (
-            0,
-            [
-                "evidence",
-                "preflight",
-                "--no-color",
-                "--source",
-                str(REFERENCE / "evidence-source.json"),
-                "--plan",
-                str(plan_path),
-                "--case-token",
-                "CSYN-CTP-I01",
-                "--checkpoint",
-                "ehr",
-                "--source-type",
-                CANONICAL_JSON_SOURCE_TYPE,
-                "--media-type",
-                CANONICAL_JSON_MEDIA_TYPE,
-            ],
-        ),
+        (0, [*_evidence_preflight_args(plan_path), "--no-color"]),
     ]
     for expected_exit, argv in invocations:
         assert main(argv) == expected_exit
