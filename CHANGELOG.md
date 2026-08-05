@@ -8,6 +8,14 @@ release yet, so everything to date lives under Unreleased.
 
 ### Added
 
+- CLI: `contextsafe evidence preflight` now accepts `--output`, matching `pack
+  validate`, `plan validate`, and `evaluate`. Previously the only way to obtain
+  the boundary-check result was stdout, so combining `--quiet` with `evidence
+  preflight` silently discarded the command's only output and left nothing but
+  the exit code. `--output` writes the same non-sensitive result document
+  (`boundary_check_status`, hashes, declared scope — `PreflightResult` never
+  carries evidence content) that would otherwise print; it does not change what
+  the command reads, copies, indexes, or logs.
 - B-033 slice: `schemas/contextsafe-receipt-v0.1.schema.json`, the published
   contract for the receipt document and its deterministic payload — the pre-1.0
   shape of the receipt schema required by `docs/04-ARCHITECTURE.md` section 8.

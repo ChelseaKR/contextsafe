@@ -116,6 +116,7 @@ def _parser() -> argparse.ArgumentParser:
     evidence_preflight.add_argument("--checkpoint", required=True)
     evidence_preflight.add_argument("--source-type", required=True)
     evidence_preflight.add_argument("--media-type", required=True)
+    evidence_preflight.add_argument("--output", type=Path)
     return parser
 
 
