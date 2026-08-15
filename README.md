@@ -256,6 +256,7 @@ A successful v1 allows one design partner to:
 - [Risk register](docs/14-RISK-REGISTER.md)
 - [V1 release checklist](docs/15-V1-RELEASE-CHECKLIST.md)
 - [Research sources](docs/16-RESEARCH-SOURCES.md)
+- [Publication readiness](docs/PUBLICATION-READINESS.md)
 - [ADR 0000: record architecture decisions](docs/adr/0000-record-architecture-decisions.md)
 - [ADR 0001: v1 boundary](docs/adr/0001-v1-boundary.md)
 - [ADR 0002: unsigned compilation before authorization](docs/adr/0002-unsigned-compilation-before-authorization.md)
@@ -275,12 +276,16 @@ A successful v1 allows one design partner to:
 
 The recommended implementation is Python 3.12, typed schemas, a command-line runner, a local SQLite evidence index, and generated static HTML/JSON. V1 has no hosted database, multi-tenant control plane, universal EHR writer, production agent, real-patient ingestion, AI classifier, or automated clinical recommendation.
 
-When implementation begins, this repository should inherit the portfolio standards in ../STANDARDS. The planning documents specify ContextSafe's project-specific values; they do not replace those standards.
+When implementation begins, this repository inherits the author's portfolio-wide
+engineering standards for code quality, security and supply chain, CI/CD,
+observability, accessibility, internationalization, documentation, and release.
+The planning documents specify ContextSafe's project-specific values; they do
+not replace those standards.
 
 ## Standards Conformance
 
-Status against the portfolio standards (per the portfolio applicability manifest;
-current code is an offline synthetic fixture validator/evaluator CLI):
+Status against those standards, with applicability judged per standard
+(current code is an offline synthetic fixture validator/evaluator CLI):
 
 | Standard | Status |
 | --- | --- |
