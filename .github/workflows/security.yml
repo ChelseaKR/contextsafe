@@ -31,7 +31,19 @@ jobs:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
           persist-credentials: false
-      - run: semgrep ci --config auto
+      # `semgrep scan`, not `semgrep ci`. On a pull_request event `semgrep ci`
+      # resolves a diff baseline and shells out to
+      # `git fetch origin --force --depth=1 <head-sha>`. This repository is
+      # private and the checkout above sets `persist-credentials: false`, so that
+      # fetch died with "could not read Username for 'https://github.com'",
+      # semgrep aborted before scanning anything, and its default
+      # `--suppress-errors` turned the aborted run into exit 0. Every pull request
+      # therefore got a green SAST check over zero scanned files, while the same
+      # config on a push to main ran the full scan and went red. `semgrep scan`
+      # needs no baseline and no credential, so both events now run the identical
+      # full scan. `--error` fails on findings; `--strict` fails on an analysis
+      # error, so a scan that cannot run can no longer report success.
+      - run: semgrep scan --config auto --error --strict
 
   gitleaks:
     name: secret scanning (gitleaks)
