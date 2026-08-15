@@ -55,6 +55,19 @@ BEFORE DELETE ON evidence_records
 BEGIN
     SELECT RAISE(ABORT, 'evidence records are append-only');
 END"""
+# SQLite rejects bound parameters inside a PRAGMA statement ("near \"?\": syntax
+# error"), so the two header PRAGMAs that carry a value cannot be parameterized the
+# way the INSERT below is. They are rendered once here instead, next to the constants
+# they encode and alongside the other _*_SQL statements this module executes, so that
+# the strings handed to `execute` are fixed module constants rather than text built at
+# the call site. The `:d` conversion accepts only an int and can emit only digits and
+# an optional sign, so neither statement can carry SQL syntax even if a future edit
+# made the constants configurable. `_validate_index` reads both values back and
+# rejects any file that does not carry them, and
+# `test_pragma_header_sql_is_a_fixed_integer_assignment` pins the exact rendered text.
+_SET_APPLICATION_ID_SQL = f"PRAGMA application_id = {_INDEX_APPLICATION_ID:d}"
+_SET_USER_VERSION_SQL = f"PRAGMA user_version = {_INDEX_USER_VERSION:d}"
+
 _SCHEMA_DEFINITIONS = (
     (
         "table",
@@ -407,8 +420,8 @@ class EvidenceStore:
             connection.execute("PRAGMA journal_mode = DELETE")
             connection.execute("PRAGMA synchronous = FULL")
             connection.execute("PRAGMA trusted_schema = OFF")
-            connection.execute(f"PRAGMA application_id = {_INDEX_APPLICATION_ID}")
-            connection.execute(f"PRAGMA user_version = {_INDEX_USER_VERSION}")
+            connection.execute(_SET_APPLICATION_ID_SQL)
+            connection.execute(_SET_USER_VERSION_SQL)
             connection.execute("BEGIN IMMEDIATE")
             for _kind, _name, _table, statement in _SCHEMA_DEFINITIONS:
                 connection.execute(statement)

@@ -77,3 +77,34 @@ release yet, so everything to date lives under Unreleased.
   Semgrep/gitleaks/pip-audit security workflow, tag-triggered release workflow,
   ADR log seed (existing ADRs relocated from `docs/decisions/` to `docs/adr/`),
   docs/I18N.md declaration, and a README Standards Conformance table.
+
+### Fixed
+
+- The Semgrep SAST gate (SEC-07) had been red on `main` for every one of its
+  fourteen runs since 2026-07-17, on four blocking findings against the two
+  evidence-index header PRAGMAs in
+  `evidence_store.py`. SQLite does not accept bound parameters
+  in a PRAGMA, so the statements are now rendered once at module scope from their
+  integer constants with the `:d` conversion — which can emit only digits and an
+  optional sign — and `_publish_new_database` executes those constants instead of
+  building a string at the call site. A new test pins the exact rendered text of
+  both statements, requires each to match `PRAGMA [a-z_]+ = -?\d+`, and asserts
+  that SQLite rejects the parameterized form. No waiver, `.semgrepignore`, or
+  `# nosemgrep` was added; the registry auto config now reports 0 findings over
+  72 targets. Store bytes and the on-disk index header are unchanged.
+
+### Security
+
+- The Semgrep SAST gate (SEC-07) reported a green check on every pull request
+  while scanning nothing. `semgrep ci` resolves a diff baseline on a
+  `pull_request` event by running `git fetch origin --force --depth=1 <head-sha>`;
+  this repository is private and the checkout sets `persist-credentials: false`,
+  so the fetch failed, Semgrep aborted before scanning, and its default
+  `--suppress-errors` turned the aborted run into exit 0. The job logs carry the
+  scan-environment banner and the fetch error with no scan summary — no rule
+  count, no target count, no findings line. A HIGH finding introduced by a pull
+  request would have passed the gate. Replaced with
+  `semgrep scan --config auto --error --strict`, which needs no baseline and no
+  credential, runs the identical full scan on push, pull request, and schedule,
+  and fails on an analysis error so a scan that cannot run can no longer report
+  success. See [ADR 0004](docs/adr/0004-sast-gate-pragma-and-scan-invocation.md).
