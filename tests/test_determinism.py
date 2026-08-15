@@ -1,0 +1,397 @@
+"""Three-run, cross-environment determinism evidence for command artifacts.
+
+R-10 rates local cross-platform nondeterminism as a live risk,
+[Test and evaluation](../docs/09-TEST-AND-EVALUATION.md) section 3 makes
+invariant 10 merge-blocking, and RG-15 requires identical deterministic JSON
+across three runs. ``tests/test_property_invariants.py`` covers the in-process
+half of that invariant: the same bundle, permuted, produces the same payload.
+This module covers the process half. Every scenario runs three times in three
+fresh interpreters under a deliberately hostile spread of environments —
+different time zone, locale, hash seed, UTF-8 mode, working directory, and
+input directory — and requires byte-identical exit codes, stdout, stderr, and
+``--output`` artifacts.
+
+The pinned digest carries the cross-platform half of the claim: the same
+constant must be reproduced by the CI determinism matrix on Ubuntu, macOS, and
+Windows, so a platform-dependent line ending, encoding, clock, locale, or path
+leak fails here rather than in a partner's release evidence. It changes only
+when a reviewed contract, fixture, or runner version changes; it is not a
+value to refresh casually.
+
+Scope: this is byte-level reproducibility of the shipped offline commands on
+the platforms the matrix runs. It is not fresh-install packaging evidence
+(B-045), not the full RG-15 gate, and not a claim about any other platform.
+"""
+
+import hashlib
+import io
+import json
+import os
+import shutil
+import subprocess
+import sys
+from collections.abc import Callable, Sequence
+from dataclasses import dataclass
+from pathlib import Path
+
+import pytest
+
+from contextsafe import jsonio
+from contextsafe.cli import main
+from contextsafe.errors import ContextSafeError
+from contextsafe.models import Checkpoint
+
+ROOT = Path(__file__).resolve().parents[1]
+REFERENCE = ROOT / "fixtures" / "reference"
+
+RECEIPT_DOCUMENT_SHA256 = (
+    "f34e58fa642ec0ac5a2368834324d55f1aacbf5f0b51c1ac0cff5c72ea3dce80"
+)
+"""SHA-256 of the reference ``evaluate`` document, terminal newline included."""
+
+_ENVIRONMENTS: tuple[dict[str, str], ...] = (
+    {
+        "TZ": "UTC",
+        "LANG": "C",
+        "LC_ALL": "C",
+        "PYTHONHASHSEED": "0",
+        "PYTHONUTF8": "0",
+    },
+    {
+        "TZ": "Pacific/Kiritimati",
+        "LANG": "en_US.UTF-8",
+        "LC_ALL": "en_US.UTF-8",
+        "PYTHONHASHSEED": "1",
+        "PYTHONUTF8": "1",
+    },
+    {
+        "TZ": "Etc/GMT+12",
+        "LANG": "C.UTF-8",
+        "LC_ALL": "C.UTF-8",
+        "PYTHONHASHSEED": "4294967295",
+        "PYTHONUTF8": "0",
+    },
+)
+"""Three environments that must not change one byte of any artifact."""
+
+_WINDOWS_UNSUPPORTED = (
+    "descriptor-relative no-follow input is a POSIX guarantee; commands that "
+    "need it fail closed elsewhere, which "
+    "test_platforms_without_descriptor_relative_open_fail_closed pins"
+)
+
+
+@dataclass(frozen=True, slots=True)
+class _Run:
+    """One complete child-process invocation and everything it emitted."""
+
+    returncode: int
+    stdout: bytes
+    stderr: bytes
+    artifact: bytes | None
+
+
+def _reference_copies(root: Path) -> tuple[Path, ...]:
+    """Return three interchangeable reference directories at different paths."""
+
+    copies = [REFERENCE]
+    for name in ("inputs-b", "a-much-longer-input-directory-name-c"):
+        destination = root / name
+        shutil.copytree(REFERENCE, destination)
+        copies.append(destination)
+    return tuple(copies)
+
+
+def _run_cli(
+    argv: Sequence[str],
+    *,
+    cwd: Path,
+    environment: dict[str, str],
+    output: Path | None,
+) -> _Run:
+    command = [sys.executable, "-m", "contextsafe", *argv]
+    if output is not None:
+        command = [*command, "--output", str(output)]
+    child_environment = dict(os.environ)
+    child_environment.update(environment)
+    completed = subprocess.run(
+        command,
+        cwd=cwd,
+        env=child_environment,
+        capture_output=True,
+        check=False,
+    )
+    return _Run(
+        returncode=completed.returncode,
+        stdout=completed.stdout,
+        stderr=completed.stderr,
+        artifact=None if output is None else output.read_bytes(),
+    )
+
+
+def _three_runs(
+    root: Path,
+    build_argv: Callable[[Path], list[str]],
+    *,
+    with_output: bool = False,
+) -> tuple[_Run, ...]:
+    """Run one scenario three times across environments, directories, and paths."""
+
+    references = _reference_copies(root)
+    working_directories = (ROOT, root, references[-1])
+    runs: list[_Run] = []
+    for index, environment in enumerate(_ENVIRONMENTS):
+        runs.append(
+            _run_cli(
+                build_argv(references[index]),
+                cwd=working_directories[index],
+                environment=environment,
+                output=root / f"artifact-{index}.json" if with_output else None,
+            )
+        )
+    return tuple(runs)
+
+
+def _assert_identical(runs: Sequence[_Run]) -> None:
+    first = runs[0]
+    for other in runs[1:]:
+        assert other.returncode == first.returncode
+        assert other.stdout == first.stdout
+        assert other.stderr == first.stderr
+        assert other.artifact == first.artifact
+
+
+def _fixture_argv(command: str, reference: Path) -> list[str]:
+    return [
+        command,
+        "--case",
+        str(reference / "case.json"),
+        "--observations",
+        str(reference / "observations.json"),
+        "--rules",
+        str(reference / "rules.json"),
+    ]
+
+
+def _evaluate_argv(reference: Path) -> list[str]:
+    return _fixture_argv("evaluate", reference)
+
+
+def _assert_canonical_line(payload: bytes) -> None:
+    """A canonical artifact is one UTF-8 JSON line with one terminal newline."""
+
+    assert b"\r" not in payload
+    assert payload.endswith(b"\n")
+    assert payload.count(b"\n") == 1
+    json.loads(payload.decode("utf-8"))
+
+
+def _execution_plan_document() -> dict[str, object]:
+    """Return the shared synthetic plan as a document a subprocess can read."""
+
+    return {
+        "schema_version": "contextsafe.plan/1.0.0",
+        "plan_id": "PLAN-SYNTHETIC-TEST",
+        "engagement_id": "ENG-SYNTHETIC-TEST",
+        "engagement_sha256": "1" * 64,
+        "compiled_pack_sha256": "2" * 64,
+        "environment": {
+            "classification": "staging",
+            "name": "SYNTHETIC-STAGING-A",
+            "non_production_attested": True,
+            "production_access_prohibited": True,
+        },
+        "target_hosts": ["staging.contextsafe.invalid"],
+        "synthetic_namespace": {
+            "system": "urn:contextsafe:synthetic",
+            "value_prefix": "CSYN-",
+        },
+        "owners": {
+            "technical_owner_id": "TEST-TECHNICAL-OWNER",
+            "clinical_owner_id": "TEST-CLINICAL-OWNER",
+            "privacy_owner_id": "TEST-PRIVACY-OWNER",
+            "cleanup_owner_id": "TEST-CLEANUP-OWNER",
+        },
+        "cleanup": {
+            "owner_id": "TEST-CLEANUP-OWNER",
+            "system_ids": ["SYS-STAGING-EHR"],
+            "due_on": "2026-08-01",
+        },
+        "checkpoints": [item.value for item in Checkpoint],
+        "case_tokens": ["CSYN-CTP-I01"],
+        "valid_from": "2026-07-13",
+        "valid_until": "2026-08-01",
+    }
+
+
+def test_validate_is_byte_identical_across_runs_environments_and_paths(
+    tmp_path: Path,
+) -> None:
+    """Invariant 10, process form: nothing outside the inputs reaches stdout."""
+
+    runs = _three_runs(tmp_path, lambda reference: _fixture_argv("validate", reference))
+    _assert_identical(runs)
+    assert runs[0].returncode == 0
+    assert runs[0].stderr == b""
+    _assert_canonical_line(runs[0].stdout)
+
+
+def test_evaluate_artifact_is_byte_identical_and_matches_stdout(
+    tmp_path: Path,
+) -> None:
+    """The receipt a release decision would carry is byte-stable everywhere."""
+
+    runs = _three_runs(tmp_path, _evaluate_argv, with_output=True)
+    _assert_identical(runs)
+    artifact = runs[0].artifact
+    assert artifact is not None
+    assert runs[0].returncode == 0
+    assert runs[0].stdout == b""
+    assert runs[0].stderr == b""
+    _assert_canonical_line(artifact)
+
+    printed = _three_runs(tmp_path / "printed", _evaluate_argv)
+    _assert_identical(printed)
+    assert printed[0].stdout == artifact
+
+
+def test_evaluate_receipt_digest_is_pinned_on_every_platform(tmp_path: Path) -> None:
+    """The cross-platform claim: one constant digest, every matrix platform.
+
+    This fails on a platform that translates the terminal newline, encodes
+    with anything other than UTF-8, or lets a clock, locale, hash seed, or
+    absolute input path reach the document.
+    """
+
+    runs = _three_runs(tmp_path, _evaluate_argv, with_output=True)
+    artifact = runs[0].artifact
+    assert artifact is not None
+    assert hashlib.sha256(artifact).hexdigest() == RECEIPT_DOCUMENT_SHA256
+
+
+def test_no_input_path_or_environment_value_reaches_an_artifact(
+    tmp_path: Path,
+) -> None:
+    """A receipt carries hashes and statuses, never the caller's filesystem."""
+
+    runs = _three_runs(tmp_path, _evaluate_argv, with_output=True)
+    artifact = runs[0].artifact
+    assert artifact is not None
+    for fragment in (str(tmp_path), str(ROOT), "Kiritimati", "en_US", "inputs-b"):
+        assert fragment.encode("utf-8") not in artifact
+
+
+def test_claimed_time_moves_the_envelope_and_never_the_payload_digest(
+    tmp_path: Path,
+) -> None:
+    """Envelope metadata is untrusted decoration; the payload hash ignores it."""
+
+    runs = _three_runs(
+        tmp_path,
+        lambda reference: [
+            *_evaluate_argv(reference),
+            "--claimed-generated-at",
+            "2026-07-17T01:02:03Z",
+        ],
+        with_output=True,
+    )
+    _assert_identical(runs)
+    claimed_artifact = runs[0].artifact
+    baseline_artifact = _three_runs(
+        tmp_path / "baseline", _evaluate_argv, with_output=True
+    )[0].artifact
+    assert claimed_artifact is not None
+    assert baseline_artifact is not None
+    claimed = json.loads(claimed_artifact.decode("utf-8"))
+    baseline = json.loads(baseline_artifact.decode("utf-8"))
+    assert claimed["envelope"]["claimed_generated_at"] == "2026-07-17T01:02:03Z"
+    assert baseline["envelope"]["claimed_generated_at"] is None
+    assert claimed["payload"] == baseline["payload"]
+    assert claimed["payload_sha256"] == baseline["payload_sha256"]
+
+
+def test_fail_closed_rejection_is_deterministic(tmp_path: Path) -> None:
+    """A rejection is an artifact too: same bytes, same code, every run."""
+
+    runs = _three_runs(
+        tmp_path,
+        lambda reference: [
+            "pack",
+            "validate",
+            "--pack",
+            str(reference / "pack-draft.json"),
+            "--as-of",
+            "2026-07-13",
+        ],
+    )
+    _assert_identical(runs)
+    assert runs[0].returncode == 2
+    assert runs[0].stdout == b""
+    _assert_canonical_line(runs[0].stderr)
+    assert json.loads(runs[0].stderr.decode("utf-8"))["error"]["code"] == (
+        "pack_not_active"
+    )
+
+
+@pytest.mark.skipif(os.name == "nt", reason=_WINDOWS_UNSUPPORTED)
+def test_evidence_preflight_result_is_deterministic(tmp_path: Path) -> None:
+    """The read-only boundary check reports the same bytes on every run."""
+
+    plan_source = tmp_path / "plan.json"
+    plan_source.write_bytes(json.dumps(_execution_plan_document()).encode("utf-8"))
+    runs = _three_runs(
+        tmp_path,
+        lambda reference: [
+            "evidence",
+            "preflight",
+            "--source",
+            str(reference / "evidence-source.json"),
+            "--plan",
+            str(plan_source),
+            "--case-token",
+            "CSYN-CTP-I01",
+            "--checkpoint",
+            "ehr",
+            "--source-type",
+            "canonical_json",
+            "--media-type",
+            "application/vnd.contextsafe.evidence+json",
+        ],
+        with_output=True,
+    )
+    _assert_identical(runs)
+    assert runs[0].returncode == 0
+    artifact = runs[0].artifact
+    assert artifact is not None
+    _assert_canonical_line(artifact)
+    assert json.loads(artifact.decode("utf-8"))["persisted"] is False
+
+
+def test_platforms_without_descriptor_relative_open_fail_closed(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Without descriptor-relative no-follow open, component reads reject.
+
+    ``docs/10-OPERATIONS-SRE.md`` names Windows 11 as a planned supported
+    platform, and Windows offers neither ``O_NOFOLLOW`` nor ``dir_fd``. The
+    commands that read pack components beneath a root therefore fail closed
+    rather than silently weaken the guarantee. Pinning that here states the
+    limitation on every platform instead of leaving it to a Windows-only CI
+    observation.
+    """
+
+    monkeypatch.setattr(jsonio, "_DESCRIPTOR_RELATIVE_SUPPORTED", False)
+    with pytest.raises(ContextSafeError) as raised:
+        jsonio.load_json_beneath(REFERENCE, "case.json")
+    assert raised.value.code == "input_path_unsupported"
+
+
+def test_text_only_stream_still_receives_the_identical_payload(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """An in-process caller that substitutes a text stream loses no output."""
+
+    stream = io.StringIO()
+    monkeypatch.setattr(sys, "stdout", stream)
+    assert main(_fixture_argv("validate", REFERENCE)) == 0
+    assert json.loads(stream.getvalue())["valid"] is True

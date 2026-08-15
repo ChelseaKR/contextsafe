@@ -4,7 +4,7 @@ import argparse
 import sys
 from collections.abc import Sequence
 from pathlib import Path
-from typing import NoReturn
+from typing import BinaryIO, NoReturn, TextIO
 
 from contextsafe.canonical import JsonValue, as_json_value, canonical_json, sha256_json
 from contextsafe.contract_validation import date_value, timestamp_value
@@ -26,6 +26,29 @@ EXIT_CONTRACT_ERROR = 2
 
 EXIT_USAGE_ERROR = 64
 """The command line itself was invalid before any input file was opened."""
+
+
+def _emit(stream: TextIO, text: str) -> None:
+    """Write exactly the UTF-8 bytes of ``text`` with no platform rewriting.
+
+    Command output is a hash-covered artifact, not display text. A text-mode
+    write translates a line feed into the platform line separator and encodes
+    with the platform's preferred encoding, so the same receipt would leave a
+    POSIX host and a Windows host with different bytes and different file
+    digests. R-10 rates that cross-platform divergence as a live risk and
+    RG-15 requires identical deterministic JSON across three runs and every
+    supported operating system, so bytes are written to the binary buffer
+    wherever the stream exposes one. A caller that substitutes a text-only
+    stream in process still receives the identical text.
+    """
+
+    buffer: BinaryIO | None = getattr(stream, "buffer", None)
+    if buffer is None:
+        stream.write(text)
+        return
+    stream.flush()
+    buffer.write(text.encode("utf-8"))
+    buffer.flush()
 
 
 class _Parser(argparse.ArgumentParser):
@@ -207,7 +230,9 @@ def main(argv: Sequence[str] | None = None) -> int:
     ``EXIT_SUCCESS`` (0) reports success, ``EXIT_CONTRACT_ERROR`` (2) reports a
     fail-closed contract rejection with one JSON error object on stderr, and
     ``EXIT_USAGE_ERROR`` (64) reports an invalid command line; ``--help`` exits
-    0. Output never contains ANSI escape sequences in any mode.
+    0. Output never contains ANSI escape sequences in any mode, and every
+    success payload, ``--output`` artifact, and stderr error object is the
+    same UTF-8 byte sequence on every supported platform.
     """
 
     args = _parser().parse_args(argv)
@@ -216,15 +241,15 @@ def main(argv: Sequence[str] | None = None) -> int:
         output_path: Path | None = getattr(args, "output", None)
         if output_path is not None:
             try:
-                output_path.write_text(output, encoding="utf-8")
+                output_path.write_bytes(output.encode("utf-8"))
             except OSError as exc:
                 raise ContextSafeError(
                     "output_io_error", "$", "output could not be written"
                 ) from exc
         elif not args.quiet:
-            sys.stdout.write(output)
+            _emit(sys.stdout, output)
         return EXIT_SUCCESS
     except ContextSafeError as exc:
         error: dict[str, JsonValue] = {"error": as_json_value(exc.to_dict())}
-        sys.stderr.write(f"{canonical_json(error)}\n")
+        _emit(sys.stderr, f"{canonical_json(error)}\n")
         return EXIT_CONTRACT_ERROR

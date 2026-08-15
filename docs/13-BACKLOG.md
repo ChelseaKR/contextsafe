@@ -86,6 +86,26 @@ closed: most of the command surface in [Architecture §7](04-ARCHITECTURE.md)
 yet, and independent accessibility review of operator-facing CLI conventions is
 outstanding.
 
+Implementation note (2026-08-15, B-021): the three-run reproducibility evidence
+named in the note below now exists for the shipped commands.
+`tests/test_determinism.py` runs each command three times in fresh interpreters
+under different time zones, locales, hash seeds, UTF-8 modes, working
+directories, and input directories, and requires byte-identical exit codes,
+stdout, stderr, and `--output` artifacts plus a pinned reference-receipt digest;
+a CI matrix reproduces the same digest on Ubuntu, macOS, and Windows. Command
+output is now written as UTF-8 bytes rather than through a text stream, because
+text-mode writes translate the terminal newline on Windows and would have given
+the same receipt two different file digests. B-021 is not closed: observation
+normalization and mapping/version binding remain with B-019/B-026, no signing
+path exists (B-035), the matrix runs GitHub's server SKUs rather than the
+Windows 11 and macOS desktop fresh installs RG-15 requires, and packaging and
+fresh-install evidence remain B-045. The matrix also records a live platform
+limitation: `pack validate`, `plan validate`, and `evidence preflight` depend on
+descriptor-relative no-follow reads, which Windows cannot provide, so they fail
+closed there with `input_path_unsupported` while
+[Operations](10-OPERATIONS-SRE.md) still lists Windows 11 as a planned supported
+platform. Closing that gap needs a decision, not a test.
+
 Implementation note (2026-07-17): the payload/envelope-separation part of B-021 is
 now exercised: `contextsafe evaluate` emits a receipt document whose deterministic
 payload is hashed separately (`payload_sha256`) from an untrusted envelope carrying
