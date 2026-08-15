@@ -104,7 +104,10 @@ The durable primitive has no CLI import route. Every iteration-3 evidence record
 `authorization_status: not_verified_internal_test_only` and
 `usable_for_execution: false`; a future signature-verification layer may not relabel
 these records. The preflight scanner is a fallible boundary check, not proof that bytes
-contain no PHI.
+contain no PHI. A near-miss suite pins where its boundary falls in both
+directions, including three identifier-shaped values it does not catch; those
+are recorded for the independent security review that B-039 requires, and the
+synthetic-namespace grammar rather than the scan is what bounds them.
 
 Declared approvals are not authenticated signatures and do not establish that a
 real clinical or community review occurred. The committed
