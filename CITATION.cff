@@ -21,3 +21,6 @@ keywords:
   - synthetic-data
   - release-gating
   - deterministic-evaluation
+# No `version` / `date-released`: nothing has been tagged or released yet, and CFF
+# treats both as optional. They return when the first release is actually cut — see
+# CHANGELOG.md and docs/PUBLICATION-READINESS.md.

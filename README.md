@@ -261,6 +261,7 @@ A successful v1 allows one design partner to:
 - [Risk register](docs/14-RISK-REGISTER.md)
 - [V1 release checklist](docs/15-V1-RELEASE-CHECKLIST.md)
 - [Research sources](docs/16-RESEARCH-SOURCES.md)
+- [Publication readiness](docs/PUBLICATION-READINESS.md)
 - [ADR 0000: record architecture decisions](docs/adr/0000-record-architecture-decisions.md)
 - [ADR 0001: v1 boundary](docs/adr/0001-v1-boundary.md)
 - [ADR 0002: unsigned compilation before authorization](docs/adr/0002-unsigned-compilation-before-authorization.md)

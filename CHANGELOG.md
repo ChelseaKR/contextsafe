@@ -95,6 +95,16 @@ release yet, so everything to date lives under Unreleased.
   and `evidence preflight` therefore cannot run. This is byte-reproducibility
   evidence only: packaging and fresh-install evidence remain B-045, and B-021
   stays open pending normalization (B-019/B-026) and signing (B-035).
+- `docs/PUBLICATION-READINESS.md`: a gate-by-gate audit of whether this
+  repository could ever be made public, with evidence. Gate 0 is the
+  IP/inventions-agreement question created by the repository's creation date
+  falling during prior employment, which only the maintainer's attorney can
+  clear; Gate 1 is a dual-use and misuse assessment specific to this project —
+  a tool that reports where transgender and nonbinary identity data is lost
+  also reports where it is retained — including what the threat model already
+  covers, four things it does not, and what must be decided before B-010. The
+  verdict is *technically ready pending IP clearance*, not *ready to publish*.
+  No tag, release, visibility change, or history rewrite accompanies it.
 - CLI: `contextsafe evidence preflight` now accepts `--output`, matching `pack
   validate`, `plan validate`, and `evaluate`. Previously the only way to obtain
   the boundary-check result was stdout, so combining `--quiet` with `evidence
@@ -215,6 +225,16 @@ release yet, so everything to date lives under Unreleased.
   receipt would have left a POSIX host and a Windows host with different bytes
   and different file digests — the cross-platform nondeterminism R-10 names and
   RG-15 gates. Artifact and payload content is unchanged on POSIX hosts.
+- `CITATION.cff` no longer advertises a release that was never cut. It carried
+  `date-released: 2026-07-17` while `git tag -l` is empty and no GitHub release
+  exists. CFF treats `version` and `date-released` as optional; both return when
+  a release is actually tagged.
+- The README no longer points readers at `../STANDARDS`, a path that exists only
+  in the author's local checkout and names a repository a reader cannot open.
+  The standards are now described rather than linked; the conformance table is
+  unchanged.
+- `.gitignore` covers `.hypothesis/`, which was previously ignored only by the
+  nested ignore file Hypothesis generates for itself.
 
 ### Security
 
