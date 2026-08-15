@@ -237,7 +237,9 @@ maintainer decides · **MAINTAINER'S CALL** — a choice, not a defect.
 
 ```
 gitleaks detect --no-banner --redact -v --log-opts="--all"
-  → 22 commits scanned (24 reachable minus 2 merges, which add no blobs)
+  → 22 commits scanned (24 reachable minus 2 merges, which add no blobs;
+    the scan predates the two commits on the open PR branches, and `main`
+    is unchanged since)
   → ~1.27 MB scanned
   → no leaks found
 
@@ -387,9 +389,9 @@ attempted:
 
 **Recommendation for the decision, not the decision itself:** if the pricing is
 still the pricing she intends to quote, option A gives every prospect her
-negotiating floor for free, and option C is the cheapest fix because this
-repository has almost no external references to break (one fork count of zero,
-zero stars, no published tags).
+negotiating floor for free, and option C is the cheapest of the rewriting
+options because this repository has almost nothing external to break: zero
+forks, zero stars, and no published tag.
 
 ### §7 Clean-clone verification
 
