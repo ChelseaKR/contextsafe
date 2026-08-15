@@ -51,3 +51,47 @@ jobs:
 
       - name: Run the local verification gate
         run: make verify
+
+  determinism:
+    # RG-15 and R-10 ask for identical deterministic JSON across three runs and
+    # every supported operating system. `verify` proves that on one runner; this
+    # job is the cross-platform half, running only tests/test_determinism.py so a
+    # platform-dependent line ending, encoding, or path leak fails here instead
+    # of in a partner's release evidence. These are GitHub's server SKUs, not the
+    # Windows 11 and macOS desktop fresh installs RG-15 requires, and packaged
+    # artifacts remain B-045; this job is byte-reproducibility evidence only.
+    name: determinism (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, macos-15, windows-2025]
+    permissions:
+      contents: read
+    env:
+      UV_PYTHON: "3.12"
+      UV_PYTHON_DOWNLOADS: never
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.3.0
+        with:
+          python-version: "3.12"
+          check-latest: false
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@11f9893b081a58869d3b5fccaea48c9e9e46f990 # v8.3.2
+        with:
+          version: "0.11.28"
+          enable-cache: true
+
+      - name: Install the frozen dependency graph
+        run: uv sync --frozen
+
+      - name: Three-run determinism suite
+        run: uv run pytest tests/test_determinism.py

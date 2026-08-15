@@ -169,6 +169,19 @@ uv run contextsafe evidence preflight \
   --output preflight-result.json
 ```
 
+Command output is a hash-covered artifact rather than display text: every
+success payload, `--output` file, and stderr error object is the same UTF-8 byte
+sequence on every platform, with no line-ending or encoding translation. A
+three-run suite re-runs each command in fresh interpreters under different time
+zones, locales, hash seeds, UTF-8 modes, working directories, and input
+directories and requires byte-identical results, and a CI matrix reproduces the
+pinned reference-receipt digest on Ubuntu, macOS, and Windows. That is
+byte-reproducibility evidence only; it is not packaging, fresh-install, or
+release evidence. `pack validate`, `plan validate`, and `evidence preflight`
+need descriptor-relative no-follow reads, so on a platform without them —
+Windows included — they fail closed with `input_path_unsupported` rather than
+run with a weaker guarantee.
+
 Every command also accepts `--quiet`, which suppresses the stdout success
 payload while leaving exit codes, `--output` files, and stderr JSON errors
 unchanged, and `--no-color`, which pins the plain-output contract: contextsafe
