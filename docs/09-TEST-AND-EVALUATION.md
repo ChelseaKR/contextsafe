@@ -132,6 +132,29 @@ against itself. A final test records the boundary honestly: structural validity
 is not tamper detection, because hash, approval, and signature verification are
 separate work.
 
+### Privacy canary matrix
+
+The rejection cases above establish that a direct identifier, control
+character, or unapproved free-text value fails closed. The canary suite
+(`tests/test_privacy_canaries.py`, B-039) establishes where that boundary
+actually falls and what surfaces it can leak into. Near-miss cases run in both
+directions: approved codes that resemble identifiers must not be false
+positives, and values one character from acceptable must fail closed with a
+named code. Three identifier-shaped values pass the pattern scan today — a date
+outside the pattern's 19xx/20xx window, a date written with dots, and a
+seven-digit local number — and are pinned as blind spots for the independent
+security review rather than presented as approved behavior; the
+synthetic-namespace grammar, not the scan, is what bounds them. The log canary
+is structural: no module imports `logging`, no module prints, and no accepted
+or rejected command emits a log record. The crash canary requires that an
+unexpected failure after the boundary read carries neither evidence content nor
+the caller's source path, and that a CLI rejection prints a structured error
+rather than a traceback. The index canary draws the storage boundary
+explicitly: raw bytes stay in the content-addressed object that `raw_sha256`
+names, while the SQLite index a diagnostic or support bundle would read carries
+hashes, tokens, and provenance only. A final matrix property asserts that no
+rejection anywhere echoes the value that triggered it.
+
 ### Determinism matrix
 
 Invariant 10 is tested in two forms. In process, the property layer permutes a

@@ -16,6 +16,26 @@ release yet, so everything to date lives under Unreleased.
   against a locked dependency could open a pull request, nothing kept the action
   pins current, and OpenSSF Scorecard's `Dependency-Update-Tool` check scored 0
   by construction.
+- B-039 slice: `tests/test_privacy_canaries.py`, the near-miss, log, and
+  crash-output half of the canary suite RG-12 gates on. It pins the privacy
+  boundary in both directions — approved codes that resemble identifiers must
+  not be false positives, values one character from acceptable must fail closed
+  with a named code — and records three identifier-shaped values the pattern
+  scan does not catch (a date outside its 19xx/20xx window, a dotted date, a
+  seven-digit local number) as blind spots for the independent security review
+  rather than as accepted behavior; the synthetic-namespace grammar is what
+  bounds them. It adds a structural log canary (no module imports `logging` or
+  prints, and no accepted or rejected command emits a record), a crash canary
+  (an unexpected failure after the boundary read carries neither evidence
+  content nor the caller's source path, and a CLI rejection prints a structured
+  error rather than a traceback), an index canary (raw bytes stay in the
+  content-addressed object; the queryable SQLite index carries hashes, tokens,
+  and provenance only), and a matrix property that no rejection echoes the
+  value that triggered it. No detector, schema, or runtime behavior changes.
+  B-039 is not closed: pattern tuning is a security-owned decision whose
+  independent review has not happened, FHIR/HL7/LIS sources do not exist
+  (B-023–B-025), and the diagnostics, support bundle, and local logs RG-12 also
+  covers are B-046.
 - B-021 slice: `tests/test_determinism.py`, the three-run reproducibility
   evidence R-10 and RG-15 ask for and the process half of status-algebra
   invariant 10. Each shipped command runs three times in fresh interpreters

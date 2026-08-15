@@ -182,6 +182,25 @@ B-036.
 | B-047 | P0-15 | Exercise PHI, critical finding, wrong result, pack withdrawal, key compromise runbooks | F/SEC/CL/DP | B-035/B-040/B-046 | 3d + 12h participants |
 | B-048 | G-01, F-001..036 | Full 36-published-regression-fault and five-hidden-challenge-fault evaluation; all 41/41 must be detected and correctly localized, with any miss blocking release; corpus-bounded result makes no population-sensitivity claim | E/independent QA | B-028..046 | 6d + 16h QA |
 
+Implementation note (2026-08-15, B-039): the canary suite is seeded in
+`tests/test_privacy_canaries.py` for the one source profile that exists. It
+pins the boundary in both directions — approved codes that resemble
+identifiers and must not be false positives, values one character from
+acceptable that must fail closed and with which code, and three documented
+blind spots where an identifier-shaped value passes the pattern scan and only
+the synthetic-namespace grammar bounds it — plus a structural log canary (no
+module imports `logging`, no command emits a record), a crash canary (an
+unexpected failure after the boundary read carries neither evidence content nor
+the caller's source path), an index canary (raw bytes stay in the
+content-addressed object; the queryable SQLite index carries hashes, tokens,
+and provenance only), and a matrix property that no rejection ever echoes the
+value that triggered it. B-039 is not closed: tuning the direct-identifier
+patterns is a security-owned decision and the independent review has not
+happened, the blind spots above are recorded for that review rather than
+accepted, FHIR/HL7/LIS sources do not exist yet (B-023–B-025), and the
+diagnostics, redacted support bundle, and local logs RG-12 also covers are
+B-046.
+
 ## Phase 6 — pilot and v1
 
 | ID | Trace | Deliverable and acceptance | Owner | Dependency | Estimate |
