@@ -270,7 +270,7 @@ current code is an offline synthetic fixture validator/evaluator CLI):
 | --- | --- |
 | Responsible-Tech Framework | Applies — governance, community accountability, and fail-closed safety posture documented in `docs/07-GOVERNANCE-LEGAL-SAFETY.md` |
 | Code Quality | Applies — ruff (incl. bandit rules, complexity ≤10), mypy `--strict`, branch coverage ≥90% (≥95% on safety-critical modules) via `make verify` |
-| Security & Supply-Chain | Applies — Semgrep SAST, gitleaks secret scan, pip-audit dependency audit (`.github/workflows/security.yml` + `make audit`), pinned `uv.lock`, SHA-pinned actions, `SECURITY.md` |
+| Security & Supply-Chain | Applies — Semgrep SAST, gitleaks secret scan, pip-audit dependency audit (`.github/workflows/security.yml` + `make audit`), pinned `uv.lock`, SHA-pinned actions kept current by Dependabot (`.github/dependabot.yml`, weekly, 7-day cooldown), `SECURITY.md` |
 | CI/CD | Applies — `ci.yml` runs the identical `make verify` gate on every push/PR |
 | Observability | Applies — deterministic, hash-covered JSON receipts and evidence records are the audit/observability surface of this offline CLI |
 | Accessibility | N/A — offline CLI/library with no human-facing HTML |

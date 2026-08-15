@@ -8,6 +8,14 @@ release yet, so everything to date lives under Unreleased.
 
 ### Added
 
+- Dependency-update automation (SEC-14): `.github/dependabot.yml` covering the
+  two places this repository pins — the `uv` lock and the SHA-pinned GitHub
+  Actions — weekly, with a seven-day cooldown on both ecosystems (SEC-26 asks for
+  72 hours) and Python updates grouped into one pull request. The repository
+  previously had neither a `dependabot.yml` nor a `renovate.json`, so no advisory
+  against a locked dependency could open a pull request, nothing kept the action
+  pins current, and OpenSSF Scorecard's `Dependency-Update-Tool` check scored 0
+  by construction.
 - CLI: `contextsafe evidence preflight` now accepts `--output`, matching `pack
   validate`, `plan validate`, and `evaluate`. Previously the only way to obtain
   the boundary-check result was stdout, so combining `--quiet` with `evidence
