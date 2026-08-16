@@ -160,6 +160,8 @@ Evidence links must point to immutable CI artifacts, signed review records, pilo
 - [ ] Marketing does not imply HL7, ONC/ASTP, DICOM, FDA, Leapfrog, or government endorsement.
 - [ ] Required E&O, cyber, and other advised insurance is active.
 - [ ] Privacy/security and publication terms are signed.
+- [ ] The [publication policy](17-PUBLICATION-POLICY.md) decision record names a date for every open decision, or records why one is deferred and who holds it.
+- [ ] Every publicly released artifact carries a recorded class and approval under that policy, no class 3 material has been published, and the pre-pack re-review of already-public documents is complete.
 
 ## RG-20 — release and maintenance
 
