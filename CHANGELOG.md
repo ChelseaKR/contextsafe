@@ -105,6 +105,31 @@ release yet, so everything to date lives under Unreleased.
   covers, four things it does not, and what must be decided before B-010. The
   verdict is *technically ready pending IP clearance*, not *ready to publish*.
   No tag, release, visibility change, or history rewrite accompanies it.
+- `docs/17-PUBLICATION-POLICY.md`: the publication policy the readiness audit
+  said had to exist, written as a decision document rather than an adopted
+  control. It classifies everything this project could publish as method,
+  locator, or instance; states what may be said about a governed pack and what
+  never may (no receipt, customer, vendor, version, or small-population
+  aggregate); names an approval owner with a community co-chair veto and an
+  interim rule that blocks locator material entirely while the maintainer is the
+  only available approver; says what happens to already-published material when
+  a pack lands; and lists the conditions under which the project stops
+  publishing. Its five open decisions carry options and a recommendation —
+  split publication, "publish the judgment, withhold the locator" — and none is
+  in force until the maintainer records a date.
+- Publication as a first-class part of the threat model and governance, closing
+  the four dual-use gaps the readiness audit named. `docs/06` states the
+  inversion in section 1 rather than deriving it later, adds TB-10 (publication)
+  with its irreversibility called out, adds the reader of public project
+  material, the party using lawful process, and the maintainer publishing under
+  time pressure as actors, and adds T-16 through T-18, two assets, and three
+  residual risks including that withholding locators buys friction rather than
+  secrecy. `docs/07` gains publication decision rights, a RACI row, HAZ-09 and
+  HAZ-10, a launch gate, and section 14. `docs/14` splits R-23, which was titled
+  "weaken demand **or increase harm**" and mitigated only demand: R-23 is now
+  demand alone, R-25 is the harm half at score 15, and R-26 is compelled
+  disclosure. `docs/13` gates B-009 on an adopted policy, `docs/15` adds two
+  RG-19 checks, and the README carries the inversion above the quickstart.
 - CLI: `contextsafe evidence preflight` now accepts `--output`, matching `pack
   validate`, `plan validate`, and `evaluate`. Previously the only way to obtain
   the boundary-check result was stdout, so combining `--quiet` with `evidence
@@ -235,6 +260,15 @@ release yet, so everything to date lives under Unreleased.
   unchanged.
 - `.gitignore` covers `.hypothesis/`, which was previously ignored only by the
   nested ignore file Hypothesis generates for itself.
+- Three links to ADR 0001 pointed at `docs/decisions/`, which does not exist;
+  the ADRs live in `docs/adr/`. Every relative link in `docs/` and the README
+  now resolves.
+- `docs/PUBLICATION-READINESS.md` Gate 0 records that the maintainer reviewed
+  the IP question and decided on 2026-08-15 to proceed. The status changed; the
+  findings did not. The audit's recommendation to wait for counsel is kept
+  verbatim alongside the decision that departed from it, because a record that
+  deleted the recommendation once it was overridden would be the less honest
+  document.
 
 ### Security
 

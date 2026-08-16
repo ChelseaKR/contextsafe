@@ -10,6 +10,23 @@ validated product exists yet.
 
 The planned ContextSafe service would run a fixed, versioned pack of synthetic patients through a health system's non-production workflow, evaluate whether identity and clinical-context data survive each boundary, and produce a signed evidence receipt. Its intended capability is to detect data loss, coercion, unsafe defaults, missing reference ranges, and patient-facing misidentification before a release reaches care. The current code proves only bounded offline fixture evaluation, unsigned contract compilation, a read-only code-envelope boundary check, and an internal-test evidence-store primitive; it is not clinically approved and does not establish those product capabilities.
 
+## Dual use
+
+A tool that reports where transgender and nonbinary identity data is lost is, in
+the same breath, reporting where it is retained: a finding that the value was
+absent at the laboratory also says it was present in the EHR. That is what the
+tool is for, and it is why this repository carries a
+[publication policy](docs/17-PUBLICATION-POLICY.md) that says what may be
+published about a governed pack, what never is — no receipt, no customer, no
+vendor, no version, no real deployment — and who approves. The threat model
+treats publication as a trust boundary of its own, TB-10, with the reader of
+public project material as a named actor
+([threat model §1, §3, §4, T-16](docs/06-SECURITY-PRIVACY-THREAT-MODEL.md)).
+
+What is here today describes no real system: every fixture is synthetic, no
+governed pack or receipt exists yet, and the concept separation the code encodes
+is published HL7 Gender Harmony material.
+
 ## Quickstart
 
 With [`uv`](https://docs.astral.sh/uv/) installed:
@@ -261,6 +278,7 @@ A successful v1 allows one design partner to:
 - [Risk register](docs/14-RISK-REGISTER.md)
 - [V1 release checklist](docs/15-V1-RELEASE-CHECKLIST.md)
 - [Research sources](docs/16-RESEARCH-SOURCES.md)
+- [Publication policy](docs/17-PUBLICATION-POLICY.md)
 - [Publication readiness](docs/PUBLICATION-READINESS.md)
 - [ADR 0000: record architecture decisions](docs/adr/0000-record-architecture-decisions.md)
 - [ADR 0001: v1 boundary](docs/adr/0001-v1-boundary.md)
