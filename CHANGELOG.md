@@ -126,6 +126,25 @@ release yet, so everything to date lives under Unreleased.
 
 ### Fixed
 
+- `CITATION.cff` no longer advertises a release that was never cut. It carried
+  `date-released: 2026-07-17` while `git tag -l` is empty, `gh release list`
+  returns nothing, and the repository's `latestRelease` is null. CFF treats
+  `version` and `date-released` as optional; both return when a release is
+  actually tagged.
+- `SECURITY.md` no longer publishes a personal email address as the disclosure
+  channel. It did so for a reason the file stated — private vulnerability
+  reporting is not available on a private repository — and that reason stops
+  applying the moment this repository is public. Reports now go through GitHub
+  private vulnerability reporting, with a details-free public issue as the
+  fallback if that form is unavailable. *The setting has to be enabled in
+  repository settings for the link to work; until it is, the form 404s.*
+- Three README claims that had drifted from what the repository does. `ci.yml`
+  does not run on "every push/PR": it skips docs-only changes by design, and
+  the row now says so and notes that the security workflow has no such skip.
+  The documentation row enumerated a planning corpus `docs/00`–`16` that no
+  longer matches the files on disk. The release row now records that no tag and
+  no release exist, which is the same fact the citation fix above turns on. The
+  "last reviewed" date moved to the date of this review.
 - The Semgrep SAST gate (SEC-07) had been red on `main` for every one of its
   fourteen runs since 2026-07-17, on four blocking findings against the two
   evidence-index header PRAGMAs in

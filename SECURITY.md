@@ -20,11 +20,28 @@ fixes land on `main` and, once one exists, the latest tagged release.
 
 ## Reporting a vulnerability
 
-**Email ckellyreif@gmail.com** with `contextsafe security` in the subject — this is
-the primary channel today: the repo is private, and GitHub's private vulnerability
-reporting is not available on a private free-plan repo. Expect an acknowledgement
-within a few days; this is a volunteer-scale project, so please be patient and do
-not disclose publicly until a fix is available.
+**Use GitHub's private vulnerability reporting**, on this repository's Security
+tab, or directly at
+<https://github.com/ChelseaKR/contextsafe/security/advisories/new>. The report
+is visible only to the maintainer, it stays attached to the repository, and it
+gives you a private thread to work in until there is a fix.
+
+That is the whole channel, on purpose. This policy used to publish a personal
+email address, because private vulnerability reporting is not offered on a
+private repository and there had to be *some* way to reach a human. A published
+address is a permanent invitation to every scraper on the internet, and it is
+worse than that here: this is a trans-health project, and the maintainer is a
+named individual. The channel should not be one that costs her anything to
+leave open.
+
+If the reporting form is unavailable to you for any reason, open a public issue
+that says only that you have a security report and asks for a private channel —
+**no details, no reproduction, no affected paths.** You will get a private
+thread back. Do not put the finding itself in a public issue.
+
+Expect an acknowledgement within a few days. This is a volunteer-scale project,
+so please be patient, and please do not disclose publicly until a fix is
+available.
 
 ### Redaction-safe reporting (please read)
 
