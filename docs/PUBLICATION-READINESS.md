@@ -2,7 +2,9 @@
 
 **Audit date:** 2026-08-15 · **Commit audited:** `main` @ `09e0317` (open PRs
 #11 and #12 excluded) · **Current visibility:** PRIVATE · **Recorded
-publication state:** none declared in this repository
+publication state:** the maintainer decided on 2026-08-15 to publish (Gate 0);
+the visibility change itself is a separate, deliberate act and has not been made
+by this document
 
 **Verdict: technically ready to publish, pending an IP clearance the maintainer
 must obtain and a dual-use decision that is hers and her governance group's to
@@ -13,6 +15,19 @@ public at all, and none of them answer Gate 1, which governs whether it should.
 Publication is the maintainer's recorded decision. This document exists to make
 that decision cheap and safe to make — not to make it.
 
+**Update, 2026-08-15 — the maintainer has decided to publish.** The verdict above
+is the audit's, unchanged, and everything it found stands as written. What
+changed is the decision on top of it: Gate 0 was reviewed and closed by the
+maintainer as a decision rather than an adjudication (see the status line below),
+and the four dual-use gaps Gate 1 identified were closed in the corpus itself —
+TB-10, the public-reader actor, T-16 through T-18, the inversion stated in
+`docs/06` section 1 and in the README, R-25 splitting the harm half out of R-23,
+HAZ-09, a publication row in the `docs/07` decision-rights table, and a
+[publication policy](17-PUBLICATION-POLICY.md) whose own decisions remain open
+for the maintainer to record. Gate 1's substantive holding is unchanged and still
+governs: publishing these contents is defensible, and the pack question must be
+decided before B-009 authoring begins.
+
 The prior employer is deliberately not named anywhere in this file. A
 publication-readiness document becomes public with the repository it audits,
 and the sweep below confirms that name appears nowhere in this history today.
@@ -21,7 +36,17 @@ and the sweep below confirms that name appears nowhere in this history today.
 
 ## Gate 0 — IP / inventions-agreement clearance (MAINTAINER + ATTORNEY)
 
-**Status: OPEN. Blocks publication regardless of every other gate on this page.**
+**Status: REVIEWED BY THE MAINTAINER AND CLOSED AS A DECISION, 2026-08-15. She
+read this section, weighed the question it raises, and decided to proceed with
+publication.**
+
+Read that status precisely. It records a decision, not a resolution. No
+adjudication has occurred, no opinion of counsel is recorded in this repository,
+and nothing below has been retracted, softened, or re-tested: every fact in the
+table, every limit on what the sweeps could establish, and the analysis of the
+unresolved question stand exactly as the audit wrote them. The maintainer decided
+with the question open, which is a legitimate thing to do and is worth recording
+as what it is.
 
 | Fact | Evidence |
 |---|---|
@@ -59,12 +84,32 @@ that matters: a repository can be un-published, but it cannot be un-seen.
 
 Until it is answered, the correct state is the current one: repository private.
 
+**Maintainer's decision, 2026-08-15.** The two paragraphs above are the audit's
+recommendation, kept verbatim, and on the timing point the maintainer decided
+otherwise: she reviewed the finding, weighed the risk it describes, and elected
+to proceed with publication without an attorney's answer on the record here.
+That is her call to make. The record preserves both the recommendation and the
+departure from it, because a document that quietly deleted the recommendation
+once it was overridden would be a worse record and a less honest one. The
+irreversibility the audit names is unchanged and is now carried as a standing
+control rather than a warning: TB-10 in `docs/06`, and the
+[publication policy](17-PUBLICATION-POLICY.md) that governs everything crossing
+it.
+
 ---
 
 ## Gate 1 — dual-use and misuse (MAINTAINER + CLINICAL CHAIR + COMMUNITY CO-CHAIR)
 
 **Status: OPEN, and not resolvable by a scan. This gate is a judgment, and the
 judgment belongs to the maintainer and the governance group `docs/07` defines.**
+
+**Update, 2026-08-15.** The four documentation gaps this gate found are closed;
+the judgment it describes is not, and closing the gaps did not close it. What
+exists now is a written threat, a named owner, and a decision document with the
+options laid out. What does not exist is the governance group that owns the pack
+decision, so the [publication policy](17-PUBLICATION-POLICY.md) blocks
+publishing locator material until both governance chair seats are filled. The
+gate stays open until its decision record names a date.
 
 ### What this tool actually maps
 
@@ -81,6 +126,11 @@ identity data is lost is, in the same breath, reporting where it is retained.**
 A receipt that says "the value was absent at the laboratory" also says "the
 value was present in the EHR at version X." That is the artifact's purpose and
 also its dual use.
+
+*"No document in this repository states it" was true when this audit was written
+and is not true now. The sentence is stated in `docs/06` section 1, `docs/07`
+section 14, `docs/17` section 1, and the README. The finding is left standing
+because it was the finding.*
 
 ### What publishing today would and would not disclose
 
@@ -139,7 +189,8 @@ threat models manage.
 
 ### What the threat model does not cover
 
-Four specific gaps, stated plainly:
+Four specific gaps, stated plainly. Each is followed by what closed it on
+2026-08-15; the findings themselves are unedited.
 
 1. **No actor is a reader of a public repository.** Every threat actor in
    section 4 is an operator, an insider, an external attacker, a compromised
@@ -148,21 +199,45 @@ Four specific gaps, stated plainly:
    operational — evidence intake, staging connection, mapping, pack update,
    workspace, signing, receipt transfer, build chain, support channel. Open
    publication is not among them.
+   **Closed 2026-08-15:** TB-10 (publication) is in `docs/06` section 3, with
+   the note that it differs in kind from the others because it is crossed
+   deliberately and cannot be uncrossed. Section 4 adds three actors: the reader
+   of published project material, the party using lawful process, and the
+   maintainer publishing under time pressure.
 2. **The inversion is never written down.** Nothing in `docs/06` or `docs/07`
    says that the artifact locating loss also documents retention. Every control
    in section 6 is aimed at keeping PHI *out*; none is aimed at what the
    findings themselves reveal once they exist.
+   **Closed 2026-08-15:** stated in `docs/06` section 1 under its own heading,
+   in `docs/07` section 14, in `docs/17` section 1, and in the README's "Dual
+   use" section, which a stranger reads before the quickstart. T-16 gives it
+   controls; the residual-risk list says plainly that withholding buys friction
+   rather than secrecy.
 3. **R-23 analyzes the wrong half of its own title.** The risk is stated as
    "Political/certification changes weaken demand **or increase harm**," and
    every mitigation and contingency addresses demand — "patient-safety
    positioning; multiple buyer triggers; quarterly policy watch," contingency
    "focus risk/insurer/lab channels; mission remains but market may shrink."
    The harm half is never analyzed anywhere in the corpus.
+   **Closed 2026-08-15:** R-23 is now scoped to demand alone, and the harm half
+   is R-25 (P3 I5, score 15, owner COM/F/LEG) with its own mitigations, leading
+   indicators, and an explicitly irreducible residual. R-26 separates compelled
+   disclosure. The register records the split so the change is traceable rather
+   than silent.
 4. **No publication policy exists.** `docs/07` section 3 assigns approval for
    an "Intended-use/marketing claim" to the founder, clinical chair, community
    co-chair, and counsel. Nothing assigns approval for *publishing an artifact*
    — not the pack, not a receipt, not the repository. The compelled-disclosure
    question ("a customer is ordered to produce its receipts") has no owner.
+   **Closed 2026-08-15:** [`docs/17`](17-PUBLICATION-POLICY.md) is the policy;
+   `docs/07` section 3 now carries four publication rows and a repository
+   visibility row, section 4 a RACI row, section 7 HAZ-09 and HAZ-10, and
+   section 14 the governance statement. Compelled disclosure has an owner
+   (counsel, T-18, R-26) and a design constraint: minimization, because the only
+   control that works against valid process is having little to produce.
+   The policy's own decisions — including whether the pack payload is ever
+   published — are open and recorded as options with a recommendation, which is
+   the state this gate says they should be in.
 
 ### The honest balance
 
@@ -189,12 +264,12 @@ before it becomes urgent.
 
 ### What should be decided, and when
 
-| Decision | Owner | When |
-|---|---|---|
-| Publish this repository at its current contents | maintainer, after Gate 0 | now |
-| Whether the governed pack and assertions are ever published, licensed to customers, or held | clinical chair + community co-chair + counsel (`docs/07` §3) | **before B-010 authoring begins**, not after |
-| Posture on compelled disclosure of a customer's receipts | counsel + customer contract (`docs/07` §8) | before the first paid pilot |
-| Add publication as an explicit trust boundary, adversarial actor, and hazard | security/privacy lead + community co-chair | at the next threat-model review |
+| Decision | Owner | When | Status (2026-08-15) |
+|---|---|---|---|
+| Publish this repository at its current contents | maintainer, after Gate 0 | now | **decided** — maintainer elected to proceed; Gate 0 closed as a decision, not an adjudication |
+| Whether the governed pack and assertions are ever published, licensed to customers, or held | clinical chair + community co-chair + counsel (`docs/07` §3) | **before B-010 authoring begins**, not after | **framed, not decided** — `docs/17` §5 sets out four options and recommends split publication ("publish the judgment, withhold the locator"). The policy moves the deadline one step earlier, to **before B-009**, because the case manifests are already the artifact that encodes necessity and prohibited inference. `docs/13` carries it as a dependency on B-009 |
+| Posture on compelled disclosure of a customer's receipts | counsel + customer contract (`docs/07` §8) | before the first paid pilot | **owned** — T-18, R-26, and `docs/17` §9 name counsel and state minimization as the operative control. The contract language itself is still to be drafted |
+| Add publication as an explicit trust boundary, adversarial actor, and hazard | security/privacy lead + community co-chair | at the next threat-model review | **done** — TB-10, three new actors, T-16/T-17/T-18, HAZ-09/HAZ-10 |
 
 A concrete form for the last row, offered as drafting material and not as an
 adopted control: a TB-10 for published artifacts, an actor entry for "reader of
@@ -202,6 +277,12 @@ public project material seeking to locate or pressure trans patients or the
 organizations serving them," and a HAZ-09 in `docs/07` section 7 whose control
 is the pack-publication policy above and whose release evidence is the recorded
 governance decision.
+
+That drafting material was adopted on 2026-08-15 in substantially the shape
+proposed, with two additions the audit did not name: a lawful-process actor with
+its own STRIDE row, and a contributor-exposure hazard, because publication turns
+every contributor into a disclosure and the corpus previously gave that choice
+only to reviewers.
 
 **This gate does not block publishing the current contents. It blocks treating
 publication as settled for everything that comes after.**
@@ -528,3 +609,18 @@ will hit it.
 The repository should stay private until Gate 0 is cleared. Gate 1 does not
 block the current contents, but the pack-publication decision it names should be
 recorded before the work that makes it urgent begins.
+
+### Where the summary stands on 2026-08-15
+
+The table above is the audit's, unchanged. Three of its rows have moved:
+
+| Row | Then | Now |
+|---|---|---|
+| **Blocking — Gate 0** | open attorney question | reviewed by the maintainer and closed **as a decision**, not as an answer. The findings and the recommendation both remain on the page |
+| **Judgment — Gate 1** | four documentation gaps, no publication actor, boundary, or hazard | gaps closed: TB-10, three actors, T-16/T-17/T-18, the inversion stated where readers meet it, R-23 split from R-25, HAZ-09/HAZ-10, publication decision rights, and `docs/17`. The judgment the gate names is still open, and locator material is blocked until both governance chair seats are filled |
+| **Same change as the visibility flip** | private vulnerability reporting, `SECURITY.md`, `NOTICE` | unchanged and still outstanding; those are technical-gate work, not governance work |
+
+The closing paragraph above stands as written, and the maintainer decided
+otherwise on its first sentence. What replaces it is not a claim that the
+question was answered; it is a decision made with the question open, recorded as
+such, on 2026-08-15.
