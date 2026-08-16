@@ -50,12 +50,20 @@ The week-21 `E` reserve is six days. No additional pre-pilot engineering scope m
 | ID | Trace | Deliverable and acceptance | Owner | Dependency | Estimate |
 |---|---|---|---|---|---:|
 | B-008 | P0-01 | Define pack/case/assertion/source/approval JSON Schemas with invalid examples | F | B-007 | 5d |
-| B-009 | P0-02, CTP-001..012 | Author canonical case manifests with necessity and prohibited-inference fields | F/CL/COM | B-004/B-008 | 5d + 16h review |
+| B-009 | P0-02, CTP-001..012, R-25 | Author canonical case manifests with necessity and prohibited-inference fields | F/CL/COM | B-004/B-008, adopted [publication policy](17-PUBLICATION-POLICY.md) | 5d + 16h review |
 | B-010 | A-001..A-036 | Author assertion predicates, applicability, states, evidence, and severity rubric | F/CL/LAB | B-008/B-009 | 8d + 40h review |
 | B-011 | A-025..A-030 | Define INV/CTX/XFAIL reference fixtures and boundary values; label them non-clinical reference data | LAB/F | B-010 | 4d + 16h lab |
 | B-012 | P0-01, R-03 | Implement approval, validity, withdrawal, and pack compatibility rules | F/CL/COM | B-008..011 | 4d |
 | B-013 | P0-02, R-01 | Complete independent clinical and community pack review; unresolved content excluded/experimental | CL/COM/LAB | B-009..012 | 2d + 40h reviewers |
 | B-014 | P0-01/P0-12 | Build deterministic pack compiler/validator and source manifest | F | B-008/B-012 | 5d |
+
+Publication gate on this phase: B-009 and B-010 are the first artifacts that would
+state which fields at which boundaries carry trans identity data, so the
+[publication policy](17-PUBLICATION-POLICY.md) decision record must name a date
+before B-009 authoring starts. The policy also requires a re-read of
+already-public documents against its classification rule at that point. This is a
+sequencing constraint rather than added work: deciding after the pack exists is
+deciding under pressure, with the artifact already written.
 
 ## Phase 2 — execution plan and evidence core
 

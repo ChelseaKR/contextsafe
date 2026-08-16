@@ -24,17 +24,21 @@ Risk acceptance: named owner plus relevant clinical/community/security/legal app
 | R-15 | Partner cannot provide representative staging pathway | 4 | 4 | 16 | DP sponsor | feasibility before build; exact owners; one-case dry run | stop pilot; simulator evidence cannot substitute for external validation |
 | R-16 | Custom integration destroys service economics | 4 | 3 | 12 | F | file-first, two-mapping cap, 80-`F`-pool-hour delivery budget, classify custom work | raise price, partner with integrator, narrow ICP, or remain consulting |
 | R-17 | Competitor/internal team already solves job | 3 | 3 | 9 | F | substitute interviews and live competitive scan; compare actual test packs | partner/license or pivot; packaged vertical novelty remains a hypothesis |
-| R-18 | Community participation is extractive or exposes reviewers | 3 | 5 | 15 | COM/F | pay parity, decision rights, attribution choice, confidential roster, wellbeing review | pause governance/recruit with consent; cannot eliminate emotional burden |
+| R-18 | Community participation is extractive or exposes reviewers | 3 | 5 | 15 | COM/F | pay parity, decision rights, attribution choice, confidential roster, wellbeing review; the same attribution choice extends to every public contributor and pseudonymous contribution is accepted | pause governance/recruit with consent; cannot eliminate emotional burden; public authorship cannot be withdrawn from forks or archives |
 | R-19 | Critical finding causes mishandled disclosure or liability | 3 | 5 | 15 | DP clinical/LEG | customer incident RACI, dual signatures for any accepted clinical residual risk, confidentiality, evidence freeze, counsel, insurance | activate customer safety process; ContextSafe does not investigate real patients |
 | R-20 | Revocation does not reach offline customer | 3 | 4 | 12 | F/SEC | contract contacts, monthly signed list check, verifier age warning | direct outreach and reissue; fully disconnected copies may remain |
 | R-21 | Signing key or build chain compromised | 2 | 5 | 10 | SEC | hardware keys, recovery key, signed artifacts/SBOM, protected release | revoke/rebuild/notify; historical trust investigation required |
 | R-22 | Evidence hash is mistaken for evidence truth | 3 | 4 | 12 | F/CL | provenance language, reviewer training, receipt comprehension | correct claims; source may be faithfully wrong |
-| R-23 | Political/certification changes weaken demand or increase harm | 4 | 3 | 12 | F/LEG | patient-safety positioning; multiple buyer triggers; quarterly policy watch | focus risk/insurer/lab channels; mission remains but market may shrink |
+| R-23 | Political/certification changes weaken demand | 4 | 3 | 12 | F/LEG | patient-safety positioning; multiple buyer triggers; quarterly policy watch | focus risk/insurer/lab channels; mission remains but market may shrink |
 | R-24 | Reviewer or `F`-pool capacity delays source/pack maintenance | 4 | 4 | 16 | F/CL/COM | funded calendar, expiry blocks, backup reviewers, narrow pack | pause release/renewal rather than run stale; service continuity depends on people |
+| R-25 | This project's own published material becomes targeting or enforcement input: a loss map read as a retention map | 3 | 5 | 15 | COM/F/LEG | [publication policy](17-PUBLICATION-POLICY.md) three-class rule; locator material blocked while either governance chair seat is unfilled; no instance material about any real organization or person, ever; community co-chair may stop a publication alone; minimization by design — hashes, statuses, and counts rather than values; policy watch extended to enforcement activity and to how the project is cited; leading indicator: any citation of project material in an enforcement action, demand letter, or a fork whose evident purpose is targeting | stop publishing under policy §8, then decide takedown deliberately with counsel and the community co-chair rather than reflexively. Residual, stated plainly: publication cannot be undone; the underlying representations are published standards, so withholding buys curation friction and not secrecy; a fork adopts none of these controls; and classification is a human judgment made once per artifact |
+| R-26 | Lawful process compels production of receipts, customer identities, reviewer identities, or pack content | 2 | 5 | 10 | LEG/SEC | minimization is the control: raw evidence stays customer-local, no hosted findings store, receipts carry no values, roster small and confidential; counsel-owned response; the customer's own posture is set in contract before the first paid pilot | produce the minimum responsive set under counsel and notify affected parties where permitted; residual: no technical control defeats valid process, and a public-institution customer may be subject to records law this project does not control |
 
 ## Highest-priority treatment
 
-Scores 15 or higher require a funded mitigation owner before implementation: R-01–04, R-06–09, R-14–15, R-18–19, and R-24. R-14 is irreducible: a finite test pack cannot prove safety. The primary treatment is bounded claims and visible coverage, not more confident scoring.
+Scores 15 or higher require a funded mitigation owner before implementation: R-01–04, R-06–09, R-14–15, R-18–19, R-24, and R-25. R-14 is irreducible: a finite test pack cannot prove safety. The primary treatment is bounded claims and visible coverage, not more confident scoring.
+
+R-23 previously read “weaken demand **or increase harm**” and analyzed only demand; every mitigation on that row was a market mitigation. The harm half is now R-25, with its own owner, score, and treatment, and R-23 is scoped to demand alone. R-26 separates compelled disclosure, which is a legal event rather than a market or publication one.
 
 ## Triggers
 
@@ -45,6 +49,9 @@ Scores 15 or higher require a funded mitigation owner before implementation: R-0
 - More than 120 `F`-pool integration hours projected: change order, partner, or stop.
 - No paid partner after 25 qualified conversations: commercial pivot decision.
 - Reviewer participation below quorum or unpaid work: pause pack release.
+- Any sign that published material is being used to locate or pressure trans people or the organizations serving them: stop publishing under [publication policy](17-PUBLICATION-POLICY.md) §8 and convene the harm review before anything else.
+- Any legal process naming this project or a customer's receipts: pause publication, preserve, and route to counsel.
+- Pack authoring (B-009) reached without an adopted publication policy: stop and decide the policy first.
 
 ## Residual-risk acceptance
 
