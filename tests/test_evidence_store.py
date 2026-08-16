@@ -3,6 +3,7 @@
 import hashlib
 import json
 import os
+import re
 import sqlite3
 import stat
 from concurrent.futures import ThreadPoolExecutor
@@ -748,6 +749,26 @@ def test_preexisting_partial_raw_store_fails_without_any_workspace_mutation(
     assert raised.value.code == "evidence_index_missing"
     assert _tree_snapshot(workspace) == before
     assert not (workspace / "contextsafe.sqlite").exists()
+
+
+def test_pragma_header_sql_is_a_fixed_integer_assignment() -> None:
+    """The two valued header PRAGMAs cannot carry SQL syntax.
+
+    SQLite rejects bound parameters in a PRAGMA, so these statements are rendered
+    from module constants rather than parameterized. Pin the exact text: the store's
+    format identity must not drift, and the right-hand side must stay an integer
+    literal so no future edit can route a string into the statement.
+    """
+
+    assert store_module._SET_APPLICATION_ID_SQL == "PRAGMA application_id = 1129601107"
+    assert store_module._SET_USER_VERSION_SQL == "PRAGMA user_version = 1"
+    for statement in (
+        store_module._SET_APPLICATION_ID_SQL,
+        store_module._SET_USER_VERSION_SQL,
+    ):
+        assert re.fullmatch(r"PRAGMA [a-z_]+ = -?\d+", statement), statement
+    with pytest.raises(sqlite3.OperationalError):
+        sqlite3.connect(":memory:").execute("PRAGMA user_version = ?", (1,))
 
 
 @pytest.mark.parametrize(
