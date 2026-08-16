@@ -145,4 +145,4 @@ Clinical emergencies use the customer's established channels, not ContextSafe su
 
 ## 11. Service improvement
 
-After each engagement, measure `F/E` pool hours by activity, custom mappings, blocked steps, support volume, false findings, customer comprehension, and renewal objection. Update the standard service only when the change preserves [ADR 0001](decisions/0001-v1-boundary.md) and is approved through governance.
+After each engagement, measure `F/E` pool hours by activity, custom mappings, blocked steps, support volume, false findings, customer comprehension, and renewal objection. Update the standard service only when the change preserves [ADR 0001](adr/0001-v1-boundary.md) and is approved through governance.

@@ -40,7 +40,7 @@ The novelty claim is intentionally narrow. Synthetic patients, FHIR conformance 
 - Regulatory certification or a hospital safety grade.
 - Generative AI in any decision or evidence path.
 
-The rationale and change rule are in [ADR 0001](decisions/0001-v1-boundary.md).
+The rationale and change rule are in [ADR 0001](adr/0001-v1-boundary.md).
 
 ## 4. Workstreams and accountable outcomes
 
