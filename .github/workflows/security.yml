@@ -105,7 +105,7 @@ jobs:
           enable-cache: true
       - name: pip-audit (same target as `make audit`)
         run: |
-          uv sync --frozen
+          uv sync --locked
           uv run pip-audit --skip-editable --cache-dir .cache/pip-audit
 
   publication-sweep:

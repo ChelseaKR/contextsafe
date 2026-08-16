@@ -5,7 +5,9 @@ SAFETY_MODULES := src/contextsafe/models.py,src/contextsafe/validation.py,src/co
 verify: sync lint format typecheck test audit hygiene publication-sweep
 
 sync:
-	uv sync --frozen
+	# --locked fails when uv.lock has drifted from pyproject.toml.
+	# --frozen installs the stale lock and exits 0, so it cannot gate drift.
+	uv sync --locked
 
 lint:
 	uv run ruff check .
