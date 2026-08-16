@@ -25,6 +25,30 @@ release yet, so everything to date lives under Unreleased.
   matched ordinary `test_`-prefixed pytest function names and then promoted them
   to "verified" by POSTing them to a third party, and this repository contains
   five distinct test names of exactly that shape.
+- Publication sweep (`tools/publication_sweep.py`, `make publication-sweep`, and
+  part of `make verify`): the readiness audit's employer / private-repo /
+  internal-host / personal-path sweep, made executable. It was run by hand,
+  which made it true of one commit rather than of the repository. The sweep
+  fails on an absolute path out of somebody's machine, a hostname a public
+  reader cannot resolve or should not probe, a pointer to a repository under
+  this owner that is not on the published allowlist, and a relative link that
+  resolves outside the repository — resolved against the containing file's
+  directory, so the pull-request template's parent-relative link to the
+  definition of done is correctly not a finding, while the README's
+  parent-relative pointer at a sibling standards directory was.
+  Reserved names (`.invalid`, `.example`, `.test`, `localhost`) are never
+  flagged, because this repository uses `*.contextsafe.invalid` on purpose.
+  Terms that must not appear in the repository *or in the scanner*, a former
+  employer's name being the obvious one, come from a denylist file outside
+  version control (`--denylist`, `PUBLICATION_SWEEP_DENYLIST`) and are reported
+  by rule, file, and line only — never by content. The one exemption mechanism
+  is a `publication-sweep: allow` marker on the offending line, so every
+  exemption is greppable. `--history` extends the scan to every blob in the
+  object database. 29 tests cover each rule in both directions, plus one that
+  asserts the repository itself sweeps clean. It also runs as its own job in
+  the security workflow, which carries no `paths-ignore`: `ci.yml` skips
+  docs-only changes by design, and the one gate whose job is documentation
+  hygiene must not be blind to documentation changes.
 - Dependency-update automation (SEC-14): `.github/dependabot.yml` covering the
   two places this repository pins — the `uv` lock and the SHA-pinned GitHub
   Actions — weekly, with a seven-day cooldown on both ecosystems (SEC-26 asks for
