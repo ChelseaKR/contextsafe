@@ -8,6 +8,44 @@ release yet, so everything to date lives under Unreleased.
 
 ### Added
 
+- B-043 slice: `tools/a11y_gate.py`, `make a11y` (in `make verify`), and
+  `make a11y-full` plus an `accessibility` CI job that adds axe-core in a
+  headless DOM. The whole design is a refusal to report a pass it did not earn.
+  The gate renders its own subjects from the bundled reference fixture and
+  checks each page against the *receipt document* — payload hash, case id, every
+  mandated limitation — before auditing it, so an error page, an empty file, or
+  a page rendered from a different receipt is `wrong-subject` and is not counted
+  as audited. An empty page set is `no-pages`; a check that examined nothing is
+  `check-examined-nothing`; a requested engine that cannot run is
+  `engine-unavailable`, never a skip; an engine that executed no rules against a
+  page is `engine-examined-nothing`. Rules axe cannot decide in a DOM with no
+  layout — `color-contrast`, `landmark-one-main`, `page-has-heading-one` — are
+  listed by name, never counted as passes, and each must map to a built-in check
+  that does decide it, so "could not determine" cannot quietly become "fine".
+  Built-in checks cover structural validity (landmarks, heading order, duplicate
+  ids, table captions and header scope, resolvable `aria-labelledby` and in-page
+  links, no script, no external resource), WCAG 2.2 contrast computed from the
+  stylesheet for screen and print rules alike, colour-only status encoding, and
+  a print block that does not hide a mandated disclosure. Every failure mode has
+  a negative control in `tests/test_a11y_gate.py` that was watched to fail.
+  Dependabot now covers the npm harness, because a gate running a stale ruleset
+  reports yesterday's answer.
+- pa11y is deliberately absent rather than skipped: HTML_CodeSniffer, the engine
+  pa11y drives, loads its rulesets by injecting script tags and does not
+  complete in a headless DOM without a browser. Wiring it in as an optional
+  engine that silently does nothing would be worse than not having it, and the
+  rules it would add over axe — contrast, colour-only encoding, print — are the
+  three the built-in checks compute.
+
+### Fixed
+
+- The machine-translation notice carried `role="note"`, which overrides the
+  implicit `complementary` landmark of `<aside>` and put the notice outside
+  every landmark on the page — making the one element addressed to readers who
+  cannot rely on the translation skippable by landmark navigation. axe's
+  `region` rule caught it on the first run of the new gate. The notice is now
+  named by its own heading through `aria-labelledby`.
+
 - B-034 slice: `contextsafe render` and `src/contextsafe/html_receipt.py`, the
   script-free semantic HTML rendering of a receipt document. The package had no
   human-facing surface at all before this — every command emitted canonical

@@ -1,8 +1,8 @@
-.PHONY: audit format format-fix hygiene i18n lint publication-sweep secret-scan sync test typecheck verify
+.PHONY: a11y a11y-full a11y-install audit format format-fix hygiene i18n lint publication-sweep secret-scan sync test typecheck verify
 
 SAFETY_MODULES := src/contextsafe/models.py,src/contextsafe/validation.py,src/contextsafe/evaluator.py,src/contextsafe/receipt.py,src/contextsafe/contract_validation.py,src/contextsafe/jsonio.py,src/contextsafe/pack.py,src/contextsafe/plan.py,src/contextsafe/evidence.py,src/contextsafe/preflight.py,src/contextsafe/evidence_store.py
 
-verify: sync lint format typecheck test audit hygiene publication-sweep i18n
+verify: sync lint format typecheck test audit hygiene publication-sweep i18n a11y
 
 sync:
 	uv sync --frozen
@@ -46,6 +46,23 @@ publication-sweep:
 # job somebody remembers to run.
 i18n:
 	uv run python tools/i18n_gate.py
+
+# The stdlib half of B-043: structural validity, contrast computed from the
+# stylesheet, no colour-only encoding, and print. In `verify` because it needs
+# nothing a clean clone does not have. It fails rather than passing when it has
+# examined no page, and it refuses to treat a rule axe cannot decide as decided.
+a11y:
+	uv run python tools/a11y_gate.py --engines builtin
+
+# Adds axe-core in a headless DOM. Separate from `verify` because it needs the
+# node harness, which a clean clone does not have; the security workflow runs it
+# after `make a11y-install`. A requested engine that cannot run is a failure, so
+# this target cannot quietly degrade into the target above.
+a11y-full:
+	uv run python tools/a11y_gate.py --engines builtin,axe --json .a11y/report.json
+
+a11y-install:
+	npm ci --prefix tools/a11y
 
 hygiene:
 	! rg -n '(TODO|FIXME|HACK)' src tests

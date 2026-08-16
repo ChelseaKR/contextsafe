@@ -241,9 +241,16 @@ def _notice(surface: Surface) -> str:
         return ""
     heading = surface.message("translation.unreviewed.heading")
     target, original = surface.disclosure()
+    # No explicit role: `role="note"` would override the implicit
+    # `complementary` landmark of `<aside>`, which puts the notice outside every
+    # landmark on the page and makes it skippable by exactly the readers it is
+    # addressed to. axe's `region` rule caught that; the name comes from the
+    # heading instead.
     return (
-        '<aside class="notice" role="note" data-cs-notice="machine-translation">'
-        f"<h2 {_marked(heading)}>{escape(heading.text)}</h2>"
+        '<aside class="notice" aria-labelledby="translation-notice" '
+        'data-cs-notice="machine-translation">'
+        f'<h2 id="translation-notice" {_marked(heading)}>'
+        f"{escape(heading.text)}</h2>"
         f"{_paragraph(target)}"
         f"{_paragraph(original)}"
         "</aside>"

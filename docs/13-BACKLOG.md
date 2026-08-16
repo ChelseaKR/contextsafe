@@ -242,6 +242,39 @@ until that person exists the honest state of this locale is "usable with a
 warning", not "translated". Locale-aware number, date, and list formatting and
 right-to-left layout are unwritten.
 
+Implementation note (2026-08-15, B-043): `tools/a11y_gate.py` audits the
+rendered page in every shipped locale. `make a11y` runs the stdlib checks in
+`make verify`; `make a11y-full` adds axe-core in a headless DOM and runs as its
+own CI job, because the node harness is not something a clean clone carries.
+
+The design point is refusing a pass the gate did not earn. It renders its own
+subjects and validates each page against the receipt document — payload hash,
+case id, mandated limitations — before auditing, so an error page or a page from
+a different receipt is `wrong-subject` and is not counted as audited. An empty
+page set is `no-pages`; a check that examined nothing is
+`check-examined-nothing`; a requested engine that cannot run is
+`engine-unavailable` rather than a skip; an engine that executed no rules is
+`engine-examined-nothing`. Rules axe cannot decide without layout
+(`color-contrast`, `landmark-one-main`, `page-has-heading-one`) are listed by
+name, never counted as passes, and each must map to a built-in check that does
+decide it. Every one of those failures has a negative control in
+`tests/test_a11y_gate.py` that was watched to fail.
+
+Running it found one real defect: `role="note"` on the machine-translation
+notice overrode the implicit `complementary` landmark of `<aside>`, putting the
+notice outside every landmark on the page — skippable by exactly the readers it
+is addressed to. axe's `region` rule caught it; the notice is now named by its
+heading instead.
+
+B-043 is not closed. pa11y is not wired in: HTML_CodeSniffer loads its rulesets
+by script injection and does not complete in a headless DOM without a browser,
+so it is absent rather than present-and-skipped, and the rules it would add over
+axe are the ones the built-in checks compute. Only the receipt page exists to
+audit, so coverage of the surfaces in
+[Accessibility §2](08-ACCESSIBILITY-I18N.md) is one row of six. No automated
+gate is a substitute for B-044, and the Spanish page is auditable but its
+wording is still unreviewed (B-042).
+
 ## Phase 6 — pilot and v1
 
 | ID | Trace | Deliverable and acceptance | Owner | Dependency | Estimate |

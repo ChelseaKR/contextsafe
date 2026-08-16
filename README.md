@@ -146,7 +146,15 @@ string catalogs):
   missing disclosure, and on any visible text the catalogs do not account for.
   It also fails rather than passing when it has examined no catalog at all.
   [`docs/I18N.md`](docs/I18N.md) records the whole split, including why receipt
-  bytes stay in one language.
+  bytes stay in one language;
+- `make a11y` audits the rendered page in every locale — structural validity,
+  WCAG 2.2 contrast computed from the stylesheet, no colour-only status
+  encoding, and print — and `make a11y-full` adds axe-core in a headless DOM.
+  The gate checks each page against the receipt document it should have
+  rendered before auditing it, counts what it examined, treats a requested
+  engine that cannot run as a failure rather than a skip, and never counts a
+  rule axe could not determine as a pass. pa11y is not wired in, and
+  [Accessibility §11](docs/08-ACCESSIBILITY-I18N.md) says why.
 
 The durable primitive has no CLI import route. Every iteration-3 evidence record says
 `authorization_status: not_verified_internal_test_only` and
