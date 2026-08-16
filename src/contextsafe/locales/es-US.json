@@ -1,0 +1,348 @@
+{
+  "locale": "es-US",
+  "source_locale": "en-US",
+  "translation_review": {
+    "status": "machine",
+    "reviewed_by": null,
+    "reviewed_at": null,
+    "note": "Machine translation produced without a qualified human translator and without independent community review. B-042 is the professional translation and community review; until it lands and this record names a reviewer and a date, every surface that shows these strings must disclose that they are unreviewed, and mandated safety disclosures must render alongside their en-US original."
+  },
+  "messages": {
+    "checkpoint.ehr": {
+      "review": "machine",
+      "text": "Registro médico electrónico"
+    },
+    "checkpoint.interface": {
+      "review": "machine",
+      "text": "Mensaje de interfaz"
+    },
+    "checkpoint.lis_return": {
+      "review": "machine",
+      "text": "Devolución de resultados de laboratorio"
+    },
+    "checkpoint.registration": {
+      "review": "machine",
+      "text": "Registro de admisión"
+    },
+    "cli.command.evaluate": {
+      "review": "machine",
+      "text": "Evalúa un caso sintético y emite un documento de recibo determinista."
+    },
+    "cli.command.evidence": {
+      "review": "machine",
+      "text": "Ejecuta una comprobación de límite de evidencia sintética, solo de lectura."
+    },
+    "cli.command.evidence.preflight": {
+      "review": "machine",
+      "text": "Comprueba una fuente sintética contra el límite del plan sin guardarla."
+    },
+    "cli.command.pack": {
+      "review": "machine",
+      "text": "Compila y valida un paquete gobernado sin firmar."
+    },
+    "cli.command.pack.validate": {
+      "review": "machine",
+      "text": "Compila un paquete e informa los hashes de sus componentes."
+    },
+    "cli.command.plan": {
+      "review": "machine",
+      "text": "Valida un plan de ejecución sin firmar que no es de producción."
+    },
+    "cli.command.plan.validate": {
+      "review": "machine",
+      "text": "Valida un acuerdo y un plan de ejecución contra un paquete compilado."
+    },
+    "cli.command.render": {
+      "review": "machine",
+      "text": "Representa un documento de recibo como una página HTML sin scripts."
+    },
+    "cli.command.validate": {
+      "review": "machine",
+      "text": "Valida un caso sintético contra los contratos publicados."
+    },
+    "cli.description": {
+      "review": "machine",
+      "text": "Valida o evalúa casos sintéticos acotados de ContextSafe."
+    },
+    "cli.epilog": {
+      "review": "machine",
+      "text": "códigos de salida: 0 correcto, 2 rechazo por contrato con un objeto JSON de error en stderr, 64 error de línea de comandos"
+    },
+    "cli.flag.claimed_generated_at": {
+      "review": "machine",
+      "text": "Marca de tiempo UTC opcional, en segundos enteros (AAAA-MM-DDThh:mm:ssZ), declarada por quien ejecuta el comando y registrada solo en el sobre no confiable del recibo, nunca en la carga determinista."
+    },
+    "cli.flag.lang": {
+      "review": "machine",
+      "text": "Idioma de la interfaz para la página representada. Nunca se lee del entorno, porque la salida del comando es un artefacto fijado byte a byte."
+    },
+    "cli.flag.no_color": {
+      "review": "machine",
+      "text": "fija el contrato de salida sin formato; la salida de contextsafe nunca contiene secuencias de escape ANSI, con o sin esta opción"
+    },
+    "cli.flag.quiet": {
+      "review": "machine",
+      "text": "suprime la carga de éxito en stdout; los códigos de salida, los archivos --output y los errores JSON en stderr no cambian"
+    },
+    "cli.flag.receipt": {
+      "review": "machine",
+      "text": "Ruta a un documento de recibo producido por contextsafe evaluate --output."
+    },
+    "column.checkpoint": {
+      "review": "machine",
+      "text": "Límite"
+    },
+    "column.concept": {
+      "review": "machine",
+      "text": "Campo"
+    },
+    "column.count": {
+      "review": "machine",
+      "text": "Resultados"
+    },
+    "column.reason": {
+      "review": "machine",
+      "text": "Motivo"
+    },
+    "column.rule": {
+      "review": "machine",
+      "text": "Regla"
+    },
+    "column.status": {
+      "review": "machine",
+      "text": "Estado"
+    },
+    "concept.gender_identity": {
+      "review": "machine",
+      "text": "Identidad de género"
+    },
+    "concept.name_to_use": {
+      "review": "machine",
+      "text": "Nombre que se debe usar"
+    },
+    "concept.pronouns": {
+      "review": "machine",
+      "text": "Pronombres"
+    },
+    "concept.recorded_sex_or_gender": {
+      "review": "machine",
+      "text": "Sexo o género registrado"
+    },
+    "concept.sex_parameter_for_clinical_use": {
+      "review": "machine",
+      "text": "Parámetro de sexo para uso clínico"
+    },
+    "envelope.claimed_generated_at.absent": {
+      "review": "machine",
+      "text": "No declarada"
+    },
+    "envelope.claimed_generated_at.label": {
+      "review": "machine",
+      "text": "Hora declarada por quien ejecutó el comando"
+    },
+    "envelope.explainer": {
+      "review": "machine",
+      "text": "Todo lo que aparece en esta sección son metadatos sin autenticar, proporcionados por quien ejecutó el comando. Están fuera de la carga con hash, no prueban nada y se pueden cambiar sin cambiar ningún hash de esta página."
+    },
+    "envelope.signature_status.label": {
+      "review": "machine",
+      "text": "Firma"
+    },
+    "envelope.signature_status.not_signed": {
+      "review": "machine",
+      "text": "Sin firmar"
+    },
+    "envelope.trusted_time.false": {
+      "review": "machine",
+      "text": "Sin fuente de hora confiable"
+    },
+    "envelope.trusted_time.label": {
+      "review": "machine",
+      "text": "Hora confiable"
+    },
+    "footer.determinism": {
+      "review": "machine",
+      "text": "Esta página se genera únicamente a partir del documento de recibo. No agrega ninguna marca de tiempo, no lee nada de la máquina que la generó y el mismo recibo siempre produce los mismos bytes."
+    },
+    "footer.locale": {
+      "review": "machine",
+      "text": "Idioma de la interfaz: {locale}"
+    },
+    "footer.runner": {
+      "review": "machine",
+      "text": "Generado por ContextSafe {version}"
+    },
+    "footer.schema": {
+      "review": "machine",
+      "text": "Contrato de recibo {schema_version}"
+    },
+    "hash.input_sha256": {
+      "review": "machine",
+      "text": "Entradas"
+    },
+    "hash.payload_sha256": {
+      "review": "machine",
+      "text": "Carga determinista"
+    },
+    "hash.result_sha256": {
+      "review": "machine",
+      "text": "Resultados"
+    },
+    "hash.rule_set_sha256": {
+      "review": "machine",
+      "text": "Conjunto de reglas"
+    },
+    "limitation.1": {
+      "review": "machine",
+      "text": "Solo caso sintético de referencia; no es un oráculo clínico aprobado."
+    },
+    "limitation.2": {
+      "review": "machine",
+      "text": "Un resultado aprobado no establece seguridad, cumplimiento ni certificación."
+    },
+    "limitation.3": {
+      "review": "machine",
+      "text": "Los datos de pacientes están prohibidos; unas comprobaciones acotadas no pueden demostrar que una entrada sea sintética."
+    },
+    "limitation.4": {
+      "review": "machine",
+      "text": "Esta iteración no ingiere FHIR ni firma artefactos."
+    },
+    "limitations.intro": {
+      "review": "machine",
+      "text": "Estas limitaciones forman parte del contrato del recibo. Se muestran con la redacción que lleva el recibo y no se pueden acortar, reordenar ni omitir."
+    },
+    "page.heading": {
+      "review": "machine",
+      "text": "Recibo de evaluación de ContextSafe"
+    },
+    "page.skip_to_content": {
+      "review": "machine",
+      "text": "Saltar al recibo"
+    },
+    "page.subheading": {
+      "review": "machine",
+      "text": "Caso {case_id}"
+    },
+    "page.title": {
+      "review": "machine",
+      "text": "Recibo de evaluación de ContextSafe"
+    },
+    "reason.affirmative_evidence_match": {
+      "review": "machine",
+      "text": "La evidencia coincidió exactamente con lo esperado"
+    },
+    "reason.ambiguous_evidence": {
+      "review": "machine",
+      "text": "La evidencia fue ambigua, así que no se afirma nada"
+    },
+    "reason.missing_evidence": {
+      "review": "machine",
+      "text": "No se encontró evidencia, así que no se afirma nada"
+    },
+    "reason.predeclared_not_applicable": {
+      "review": "machine",
+      "text": "La regla declaró de antemano que este caso queda fuera de alcance"
+    },
+    "reason.semantic_mismatch": {
+      "review": "machine",
+      "text": "Se encontró evidencia y no coincidió con lo esperado"
+    },
+    "scope.clinical_oracle_approved.label": {
+      "review": "machine",
+      "text": "Oráculo clínico aprobado"
+    },
+    "scope.patient_data_allowed.label": {
+      "review": "machine",
+      "text": "Se permiten datos de pacientes"
+    },
+    "scope.synthetic_fixture_only.label": {
+      "review": "machine",
+      "text": "Solo casos sintéticos"
+    },
+    "section.envelope.heading": {
+      "review": "machine",
+      "text": "Sobre, que no es confiable"
+    },
+    "section.hashes.heading": {
+      "review": "machine",
+      "text": "Hashes"
+    },
+    "section.limitations.heading": {
+      "review": "machine",
+      "text": "Limitaciones que tiene que leer"
+    },
+    "section.results.heading": {
+      "review": "machine",
+      "text": "Resultados de las reglas"
+    },
+    "section.scope.heading": {
+      "review": "machine",
+      "text": "Qué cubre este recibo"
+    },
+    "section.summary.heading": {
+      "review": "machine",
+      "text": "Resumen de resultados"
+    },
+    "status.blocked": {
+      "review": "machine",
+      "text": "Bloqueado"
+    },
+    "status.fail": {
+      "review": "machine",
+      "text": "Falla"
+    },
+    "status.indeterminate": {
+      "review": "machine",
+      "text": "Indeterminado"
+    },
+    "status.legend.body": {
+      "review": "machine",
+      "text": "Cada estado se escribe con palabras y lleva un símbolo distinto. Ningún estado de esta página se indica solo con color, y la página se imprime correctamente en blanco y negro."
+    },
+    "status.legend.heading": {
+      "review": "machine",
+      "text": "Cómo se muestra el estado"
+    },
+    "status.not_applicable": {
+      "review": "machine",
+      "text": "No aplica"
+    },
+    "status.pass": {
+      "review": "machine",
+      "text": "Aprobado"
+    },
+    "table.results.caption": {
+      "review": "machine",
+      "text": "Una fila por cada regla que ejecutó el evaluador, en orden de regla."
+    },
+    "table.summary.caption": {
+      "review": "machine",
+      "text": "Cuántos resultados de reglas quedaron en cada estado."
+    },
+    "translation.source_label": {
+      "review": "machine",
+      "text": "Original ({locale})"
+    },
+    "translation.unavailable": {
+      "review": "machine",
+      "text": "No hay ninguna traducción publicada de este texto, así que se muestra en {locale}."
+    },
+    "translation.unreviewed.body": {
+      "review": "machine",
+      "text": "Esta página se muestra en una traducción automática que ningún traductor profesional ni revisor de la comunidad ha revisado. Las palabras sobre identidad, seguridad y lo que este recibo no demuestra pueden estar equivocadas aquí de maneras que importan. La redacción original se muestra junto a cada declaración de seguridad más abajo. No se base en esta traducción para tomar una decisión de publicación."
+    },
+    "translation.unreviewed.heading": {
+      "review": "machine",
+      "text": "Traducción automática, no revisada por una persona"
+    },
+    "value.no": {
+      "review": "machine",
+      "text": "No"
+    },
+    "value.yes": {
+      "review": "machine",
+      "text": "Sí"
+    }
+  }
+}

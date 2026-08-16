@@ -8,6 +8,55 @@ release yet, so everything to date lives under Unreleased.
 
 ### Added
 
+- B-034 slice: `contextsafe render` and `src/contextsafe/html_receipt.py`, the
+  script-free semantic HTML rendering of a receipt document. The package had no
+  human-facing surface at all before this — every command emitted canonical
+  JSON — which is why B-041 was blocked and why the old i18n declaration could
+  truthfully say "N/A". The page is one self-contained file with no script, no
+  event-handler attribute, no external stylesheet, font, or image, and no
+  network reference; it is deterministic in the receipt document and the
+  catalog, reads no clock and no environment, and a three-environment
+  subprocess test pins byte equality across time zone, locale, and hash seed.
+  Every status carries its word and a distinct symbol rather than a colour, so
+  nothing is lost in black-and-white print or to any colour vision; `<main>`
+  carries `data-cs-payload-sha256` and `data-cs-case-id` so a checker can prove
+  which receipt it examined rather than reporting zero findings against
+  whatever page it was handed. Unpublished enum values, non-boolean scope
+  entries, and any envelope claiming a signature or trusted time are refused
+  rather than printed. B-034 is not closed: this is the receipt surface only,
+  the print stylesheet has had no B-038 evidence-minimization pass, and
+  independent accessibility review remains B-043 and B-044.
+- B-041 slice: message catalogs, and the rule that an unreviewed translation
+  says so. Every user-facing string now lives in `src/contextsafe/locales/`,
+  and `src/contextsafe/i18n.py` hands back a `Message` carrying its text *and*
+  the provenance of its wording — never a bare string — so "we forgot to check
+  whether this was reviewed" is not a reachable state. A `Surface` declares
+  what it claims about the text it shows, and a surface claiming
+  `human_reviewed` refuses an unreviewed string by construction. B-042, the
+  professional translation and independent community review, has not happened,
+  so the shipped `es-US` catalog is marked machine-translated on every entry
+  and no surface claims review: the rendered page carries the notice in Spanish
+  *and* in English, marks each string with `data-cs-review`, and renders every
+  mandated safety disclosure next to its `en-US` original, because a machine
+  translation of "not an approved clinical oracle" is exactly the sentence a
+  reader must not be left alone with. Limitation translations are matched by
+  the source sentence rather than by position, so rewording a mandated
+  limitation drops its translation and says so instead of keeping a stale one.
+  Hash-covered artifacts stay in one fixed language and a test pins that no
+  catalog string reaches one; CLI help is externalized but rendered only in the
+  source locale, because `--help` and usage errors are part of the byte surface
+  `tests/test_determinism.py` guards. `make i18n` (`tools/i18n_gate.py`, in
+  `make verify`) fails on catalog-key drift, placeholder drift, empty or
+  mismarked strings, a review record nobody signed, an unreviewed string
+  reaching a claiming surface, a missing or spurious disclosure, and any
+  visible text on the pseudolocalized page that no catalog message accounts
+  for — which is how "externalize every string" is checked rather than
+  asserted. It also fails, rather than passing, when it has examined no catalog
+  at all. Every rule has a negative control in `tests/test_i18n.py` that was
+  watched to fail. B-041 is not closed while its only translation is
+  unreviewed; `docs/I18N.md` now records "Partial" and supersedes the
+  2026-07-16 "N/A" declaration.
+
 - Full-history secret scan (SEC-19): `tools/secret-scan-full-history.sh`, run by
   `make secret-scan`, by the `security` workflow on every push, pull request,
   and the weekly schedule, and by the release workflow before anything is built

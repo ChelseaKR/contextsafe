@@ -1,8 +1,8 @@
-.PHONY: audit format format-fix hygiene lint publication-sweep secret-scan sync test typecheck verify
+.PHONY: audit format format-fix hygiene i18n lint publication-sweep secret-scan sync test typecheck verify
 
 SAFETY_MODULES := src/contextsafe/models.py,src/contextsafe/validation.py,src/contextsafe/evaluator.py,src/contextsafe/receipt.py,src/contextsafe/contract_validation.py,src/contextsafe/jsonio.py,src/contextsafe/pack.py,src/contextsafe/plan.py,src/contextsafe/evidence.py,src/contextsafe/preflight.py,src/contextsafe/evidence_store.py
 
-verify: sync lint format typecheck test audit hygiene publication-sweep
+verify: sync lint format typecheck test audit hygiene publication-sweep i18n
 
 sync:
 	uv sync --frozen
@@ -39,6 +39,13 @@ secret-scan:
 # nothing and needs no tool a clean clone does not already have.
 publication-sweep:
 	uv run python tools/publication_sweep.py
+
+# Catalog parity, placeholder parity, review consistency, and the rule that a
+# machine-translated string may never reach a surface claiming human review.
+# Stdlib plus the package itself, so it belongs in `verify` rather than in a
+# job somebody remembers to run.
+i18n:
+	uv run python tools/i18n_gate.py
 
 hygiene:
 	! rg -n '(TODO|FIXME|HACK)' src tests

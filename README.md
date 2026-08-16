@@ -32,12 +32,15 @@ is published HL7 Gender Harmony material.
 With [`uv`](https://docs.astral.sh/uv/) installed:
 
 ```sh
-make verify                       # frozen sync, lint, format, strict typing, coverage, audit, hygiene, publication sweep
+make verify                       # frozen sync, lint, format, strict typing, coverage, audit, hygiene, publication sweep, i18n
 uv run contextsafe evaluate \
   --case fixtures/reference/case.json \
   --observations fixtures/reference/observations.json \
   --rules fixtures/reference/rules.json \
   --output receipt.json           # offline synthetic fixtures; unsigned receipt
+uv run contextsafe render \
+  --receipt receipt.json \
+  --output receipt.html           # script-free HTML page; --lang for a locale
 ```
 
 Everything runs offline against the committed synthetic reference fixtures;
@@ -120,6 +123,30 @@ payload/envelope and B-033 receipt-schema slices):
 Every published contract is listed in
 [`schemas/README.md`](schemas/README.md), which also records why each `$id`
 is under a domain reserved never to resolve.
+
+Iteration 5 gives the receipt a human surface (the B-034 renderer and B-041
+string catalogs):
+
+- `contextsafe render --receipt receipt.json --lang en-US --output page.html`
+  produces one self-contained HTML page: no script, no event-handler attribute,
+  no external stylesheet, font, or image, and no network reference of any kind.
+  It is deterministic in the receipt document and the catalog, adds no
+  timestamp, and reads nothing from the machine that rendered it;
+- every status is carried by its word *and* a distinct symbol, so the page
+  loses no information printed in black and white or read with any colour
+  vision; `<main>` carries `data-cs-payload-sha256`, so a checker can prove
+  which receipt it looked at;
+- user-facing strings live in `src/contextsafe/locales/`. `en-US` is the source
+  locale. **`es-US` is a machine translation that no qualified human translator
+  or community reviewer has checked** (that is B-042, and it has not happened),
+  so the page shows a notice in both languages, marks each unreviewed string,
+  and renders every mandated safety disclosure beside its `en-US` original;
+- `make i18n` fails on catalog or placeholder drift, on a review record nobody
+  signed, on an unreviewed string reaching a surface that claims review, on a
+  missing disclosure, and on any visible text the catalogs do not account for.
+  It also fails rather than passing when it has examined no catalog at all.
+  [`docs/I18N.md`](docs/I18N.md) records the whole split, including why receipt
+  bytes stay in one language.
 
 The durable primitive has no CLI import route. Every iteration-3 evidence record says
 `authorization_status: not_verified_internal_test_only` and

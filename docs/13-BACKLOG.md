@@ -209,6 +209,39 @@ accepted, FHIR/HL7/LIS sources do not exist yet (B-023–B-025), and the
 diagnostics, redacted support bundle, and local logs RG-12 also covers are
 B-046.
 
+Implementation note (2026-08-15, B-034 and B-041): B-041 depends on B-034, and
+B-034 did not exist — `render_receipt` produced canonical JSON, and the package
+had no human-facing surface at all, which is also why the previous i18n
+declaration could truthfully say "N/A". So B-034 landed first as the enabling
+slice: `src/contextsafe/html_receipt.py` and `contextsafe render` produce one
+self-contained, script-free, network-free HTML page from a receipt document,
+deterministic in the document and the catalog and nothing else, with every
+status carried by a word and a symbol rather than by colour, a print
+stylesheet, and `data-cs-payload-sha256` on `<main>` so a gate can prove which
+receipt it audited.
+
+B-041 then externalized the strings. Catalogs are
+`src/contextsafe/locales/*.json`; `src/contextsafe/i18n.py` returns a `Message`
+carrying text *and* review status, never a bare string, and a `Surface`
+declares what it claims about the text it shows. A surface claiming
+`human_reviewed` refuses an unreviewed string by construction. Because B-042
+has not happened, the shipped `es-US` catalog is machine translated and marked
+`machine` on every entry: the page carries a notice in both languages, marks
+each string with `data-cs-review`, and renders every mandated safety
+disclosure next to its `en-US` original. `make i18n` runs seven rules plus a
+refusal to pass on an empty catalog set; `docs/I18N.md` records the whole
+split, including why hash-covered artifacts stay in one language.
+
+Neither item is closed. B-034 covers the receipt page only — the review,
+finding, disposition, and delta surfaces in
+[Architecture §7](04-ARCHITECTURE.md) do not exist, the print stylesheet has
+had no B-038 evidence-minimization pass, and no independent accessibility
+review has happened (B-043 automates part of that; B-044 is the human half).
+B-041 is not closed while its Spanish is unreviewed: B-042 is a person, and
+until that person exists the honest state of this locale is "usable with a
+warning", not "translated". Locale-aware number, date, and list formatting and
+right-to-left layout are unwritten.
+
 ## Phase 6 — pilot and v1
 
 | ID | Trace | Deliverable and acceptance | Owner | Dependency | Estimate |

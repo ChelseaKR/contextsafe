@@ -1,0 +1,348 @@
+{
+  "locale": "en-US",
+  "source_locale": "en-US",
+  "translation_review": {
+    "status": "source",
+    "reviewed_by": null,
+    "reviewed_at": null,
+    "note": "Authored in this locale. Nothing here is a translation, so there is nothing for a translation reviewer to review."
+  },
+  "messages": {
+    "checkpoint.ehr": {
+      "review": "source",
+      "text": "Electronic health record"
+    },
+    "checkpoint.interface": {
+      "review": "source",
+      "text": "Interface message"
+    },
+    "checkpoint.lis_return": {
+      "review": "source",
+      "text": "Laboratory result return"
+    },
+    "checkpoint.registration": {
+      "review": "source",
+      "text": "Registration"
+    },
+    "cli.command.evaluate": {
+      "review": "source",
+      "text": "Evaluate a synthetic fixture and emit a deterministic receipt document."
+    },
+    "cli.command.evidence": {
+      "review": "source",
+      "text": "Run a read-only synthetic-evidence boundary check."
+    },
+    "cli.command.evidence.preflight": {
+      "review": "source",
+      "text": "Check one synthetic source against the plan boundary without persisting it."
+    },
+    "cli.command.pack": {
+      "review": "source",
+      "text": "Compile and validate an unsigned governed pack."
+    },
+    "cli.command.pack.validate": {
+      "review": "source",
+      "text": "Compile a pack and report its component hashes."
+    },
+    "cli.command.plan": {
+      "review": "source",
+      "text": "Validate an unsigned non-production execution plan."
+    },
+    "cli.command.plan.validate": {
+      "review": "source",
+      "text": "Validate an engagement and execution plan against a compiled pack."
+    },
+    "cli.command.render": {
+      "review": "source",
+      "text": "Render a receipt document as a script-free HTML page."
+    },
+    "cli.command.validate": {
+      "review": "source",
+      "text": "Validate a synthetic fixture against the published contracts."
+    },
+    "cli.description": {
+      "review": "source",
+      "text": "Validate or evaluate bounded synthetic ContextSafe fixtures."
+    },
+    "cli.epilog": {
+      "review": "source",
+      "text": "exit codes: 0 success, 2 contract rejection with one JSON error object on stderr, 64 command-line usage error"
+    },
+    "cli.flag.claimed_generated_at": {
+      "review": "source",
+      "text": "Optional caller-declared whole-second UTC timestamp (YYYY-MM-DDThh:mm:ssZ) recorded only in the untrusted receipt envelope, never in the deterministic payload."
+    },
+    "cli.flag.lang": {
+      "review": "source",
+      "text": "Interface locale for the rendered page. Never read from the environment, because command output is a byte-pinned artifact."
+    },
+    "cli.flag.no_color": {
+      "review": "source",
+      "text": "pin the plain-output contract; contextsafe output never contains ANSI escape sequences, with or without this flag"
+    },
+    "cli.flag.quiet": {
+      "review": "source",
+      "text": "suppress the success payload on stdout; exit codes, --output files, and stderr JSON errors are unchanged"
+    },
+    "cli.flag.receipt": {
+      "review": "source",
+      "text": "Path to a receipt document produced by contextsafe evaluate --output."
+    },
+    "column.checkpoint": {
+      "review": "source",
+      "text": "Boundary"
+    },
+    "column.concept": {
+      "review": "source",
+      "text": "Field"
+    },
+    "column.count": {
+      "review": "source",
+      "text": "Outcomes"
+    },
+    "column.reason": {
+      "review": "source",
+      "text": "Reason"
+    },
+    "column.rule": {
+      "review": "source",
+      "text": "Rule"
+    },
+    "column.status": {
+      "review": "source",
+      "text": "Status"
+    },
+    "concept.gender_identity": {
+      "review": "source",
+      "text": "Gender identity"
+    },
+    "concept.name_to_use": {
+      "review": "source",
+      "text": "Name to use"
+    },
+    "concept.pronouns": {
+      "review": "source",
+      "text": "Pronouns"
+    },
+    "concept.recorded_sex_or_gender": {
+      "review": "source",
+      "text": "Recorded sex or gender"
+    },
+    "concept.sex_parameter_for_clinical_use": {
+      "review": "source",
+      "text": "Sex parameter for clinical use"
+    },
+    "envelope.claimed_generated_at.absent": {
+      "review": "source",
+      "text": "Not declared"
+    },
+    "envelope.claimed_generated_at.label": {
+      "review": "source",
+      "text": "Caller-declared time"
+    },
+    "envelope.explainer": {
+      "review": "source",
+      "text": "Everything in this section is unauthenticated metadata supplied by whoever ran the command. It is outside the hashed payload, it proves nothing, and it can be changed without changing any hash on this page."
+    },
+    "envelope.signature_status.label": {
+      "review": "source",
+      "text": "Signature"
+    },
+    "envelope.signature_status.not_signed": {
+      "review": "source",
+      "text": "Not signed"
+    },
+    "envelope.trusted_time.false": {
+      "review": "source",
+      "text": "No trusted time source"
+    },
+    "envelope.trusted_time.label": {
+      "review": "source",
+      "text": "Trusted time"
+    },
+    "footer.determinism": {
+      "review": "source",
+      "text": "This page is rendered from the receipt document alone. It adds no timestamp, reads nothing from the machine that rendered it, and the same receipt always produces the same bytes."
+    },
+    "footer.locale": {
+      "review": "source",
+      "text": "Interface locale: {locale}"
+    },
+    "footer.runner": {
+      "review": "source",
+      "text": "Produced by ContextSafe {version}"
+    },
+    "footer.schema": {
+      "review": "source",
+      "text": "Receipt contract {schema_version}"
+    },
+    "hash.input_sha256": {
+      "review": "source",
+      "text": "Inputs"
+    },
+    "hash.payload_sha256": {
+      "review": "source",
+      "text": "Deterministic payload"
+    },
+    "hash.result_sha256": {
+      "review": "source",
+      "text": "Results"
+    },
+    "hash.rule_set_sha256": {
+      "review": "source",
+      "text": "Rule set"
+    },
+    "limitation.1": {
+      "review": "source",
+      "text": "Synthetic reference fixture only; not an approved clinical oracle."
+    },
+    "limitation.2": {
+      "review": "source",
+      "text": "A passing result does not establish safety, compliance, or certification."
+    },
+    "limitation.3": {
+      "review": "source",
+      "text": "Patient data is prohibited; bounded checks cannot prove an input is synthetic."
+    },
+    "limitation.4": {
+      "review": "source",
+      "text": "This iteration does not ingest FHIR or sign artifacts."
+    },
+    "limitations.intro": {
+      "review": "source",
+      "text": "These limitations are part of the receipt contract. They are shown in the wording the receipt carries, and they cannot be shortened, reordered, or dropped."
+    },
+    "page.heading": {
+      "review": "source",
+      "text": "ContextSafe evaluation receipt"
+    },
+    "page.skip_to_content": {
+      "review": "source",
+      "text": "Skip to the receipt"
+    },
+    "page.subheading": {
+      "review": "source",
+      "text": "Case {case_id}"
+    },
+    "page.title": {
+      "review": "source",
+      "text": "ContextSafe evaluation receipt"
+    },
+    "reason.affirmative_evidence_match": {
+      "review": "source",
+      "text": "Evidence matched the expectation exactly"
+    },
+    "reason.ambiguous_evidence": {
+      "review": "source",
+      "text": "Evidence was ambiguous, so no claim is made"
+    },
+    "reason.missing_evidence": {
+      "review": "source",
+      "text": "No evidence was found, so no claim is made"
+    },
+    "reason.predeclared_not_applicable": {
+      "review": "source",
+      "text": "The rule declared this case out of scope in advance"
+    },
+    "reason.semantic_mismatch": {
+      "review": "source",
+      "text": "Evidence was found and it did not match the expectation"
+    },
+    "scope.clinical_oracle_approved.label": {
+      "review": "source",
+      "text": "Approved clinical oracle"
+    },
+    "scope.patient_data_allowed.label": {
+      "review": "source",
+      "text": "Patient data permitted"
+    },
+    "scope.synthetic_fixture_only.label": {
+      "review": "source",
+      "text": "Synthetic fixture only"
+    },
+    "section.envelope.heading": {
+      "review": "source",
+      "text": "Envelope, which is not trusted"
+    },
+    "section.hashes.heading": {
+      "review": "source",
+      "text": "Hashes"
+    },
+    "section.limitations.heading": {
+      "review": "source",
+      "text": "Limitations you have to read"
+    },
+    "section.results.heading": {
+      "review": "source",
+      "text": "Rule outcomes"
+    },
+    "section.scope.heading": {
+      "review": "source",
+      "text": "What this receipt covers"
+    },
+    "section.summary.heading": {
+      "review": "source",
+      "text": "Outcome summary"
+    },
+    "status.blocked": {
+      "review": "source",
+      "text": "Blocked"
+    },
+    "status.fail": {
+      "review": "source",
+      "text": "Fail"
+    },
+    "status.indeterminate": {
+      "review": "source",
+      "text": "Indeterminate"
+    },
+    "status.legend.body": {
+      "review": "source",
+      "text": "Every status is written out in words and carries a distinct symbol. No status on this page is indicated by colour alone, and the page prints correctly in black and white."
+    },
+    "status.legend.heading": {
+      "review": "source",
+      "text": "How status is shown"
+    },
+    "status.not_applicable": {
+      "review": "source",
+      "text": "Not applicable"
+    },
+    "status.pass": {
+      "review": "source",
+      "text": "Pass"
+    },
+    "table.results.caption": {
+      "review": "source",
+      "text": "One row for each rule the evaluator ran, in rule order."
+    },
+    "table.summary.caption": {
+      "review": "source",
+      "text": "How many rule outcomes fell into each status."
+    },
+    "translation.source_label": {
+      "review": "source",
+      "text": "Original ({locale})"
+    },
+    "translation.unavailable": {
+      "review": "source",
+      "text": "No translation of this text is published, so it is shown in {locale}."
+    },
+    "translation.unreviewed.body": {
+      "review": "source",
+      "text": "This page is shown in a machine translation that no qualified human translator or community reviewer has checked. Words about identity, safety, and what this receipt does not prove can be wrong here in ways that matter. The original wording is shown alongside every safety statement below. Do not rely on this translation for a release decision."
+    },
+    "translation.unreviewed.heading": {
+      "review": "source",
+      "text": "Machine translation, not reviewed by a person"
+    },
+    "value.no": {
+      "review": "source",
+      "text": "No"
+    },
+    "value.yes": {
+      "review": "source",
+      "text": "Yes"
+    }
+  }
+}
