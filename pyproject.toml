@@ -15,14 +15,14 @@ contextsafe = "contextsafe.cli:main"
 
 [dependency-groups]
 dev = [
-  "coverage>=7.10",
-  "hypothesis>=6.100",
+  "coverage>=7.15.4",
+  "hypothesis>=6.165.2",
   "jsonschema>=4.23",
   "mypy>=1.18",
   "pip-audit>=2.9",
   "pytest>=8.0",
   "pytest-cov>=6.0",
-  "ruff>=0.15.0",
+  "ruff>=0.16.2",
 ]
 
 [tool.hatch.build.targets.wheel]
