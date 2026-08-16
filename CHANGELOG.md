@@ -8,6 +8,23 @@ release yet, so everything to date lives under Unreleased.
 
 ### Added
 
+- Full-history secret scan (SEC-19): `tools/secret-scan-full-history.sh`, run by
+  `make secret-scan`, by the `security` workflow on every push, pull request,
+  and the weekly schedule, and by the release workflow before anything is built
+  at a tag. Both previous secret scans were diff-scoped — the pre-commit hook
+  sees staged changes, the CI job saw a pull request's commit range — so neither
+  could ever support a claim about the history as a whole. The new gate has
+  three phases: every reachable commit on every ref; every object in the object
+  database, which adds unreachable blobs and every commit message, neither of
+  which phase 1 reads; and the working tree including untracked files. gitleaks
+  is installed from one named release verified against a recorded SHA-256, by a
+  local composite action rather than a wrapper action that would resolve the
+  scanning binary at run time — pinning the action does not pin the ruleset. The
+  script also refuses to run against an unpinned gitleaks version. Scanner
+  choice is recorded in the script's header: TruffleHog's Lob detector has
+  matched ordinary `test_`-prefixed pytest function names and then promoted them
+  to "verified" by POSTing them to a third party, and this repository contains
+  five distinct test names of exactly that shape.
 - Dependency-update automation (SEC-14): `.github/dependabot.yml` covering the
   two places this repository pins — the `uv` lock and the SHA-pinned GitHub
   Actions — weekly, with a seven-day cooldown on both ecosystems (SEC-26 asks for

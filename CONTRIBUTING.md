@@ -54,6 +54,13 @@ hygiene — the exact same target `ci.yml` invokes, on the same pinned
 | Dependency audit | `make audit` | `pip-audit` against the locked environment |
 | Hygiene | `make hygiene` | no TODO/FIXME/HACK in `src`/`tests`; no stray tool configs |
 
+One gate sits outside `make verify`, because it needs a tool a clean clone does
+not have and `make verify` must stay exactly what CI runs:
+
+| Gate | Command | What it checks |
+| --- | --- | --- |
+| Full-history secret scan | `make secret-scan` | gitleaks over every ref, every object in the object database (including unreachable ones and every commit message), and the working tree. Needs gitleaks 8.30.1 on `PATH` (`brew install gitleaks`); CI and the release pipeline run this same target. |
+
 ## Design constraints that reviews enforce
 
 - **Fail closed.** Missing or ambiguous evidence is indeterminate, never pass.
