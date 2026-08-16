@@ -169,13 +169,12 @@ subject get a stop, not a vote. Silence is not approval.
 
 **Interim rule, in force until both the clinical safety chair and the community
 co-chair seats are filled by people who are not the maintainer.** Until then the
-maintainer is the only available approver, and
-a single approver with no counterparty is exactly the failure mode
-[R-05](14-RISK-REGISTER.md) describes. The interim rule is therefore not "the
-maintainer decides"; it is:
+maintainer is the only available approver, and a single approver with no
+counterparty is exactly the failure mode [R-05](14-RISK-REGISTER.md) describes.
+The interim rule is therefore not "the maintainer decides"; it is:
 
 - Class 1 material may be published by the maintainer alone, with the decision
-  recorded in §12;
+  recorded in the publication log in §12;
 - **Class 2 material may not be published at all** while either chair seat is
   unfilled. The absent governance group is the gate, not an excuse for one;
 - Class 3 material has no approval path in either state.
@@ -309,6 +308,16 @@ To be completed by the maintainer. A row is in force only when it names a date.
 | D-2 | Approval owner and interim rule (§6) | as written / alternative | as written, including the community co-chair veto and the interim Class 2 block | **proposed** |
 | D-3 | Independent-reviewer attestation (§5.1) | fund / defer | fund before the first pack release, or state that B has degraded to C | **proposed** |
 | D-4 | Warrant canary (§9) | adopt / decline | decline pending counsel | **proposed** |
+
+### Publication log
+
+One row per publication decision, including decisions not to publish. Routine
+Class 1 material may be batched into a single row per release. Empty is the
+correct state until something is published under this policy.
+
+| Date | Artifact | Class | Approvers | Reasoning |
+|---|---|---|---|---|
+| — | — | — | — | — |
 
 ## 13. Relationship to the rest of the corpus
 
