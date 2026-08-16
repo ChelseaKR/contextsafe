@@ -288,6 +288,31 @@ def _normalized(value: str) -> str:
     return unicodedata.normalize("NFKC", value)
 
 
+def identifier_hits(value: str) -> tuple[str, ...]:
+    """Return the names of the boundary detectors ``value`` trips.
+
+    Exposed so that a second, independent pass can be run over something this
+    module did not produce — the redacted support bundle in ``diagnostics``
+    checks its own output here before writing it. That pass is belt and braces:
+    the bundle is redacted by construction and cannot carry free text in the
+    first place, and a detector that fires on it is a defect in the
+    construction rather than a redaction that saved the day. Detector coverage
+    is bounded, and ``tests/test_privacy_canaries.py`` records where.
+    """
+
+    normalized = _normalized(value)
+    compact = re.sub(r"[^a-z0-9]", "", normalized.casefold())
+    hits = [
+        f"canary:{canary}" for canary in sorted(_KNOWN_CANARIES) if canary in compact
+    ]
+    hits.extend(
+        f"direct-identifier:{index}"
+        for index, pattern in enumerate(_DIRECT_IDENTIFIER_PATTERNS)
+        if pattern.search(normalized) is not None
+    )
+    return tuple(hits)
+
+
 def _reject_unsafe_string(value: str, path: str) -> None:
     if value != value.strip():
         raise ContextSafeError(

@@ -1,0 +1,157 @@
+"""Opt-in local event log: closed vocabulary, no free text, no clock.
+
+RG-12 asks for local logs. This is the smallest thing that can be called one
+without becoming a second place patient data lives.
+
+Four properties, each of which is a decision rather than an omission.
+
+**Off unless asked, and asked on the command line.** A log is written only when
+``--log-dir`` is passed. It is never enabled by an environment variable,
+because output that changes with the environment is exactly what
+``tests/test_determinism.py`` exists to prevent, and because a log nobody asked
+for is a disclosure nobody consented to.
+
+**No free text.** A record is a fixed set of fields drawn from closed
+vocabularies: the command, the outcome, and the error code if there was one.
+There is no message field, so there is nowhere for an exception string, a path,
+or a token to end up. Unrecognised values are refused rather than truncated.
+
+**No clock.** The runner never reads a clock — the receipt envelope is explicit
+that it has no trusted time — and a log is not a good reason to start. Records
+carry a per-file sequence number instead. That is a real limitation: correlating
+these records with anything else needs an external timestamp, and an operator
+who needs one should capture it outside the tool. Recording an untrusted local
+clock reading in a file that looks like an audit trail would be worse.
+
+**Append-only, owner-only, one line at a time.** Each record is one canonical
+JSON line, opened with ``O_APPEND`` and ``O_NOFOLLOW``, written in a single
+call. Nothing here imports ``logging``: the privacy canary in
+``tests/test_privacy_canaries.py`` asserts no module does, and that canary is
+worth more than the convenience.
+"""
+
+from __future__ import annotations
+
+import os
+from enum import StrEnum
+from pathlib import Path
+
+from contextsafe.canonical import JsonValue, canonical_json
+from contextsafe.errors import ContextSafeError
+
+LOG_SCHEMA_VERSION = "contextsafe.event-log/0.1.0"
+LOG_FILE_NAME = "contextsafe-events.jsonl"
+MAX_LOG_BYTES = 1_048_576
+"""A log that grows without bound is an operational hazard of its own."""
+
+_CLOEXEC = getattr(os, "O_CLOEXEC", 0)
+_NOFOLLOW = getattr(os, "O_NOFOLLOW", 0)
+_APPEND_FLAGS = os.O_WRONLY | os.O_APPEND | os.O_CREAT | _NOFOLLOW | _CLOEXEC
+
+
+class Outcome(StrEnum):
+    """The closed set of things that can happen to a command."""
+
+    ACCEPTED = "accepted"
+    REJECTED = "rejected"
+
+
+COMMANDS = frozenset(
+    {
+        "validate",
+        "evaluate",
+        "render",
+        "pack",
+        "plan",
+        "evidence",
+        "diagnostics",
+        "cleanup",
+        "support-bundle",
+    }
+)
+"""Every command that may appear in a record. Not a prefix, not a pattern."""
+
+
+def _record(
+    *, command: str, outcome: Outcome, error_code: str | None, sequence: int
+) -> dict[str, JsonValue]:
+    if command not in COMMANDS:
+        raise ContextSafeError(
+            "unloggable_command", "$.command", "command is not a published value"
+        )
+    if error_code is not None and not error_code.replace("_", "").isalnum():
+        raise ContextSafeError(
+            "unloggable_error_code",
+            "$.error_code",
+            "an error code is a closed identifier, not a message",
+        )
+    return {
+        "command": command,
+        "error_code": error_code,
+        "outcome": outcome.value,
+        "schema_version": LOG_SCHEMA_VERSION,
+        "sequence": sequence,
+    }
+
+
+def _next_sequence(path: Path) -> int:
+    try:
+        with path.open("rb") as handle:
+            return sum(1 for line in handle if line.strip())
+    except FileNotFoundError:
+        return 0
+    except OSError as exc:
+        raise ContextSafeError(
+            "log_io_error", "$", "the local event log could not be read"
+        ) from exc
+
+
+def append_event(
+    log_dir: Path, *, command: str, outcome: Outcome, error_code: str | None = None
+) -> Path:
+    """Append one record to the local event log and return the log path."""
+
+    try:
+        log_dir.mkdir(mode=0o700, parents=True, exist_ok=True)
+    except OSError as exc:
+        raise ContextSafeError(
+            "log_io_error", "$", "the log directory could not be created"
+        ) from exc
+    path = log_dir / LOG_FILE_NAME
+    if path.is_symlink():
+        raise ContextSafeError(
+            "log_io_error", "$", "the local event log may not be a symbolic link"
+        )
+    sequence = _next_sequence(path)
+    line = (
+        canonical_json(
+            _record(
+                command=command,
+                outcome=outcome,
+                error_code=error_code,
+                sequence=sequence,
+            )
+        )
+        + "\n"
+    ).encode("utf-8")
+    _append_bytes(path, line)
+    return path
+
+
+def _append_bytes(path: Path, line: bytes) -> None:
+    try:
+        descriptor = os.open(path, _APPEND_FLAGS, 0o600)
+    except OSError as exc:
+        raise ContextSafeError(
+            "log_io_error", "$", "the local event log could not be opened"
+        ) from exc
+    try:
+        if os.fstat(descriptor).st_size + len(line) > MAX_LOG_BYTES:
+            raise ContextSafeError(
+                "log_full",
+                "$",
+                "the local event log has reached its published size limit",
+            )
+        os.write(descriptor, line)
+    finally:
+        os.close(descriptor)

@@ -8,8 +8,15 @@ from typing import BinaryIO, NoReturn, TextIO
 
 from contextsafe.canonical import JsonValue, as_json_value, canonical_json, sha256_json
 from contextsafe.contract_validation import date_value, timestamp_value
+from contextsafe.diagnostics import (
+    build_diagnostics,
+    build_support_bundle,
+    enumerate_cleanup,
+    remove_cleanup,
+)
 from contextsafe.errors import ContextSafeError
 from contextsafe.evaluator import evaluate
+from contextsafe.eventlog import Outcome, append_event
 from contextsafe.evidence import build_evidence_scope
 from contextsafe.html_receipt import render_receipt_page
 from contextsafe.i18n import SOURCE_LOCALE, Surface, available_locales, source_catalog
@@ -82,6 +89,16 @@ def _mode_flags() -> "_Parser":
     parent.add_argument(
         "--no-color", action="store_true", help=_HELP.text("cli.flag.no_color")
     )
+    parent.add_argument(
+        "--log-dir",
+        type=Path,
+        help=(
+            "append one closed-vocabulary event record to a local log in this "
+            "directory. Off unless given, never read from the environment, and "
+            "the record carries the command, the outcome, and the error code "
+            "only: no message, no path, no clock reading"
+        ),
+    )
     return parent
 
 
@@ -153,6 +170,50 @@ def _parser() -> argparse.ArgumentParser:
     evidence_preflight.add_argument("--source-type", required=True)
     evidence_preflight.add_argument("--media-type", required=True)
     evidence_preflight.add_argument("--output", type=Path)
+    diagnostics_parser = subparsers.add_parser(
+        "diagnostics",
+        parents=[modes],
+        help="Report what this installation can do, not what it has done.",
+    )
+    diagnostics_parser.add_argument("--workspace", type=Path)
+    diagnostics_parser.add_argument("--output", type=Path)
+    cleanup_parser = subparsers.add_parser(
+        "cleanup",
+        parents=[modes],
+        help="List what the tool created in a workspace; removal is explicit.",
+    )
+    cleanup_parser.add_argument("--workspace", required=True, type=Path)
+    cleanup_parser.add_argument(
+        "--remove",
+        action="store_true",
+        help=(
+            "delete the entries this command lists. Never leaves the "
+            "workspace, never follows a symbolic link, and never removes an "
+            "entry it could not classify"
+        ),
+    )
+    cleanup_parser.add_argument(
+        "--confirm",
+        action="store_true",
+        help="required alongside --remove; without it nothing is deleted",
+    )
+    cleanup_parser.add_argument("--output", type=Path)
+    bundle_parser = subparsers.add_parser(
+        "support-bundle",
+        parents=[modes],
+        help="Assemble a support bundle redacted by construction.",
+    )
+    bundle_parser.add_argument("--workspace", type=Path)
+    bundle_parser.add_argument(
+        "--error-code",
+        action="append",
+        default=[],
+        help=(
+            "a ContextSafe error code to include. Recorded as a digest, "
+            "because this command cannot know that what it was handed is one"
+        ),
+    )
+    bundle_parser.add_argument("--output", type=Path)
     return parser
 
 
@@ -166,16 +227,47 @@ def _validated_inputs(
     )
 
 
+def _operator_command(args: argparse.Namespace) -> str | None:
+    """Handle the operator-facing commands, or return None for the rest."""
+
+    if args.command == "diagnostics":
+        return f"{canonical_json(build_diagnostics(args.workspace))}\n"
+    if args.command == "cleanup":
+        plan = enumerate_cleanup(args.workspace)
+        summary = plan.to_dict()
+        if args.remove:
+            if not args.confirm:
+                raise ContextSafeError(
+                    "cleanup_not_confirmed",
+                    "$",
+                    "--remove requires --confirm; nothing was deleted",
+                )
+            removed, retained = remove_cleanup(plan)
+            summary = {**summary, "removed": removed, "retained_count": retained}
+        return f"{canonical_json(summary)}\n"
+    if args.command == "support-bundle":
+        bundle = build_support_bundle(args.workspace, error_codes=args.error_code)
+        return f"{canonical_json(bundle)}\n"
+    return None
+
+
+def _render_command(args: argparse.Namespace) -> str:
+    document = load_json(args.receipt)
+    if not isinstance(document, dict):
+        raise ContextSafeError(
+            "invalid_receipt_document",
+            "$",
+            "receipt document must be a JSON object",
+        )
+    return render_receipt_page(document, locale=args.lang)
+
+
 def _run(args: argparse.Namespace) -> str:
+    operator = _operator_command(args)
+    if operator is not None:
+        return operator
     if args.command == "render":
-        document = load_json(args.receipt)
-        if not isinstance(document, dict):
-            raise ContextSafeError(
-                "invalid_receipt_document",
-                "$",
-                "receipt document must be a JSON object",
-            )
-        return render_receipt_page(document, locale=args.lang)
+        return _render_command(args)
     if args.command == "pack":
         if args.pack_command != "validate":
             raise ContextSafeError(
@@ -270,8 +362,32 @@ def main(argv: Sequence[str] | None = None) -> int:
                 ) from exc
         elif not args.quiet:
             _emit(sys.stdout, output)
+        _log(args, Outcome.ACCEPTED, None)
         return EXIT_SUCCESS
     except ContextSafeError as exc:
         error: dict[str, JsonValue] = {"error": as_json_value(exc.to_dict())}
         _emit(sys.stderr, f"{canonical_json(error)}\n")
+        _log(args, Outcome.REJECTED, exc.code)
         return EXIT_CONTRACT_ERROR
+
+
+def _log(args: argparse.Namespace, outcome: Outcome, error_code: str | None) -> None:
+    """Append one event record, but only because ``--log-dir`` asked for it.
+
+    A logging failure never changes the exit code of the command that was
+    logged: the command already succeeded or already failed for its own
+    reasons, and turning "the log directory is read-only" into "your evaluation
+    failed" would be its own defect. The failure is reported on stderr as a
+    structured error and nothing else changes.
+    """
+
+    log_dir: Path | None = getattr(args, "log_dir", None)
+    if log_dir is None:
+        return
+    try:
+        append_event(
+            log_dir, command=args.command, outcome=outcome, error_code=error_code
+        )
+    except ContextSafeError as exc:
+        failure: dict[str, JsonValue] = {"error": as_json_value(exc.to_dict())}
+        _emit(sys.stderr, f"{canonical_json(failure)}\n")
