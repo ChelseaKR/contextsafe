@@ -16,6 +16,24 @@ release yet, so everything to date lives under Unreleased.
   against a locked dependency could open a pull request, nothing kept the action
   pins current, and OpenSSF Scorecard's `Dependency-Update-Tool` check scored 0
   by construction.
+- B-021 slice: `tests/test_determinism.py`, the three-run reproducibility
+  evidence R-10 and RG-15 ask for and the process half of status-algebra
+  invariant 10. Each shipped command runs three times in fresh interpreters
+  under different time zones, locales, hash seeds, UTF-8 modes, working
+  directories, and input directories, and must produce byte-identical exit
+  codes, stdout, stderr, and `--output` artifacts. Every artifact must be one
+  canonical UTF-8 JSON line with one terminal newline and no carriage return,
+  the reference `evaluate` document has a pinned SHA-256, no absolute input
+  path or environment value may reach an artifact, a caller-declared
+  `claimed_generated_at` must move the envelope without moving
+  `payload_sha256`, and a fail-closed rejection must emit the same stderr bytes
+  and error code every run. A CI matrix (`ubuntu-24.04`, `macos-15`,
+  `windows-2025`) reproduces the pinned digest, and a monkeypatched test pins
+  the documented fail-closed rejection on platforms without descriptor-relative
+  no-follow open — Windows among them, where `pack validate`, `plan validate`,
+  and `evidence preflight` therefore cannot run. This is byte-reproducibility
+  evidence only: packaging and fresh-install evidence remain B-045, and B-021
+  stays open pending normalization (B-019/B-026) and signing (B-035).
 - CLI: `contextsafe evidence preflight` now accepts `--output`, matching `pack
   validate`, `plan validate`, and `evaluate`. Previously the only way to obtain
   the boundary-check result was stdout, so combining `--quiet` with `evidence
@@ -100,6 +118,12 @@ release yet, so everything to date lives under Unreleased.
   that SQLite rejects the parameterized form. No waiver, `.semgrepignore`, or
   `# nosemgrep` was added; the registry auto config now reports 0 findings over
   72 targets. Store bytes and the on-disk index header are unchanged.
+- Command output is written as UTF-8 bytes instead of through a text stream.
+  Text-mode writes translate the terminal newline into the platform line
+  separator and encode with the platform's preferred encoding, so the same
+  receipt would have left a POSIX host and a Windows host with different bytes
+  and different file digests — the cross-platform nondeterminism R-10 names and
+  RG-15 gates. Artifact and payload content is unchanged on POSIX hosts.
 
 ### Security
 

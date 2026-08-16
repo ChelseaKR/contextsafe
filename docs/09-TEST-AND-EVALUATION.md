@@ -132,6 +132,28 @@ against itself. A final test records the boundary honestly: structural validity
 is not tamper detection, because hash, approval, and signature verification are
 separate work.
 
+### Determinism matrix
+
+Invariant 10 is tested in two forms. In process, the property layer permutes a
+generated bundle's observations and rules and requires the same payload bytes.
+Across processes, `tests/test_determinism.py` runs each shipped command three
+times in fresh interpreters under different time zones, locales, hash seeds,
+UTF-8 modes, working directories, and input directories, and requires
+byte-identical exit codes, stdout, stderr, and `--output` artifacts. Every
+artifact must be one canonical UTF-8 JSON line with one terminal newline and no
+carriage return; the reference `evaluate` document has a pinned SHA-256 that a
+CI matrix must reproduce on Ubuntu, macOS, and Windows; no absolute input path,
+locale, or time-zone value may appear in an artifact; a caller-declared
+`claimed_generated_at` must move the envelope without moving `payload_sha256`;
+and a fail-closed rejection must emit the same stderr bytes and error code every
+run. The matrix runs GitHub's server images, so it is byte-reproducibility
+evidence and not the Windows 11 and macOS desktop fresh-install evidence RG-15
+requires (B-045). Commands that read components beneath a root require
+descriptor-relative no-follow open and fail closed with
+`input_path_unsupported` where the platform cannot provide it; a monkeypatched
+test pins that behavior on every platform rather than trusting a Windows-only
+observation.
+
 Store tests cover private modes, deterministic IDs, content deduplication, idempotency,
 concurrent writers, append-only update/delete triggers, ordinary rollback, staged-copy
 failure, orphan/staging recovery, missing/corrupt objects, read-only access, exact
