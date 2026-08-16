@@ -100,6 +100,10 @@ payload/envelope and B-033 receipt-schema slices):
   clinical approval, or receipt verification, and not that the payload hash
   still matches its payload.
 
+Every published contract is listed in
+[`schemas/README.md`](schemas/README.md), which also records why each `$id`
+is under a domain reserved never to resolve.
+
 The durable primitive has no CLI import route. Every iteration-3 evidence record says
 `authorization_status: not_verified_internal_test_only` and
 `usable_for_execution: false`; a future signature-verification layer may not relabel

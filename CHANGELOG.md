@@ -126,6 +126,17 @@ release yet, so everything to date lives under Unreleased.
 
 ### Fixed
 
+- Schema identity: five of the eleven published contracts claimed `$id` under
+  `contextsafe.dev`, a domain nobody had registered. On a public repository an
+  unregistered domain in a contract identity is squattable — whoever buys the
+  name can serve documents at URIs this project publishes as canonical. All
+  eleven now use `https://contextsafe.invalid/schemas/<file>`. `.invalid` is
+  reserved by RFC 2606 and can never be delegated, so the identifiers are
+  stable and unique without depending on anyone owning anything, and nothing
+  here is dereferenced in any case: no code fetches a schema, and every `$ref`
+  is local. The choice and the alternative (register a domain and serve them)
+  are written down in the new `schemas/README.md`, and a test pins every `$id`
+  to the reserved domain so a resolvable identity cannot come back by accident.
 - The Semgrep SAST gate (SEC-07) had been red on `main` for every one of its
   fourteen runs since 2026-07-17, on four blocking findings against the two
   evidence-index header PRAGMAs in

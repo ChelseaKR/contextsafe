@@ -32,6 +32,9 @@ def _assert_code(code: str, call: Any, value: object) -> None:
     assert "fixture-gender-1" not in str(caught.value)
 
 
+SCHEMA_ID_PREFIX = "https://contextsafe.invalid/schemas/"
+
+
 def test_every_published_schema_is_a_valid_draft_2020_12_contract() -> None:
     """Every file in `schemas/` is a self-consistent published contract."""
 
@@ -43,6 +46,26 @@ def test_every_published_schema_is_a_valid_draft_2020_12_contract() -> None:
         assert schema["$schema"] == "https://json-schema.org/draft/2020-12/schema"
         assert schema["$id"].endswith(f"/schemas/{path.name}")
         assert schema["title"].startswith("ContextSafe ")
+
+
+def test_every_schema_id_is_under_the_reserved_domain() -> None:
+    """`$id` must be an identifier nobody can take over.
+
+    Five of these schemas once claimed `$id` under `contextsafe.dev`, a domain
+    nobody had registered. On a public repository that is a squattable contract
+    identity: anyone may buy the name and serve documents at the URIs this
+    project publishes as canonical. `.invalid` is reserved by RFC 2606 and can
+    never be delegated, so the identifiers stay unique and stable without
+    depending on anyone owning anything. See `schemas/README.md`.
+    """
+
+    published = sorted((ROOT / "schemas").glob("*.schema.json"))
+    assert published
+    for path in published:
+        schema = json.loads(path.read_text(encoding="utf-8"))
+        assert schema["$id"] == f"{SCHEMA_ID_PREFIX}{path.name}", (
+            f"{path.name} claims an identity outside the reserved domain"
+        )
 
 
 def test_published_schemas_accept_reference_fixtures(
