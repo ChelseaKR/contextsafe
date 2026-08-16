@@ -96,3 +96,35 @@ jobs:
         run: |
           uv sync --frozen
           uv run pip-audit --skip-editable --cache-dir .cache/pip-audit
+
+  publication-sweep:
+    # `make verify` already runs this sweep, but ci.yml carries a `paths-ignore`
+    # for `**.md` and `docs/**` so that a docs-only change does not spend a full
+    # CI run. That skip would leave the one gate whose whole job is documentation
+    # hygiene unable to see documentation changes: a reintroduced personal path
+    # or internal hostname in a Markdown file would land unswept. This workflow
+    # has no paths-ignore, so the sweep runs on every change either way.
+    name: publication sweep (no personal paths, internal hosts, dead pointers)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    env:
+      UV_PYTHON: "3.12"
+      UV_PYTHON_DOWNLOADS: never
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
+      - name: Set up Python
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.3.0
+        with:
+          python-version: "3.12"
+          check-latest: false
+      - name: Set up uv
+        uses: astral-sh/setup-uv@11f9893b081a58869d3b5fccaea48c9e9e46f990 # v8.3.2
+        with:
+          version: "0.11.28"
+          enable-cache: true
+      - name: make publication-sweep
+        run: make publication-sweep

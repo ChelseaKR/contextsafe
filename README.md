@@ -15,7 +15,7 @@ The planned ContextSafe service would run a fixed, versioned pack of synthetic p
 With [`uv`](https://docs.astral.sh/uv/) installed:
 
 ```sh
-make verify                       # frozen sync, lint, format, strict typing, coverage, audit, hygiene
+make verify                       # frozen sync, lint, format, strict typing, coverage, audit, hygiene, publication sweep
 uv run contextsafe evaluate \
   --case fixtures/reference/case.json \
   --observations fixtures/reference/observations.json \
@@ -195,7 +195,8 @@ command-line usage error.
 
 `make verify` uses the frozen lockfile and gates lint, format, strict typing,
 90% overall branch coverage, 95% safety-module branch coverage, dependency audit,
-and repository hygiene.
+repository hygiene, and the publication sweep (no personal filesystem path, no
+internal hostname, no pointer a public reader cannot follow).
 
 The v1 product is deliberately a **service with a small local tool**, not a universal integration platform:
 
@@ -275,12 +276,16 @@ A successful v1 allows one design partner to:
 
 The recommended implementation is Python 3.12, typed schemas, a command-line runner, a local SQLite evidence index, and generated static HTML/JSON. V1 has no hosted database, multi-tenant control plane, universal EHR writer, production agent, real-patient ingestion, AI classifier, or automated clinical recommendation.
 
-When implementation begins, this repository should inherit the portfolio standards in ../STANDARDS. The planning documents specify ContextSafe's project-specific values; they do not replace those standards.
+When implementation begins, this repository inherits the author's portfolio-wide
+engineering standards for code quality, security and supply chain, CI/CD,
+observability, accessibility, internationalization, documentation, and release.
+The planning documents specify ContextSafe's project-specific values; they do
+not replace those standards.
 
 ## Standards Conformance
 
-Status against the portfolio standards (per the portfolio applicability manifest;
-current code is an offline synthetic fixture validator/evaluator CLI):
+Status against those standards, with applicability judged per standard
+(current code is an offline synthetic fixture validator/evaluator CLI):
 
 | Standard | Status |
 | --- | --- |

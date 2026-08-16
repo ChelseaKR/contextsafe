@@ -1,8 +1,8 @@
-.PHONY: audit format format-fix hygiene lint sync test typecheck verify
+.PHONY: audit format format-fix hygiene lint publication-sweep sync test typecheck verify
 
 SAFETY_MODULES := src/contextsafe/models.py,src/contextsafe/validation.py,src/contextsafe/evaluator.py,src/contextsafe/receipt.py,src/contextsafe/contract_validation.py,src/contextsafe/jsonio.py,src/contextsafe/pack.py,src/contextsafe/plan.py,src/contextsafe/evidence.py,src/contextsafe/preflight.py,src/contextsafe/evidence_store.py
 
-verify: sync lint format typecheck test audit hygiene
+verify: sync lint format typecheck test audit hygiene publication-sweep
 
 sync:
 	uv sync --frozen
@@ -26,6 +26,12 @@ test:
 
 audit:
 	uv run pip-audit --skip-editable --cache-dir .cache/pip-audit
+
+# Keeps the publication-readiness sweep true as commits land, instead of true
+# as of the day somebody ran it by hand. Stdlib only, so it costs `verify`
+# nothing and needs no tool a clean clone does not already have.
+publication-sweep:
+	uv run python tools/publication_sweep.py
 
 hygiene:
 	! rg -n '(TODO|FIXME|HACK)' src tests

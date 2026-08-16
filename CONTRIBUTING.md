@@ -42,7 +42,7 @@ make verify
 ```
 
 `make verify` runs sync + lint + format-check + typecheck + test/coverage + audit +
-hygiene — the exact same target `ci.yml` invokes, on the same pinned
+hygiene + publication sweep — the exact same target `ci.yml` invokes, on the same pinned
 (`uv sync --frozen`) toolchain, so green locally means green in CI.
 
 | Gate | Command | What it checks |
@@ -53,6 +53,7 @@ hygiene — the exact same target `ci.yml` invokes, on the same pinned
 | Tests + coverage | `make test` | pytest; branch coverage ≥90% overall, ≥95% on safety-critical modules |
 | Dependency audit | `make audit` | `pip-audit` against the locked environment |
 | Hygiene | `make hygiene` | no TODO/FIXME/HACK in `src`/`tests`; no stray tool configs |
+| Publication sweep | `make publication-sweep` | nothing unpublishable in tracked files: no personal filesystem path, no internal hostname, no pointer to a repository a reader cannot open, no relative link escaping the repository. Add `publication-sweep: allow` to a line only with a reason in review. |
 
 ## Design constraints that reviews enforce
 
