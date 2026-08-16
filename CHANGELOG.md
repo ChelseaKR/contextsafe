@@ -254,10 +254,13 @@ release yet, so everything to date lives under Unreleased.
   `date-released: 2026-07-17` while `git tag -l` is empty and no GitHub release
   exists. CFF treats `version` and `date-released` as optional; both return when
   a release is actually tagged.
-- The README no longer points readers at `../STANDARDS`, a path that exists only
-  in the author's local checkout and names a repository a reader cannot open.
-  The standards are now described rather than linked; the conformance table is
-  unchanged.
+- The README no longer points readers at a parent-relative sibling standards
+  directory, a path that exists only in the author's local checkout and names a
+  repository a reader cannot open. The standards are now described rather than
+  linked; the conformance table is unchanged. The literal path is deliberately
+  not quoted here: the publication sweep landed in the same batch flags that
+  string in any tracked file, correctly, and a changelog entry describing the
+  removal is not a reason to weaken the rule or to spend its one exemption.
 - `.gitignore` covers `.hypothesis/`, which was previously ignored only by the
   nested ignore file Hypothesis generates for itself.
 - Three links to ADR 0001 pointed at `docs/decisions/`, which does not exist;
