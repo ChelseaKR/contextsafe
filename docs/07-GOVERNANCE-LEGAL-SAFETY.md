@@ -37,6 +37,11 @@ Seek racial, disability, age, socioeconomic, nonbinary, and care-setting breadth
 | Accepted clinical residual-risk disposition | customer clinical owner owns local operational risk and release decision; ContextSafe clinical chair independently confirms the governed expectation, severity, and bounded disposition record; both sign and neither substitutes for the other |
 | Intended-use/marketing claim | founder, clinical chair, community co-chair, and counsel |
 | Assertion withdrawal | either clinical chair or community co-chair may impose immediate temporary hold |
+| Publication of method and concept material (class 1 in [publication policy](17-PUBLICATION-POLICY.md) §2) | maintainer alone while the group is unseated, decision recorded; clinical chair and community co-chair once seated |
+| Publication of locator material — pack payload, mapping profiles, field and boundary paths (class 2) | clinical chair **and** community co-chair, plus counsel where a customer, contract, or jurisdiction is involved and the security/privacy lead where system internals are described. **Not publishable at all while either chair seat is unfilled** |
+| Publication of instance material — any real organization, deployment, receipt, or person (class 3) | no approval path exists; prohibited |
+| Withdrawal of publication approval, or a halt on publishing | community co-chair may act alone, as with an assertion hold; before that role is filled, any compensated community reviewer may |
+| Repository visibility change | maintainer, recorded, with the threat model reviewed first |
 
 Silence is not approval. Approval includes name/pseudonym, role, date, version, conflicts, rationale, and signature. The ContextSafe chair's signature on an accepted clinical residual risk does not make the customer's release decision; it confirms only the clinical expectation, severity, and boundedness of the recorded disposition. Refusal by either required signer prevents the receipt from representing that risk as accepted.
 
@@ -52,8 +57,9 @@ Silence is not approval. Approval includes name/pseudonym, role, date, version, 
 | Security boundary | C | I | I | C | C | A | C |
 | Legal claims | R | C | I | C | I | C | A |
 | Emergency withdrawal | R | A | C | A | C | C | C |
+| Publication of project material | R | A | I | A | C | C | C |
 
-Dual accountabilities reflect independent safety domains; a release needs all named approvals.
+Dual accountabilities reflect independent safety domains; a release needs all named approvals. On publication the community co-chair's accountability includes a unilateral stop, described in section 14.
 
 ## 5. Evidence policy
 
@@ -99,6 +105,8 @@ Release evidence for these subclaims is enumerated in [Release checklist](15-V1-
 | HAZ-06: real PHI ingested | no-PHI boundary and fail-closed preflight | canary test/tabletop |
 | HAZ-07: receipt treated as certification | bounded claims, watermark, contract, comprehension test | counsel/claims review |
 | HAZ-08: community consultation is extractive | pay parity, decision rights, withdrawal, conflict policy | compensation and approval records |
+| HAZ-09: published project material helps someone locate trans patients or pressure the organizations serving them | [publication policy](17-PUBLICATION-POLICY.md) three-class rule, named approvers with a community co-chair veto, no instance material ever, re-review of already-public material before a governed pack lands | recorded publication decisions, the pre-B-009 re-review record, and TB-10/T-16 in the reviewed threat model |
+| HAZ-10: public contribution outs a contributor or reviewer | attribution choice offered before first contribution, pseudonymity accepted, no roster or acknowledgement without individual written consent | consent records and the absence of any published roster |
 
 ## 8. Legal and regulatory posture
 
@@ -221,6 +229,7 @@ Before pilot:
 - conflict disclosures complete;
 - core case necessity review complete;
 - intended-use/legal memo complete;
+- [publication policy](17-PUBLICATION-POLICY.md) adopted or amended, and its class-2 posture decided;
 - at least pack 0.1 dual-approved;
 - dispute, withdrawal, and incident table-tops complete.
 
@@ -231,3 +240,39 @@ Before v1:
 - one external pilot reviewed by the group;
 - reviewer workload and wellbeing retrospective complete;
 - next review dates funded and scheduled.
+
+## 14. Publication of project material
+
+**A tool that reports where transgender and nonbinary identity data is lost is, in
+the same breath, reporting where it is retained.** Governance therefore owns not
+only what this project asserts but what it says in public, because a governed
+pack is a list of where to look and a finding about loss is a statement about
+retention. [Security §1 and T-16](06-SECURITY-PRIVACY-THREAT-MODEL.md) carry the
+threat; the [publication policy](17-PUBLICATION-POLICY.md) carries the rule.
+
+Four points belong here because they are governance decisions rather than
+security controls:
+
+- **Approval has an owner.** The decision-rights table in section 3 now assigns
+  it. Method and concept material is open. Locator material — the pack payload,
+  mapping profiles, and anything that names a field at a boundary — requires the
+  clinical safety chair and the community co-chair, and **cannot be published at
+  all while either chair seat is unfilled.** The unrecruited
+  governance group is the gate on that class, not an excuse for skipping it.
+- **The community co-chair may stop a publication alone**, on the same footing as
+  an emergency assertion hold in section 11, and before that role is filled any
+  compensated community reviewer may. The people whose exposure is the subject
+  get a stop, not a vote.
+- **Publication is irreversible in the way that matters.** A repository can be
+  made private again; it cannot be made unread. Removal is a forward-looking
+  signal, not an undo, and this project's own audit shows a deleted document
+  remaining one command away in history.
+- **Some publication is required, not merely permitted.** Withdrawn assertions,
+  corrections, and limitations are published under sections 9 and 11. Nothing in
+  this section may be used to suppress a finding that a customer or the public
+  needs; the classes restrict where identity data lives, not whether this project
+  admits when it was wrong.
+
+The policy is a proposed decision document with open options and a recommendation
+for each. Until its decision record names a date, this project's operative
+posture is the interim rule above.
