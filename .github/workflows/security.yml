@@ -2,6 +2,12 @@
 # (gitleaks), and dependency audit (pip-audit against the locked uv environment —
 # the same `make audit` a contributor runs locally). All jobs run automatically on
 # push/PR plus a weekly sweep; none is dispatch-only.
+#
+# The secret-scan job is full-history, not diff-scoped: it runs the repository's
+# own `make secret-scan` over every ref, every object in the object database
+# (including unreachable ones), and the working tree. See
+# tools/secret-scan-full-history.sh for what each phase covers and why the
+# scanner is pinned.
 name: security
 
 on:
@@ -45,29 +51,34 @@ jobs:
       # error, so a scan that cannot run can no longer report success.
       - run: semgrep scan --config auto --error --strict
 
-  gitleaks:
-    name: secret scanning (gitleaks)
+  secret-scan:
+    name: secret scanning (gitleaks, full history + object database)
     runs-on: ubuntu-latest
     timeout-minutes: 15
     permissions:
       contents: read
-      # gitleaks-action lists the PR's commits via the REST API on pull_request
-      # events to compute the scan range; without this it fails with a 403
-      # "Resource not accessible by integration" before scanning anything.
-      pull-requests: read
     steps:
-      - name: Checkout (full history — gitleaks scans the diff/range)
+      # fetch-depth: 0 brings down every branch and tag as a remote-tracking
+      # ref, which is what phase 1's `--log-opts="--all --full-history"` needs.
+      # It also brings down the packfile phase 2 enumerates. A shallow checkout
+      # would let this job report success over a few commits.
+      - name: Checkout (full history — this gate scans every ref and every object)
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
           fetch-depth: 0
           persist-credentials: false
-      - name: Run gitleaks (fails the build on any finding; redacts secrets in logs)
-        uses: gitleaks/gitleaks-action@e0c47f4f8be36e29cdc102c57e68cb5cbf0e8d1e # v3.0.0
+      # Not gitleaks-action: that wrapper resolves the scanning binary at run
+      # time, so pinning the action does not pin the ruleset. This installs one
+      # named release and checks it against a recorded SHA-256.
+      - name: Install pinned gitleaks
+        id: gitleaks
+        uses: ./.github/actions/setup-gitleaks
+      # The same command a maintainer runs locally. Findings are redacted, and
+      # any finding, any phase, fails the job — no mute, no .gitleaksignore.
+      - name: Full-history secret scan (make secret-scan)
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          # No GITLEAKS_LICENSE: this repo is under a personal account, not an
-          # organization, so gitleaks-action does not require a license key.
-          # No mute: default config, no .gitleaksignore, non-zero exit fails the job.
+          GITLEAKS_BIN: ${{ steps.gitleaks.outputs.gitleaks-bin }}
+        run: make secret-scan
 
   pip-audit:
     name: dependency audit (pip-audit, locked env)

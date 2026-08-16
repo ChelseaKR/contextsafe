@@ -1,8 +1,9 @@
 # Release pipeline (2026-07-16 standards sweep). Fires on a vX.Y.Z tag — no tag
-# exists yet, so this is wired and shaped correctly but has never fired. It re-runs
-# the literal `make verify` at the tagged commit (the exact gate a contributor runs
-# locally: lint, format, types, tests/coverage, pip-audit, hygiene), gates on a
-# matching CHANGELOG section, and builds the sdist/wheel with `uv build`. There is
+# exists yet, so this is wired and shaped correctly but has never fired. It runs
+# the full-history secret scan at the tagged commit, re-runs the literal
+# `make verify` there (the exact gate a contributor runs locally: lint, format,
+# types, tests/coverage, pip-audit, hygiene), gates on a matching CHANGELOG
+# section, and builds the sdist/wheel with `uv build`. There is
 # deliberately no publish/sign step: ContextSafe has no distribution channel yet,
 # and a stub that always "published" would be a false-green gate.
 name: release
@@ -20,7 +21,7 @@ concurrency:
 
 jobs:
   verify-at-tag:
-    name: re-verify at tagged commit (make verify) and build
+    name: secret-scan and re-verify at tagged commit (make verify), then build
     runs-on: ubuntu-latest
     timeout-minutes: 20
     permissions:
@@ -29,9 +30,21 @@ jobs:
       UV_PYTHON: "3.12"
       UV_PYTHON_DOWNLOADS: never
     steps:
+      # Full history: the release gate re-runs the full-history secret scan
+      # below, and that scan cannot mean anything on a shallow checkout.
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
+          fetch-depth: 0
           persist-credentials: false
+      - name: Install pinned gitleaks
+        id: gitleaks
+        uses: ./.github/actions/setup-gitleaks
+      # Before anything is built: no release artifact is produced from a history
+      # that has never been scanned end to end at the tagged commit.
+      - name: Full-history secret scan (make secret-scan)
+        env:
+          GITLEAKS_BIN: ${{ steps.gitleaks.outputs.gitleaks-bin }}
+        run: make secret-scan
       - name: Set up Python
         uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.3.0
         with:

@@ -1,0 +1,69 @@
+name: Install pinned gitleaks
+description: >-
+  Installs one exact gitleaks release, verified against a recorded SHA-256, and
+  returns its path.
+
+# Why this exists rather than the official gitleaks action:
+#
+# A secret-scanning gate is only as pinned as the thing that actually scans.
+# Scanner actions typically resolve the binary at run time from a `version`
+# input that defaults to `latest`, so SHA-pinning the action pins the wrapper
+# and not the ruleset — the gate can change behaviour, in either direction,
+# without a commit in this repository. This action downloads a single named
+# release, checks it against a checksum recorded here, and refuses to continue
+# if the bytes differ.
+#
+# It deliberately does not write to `GITHUB_PATH`. Prepending a directory to
+# every later step's PATH is a broader change than this needs, and it is a
+# genuine code-execution surface (zizmor's `github-env` audit). The installed
+# path is returned as an output instead, and the caller passes it to the one
+# step that needs it.
+#
+# Bumping the version means changing both inputs together. The checksums are
+# published by the project at
+# https://github.com/gitleaks/gitleaks/releases/download/v<version>/gitleaks_<version>_checksums.txt
+
+inputs:
+  version:
+    description: gitleaks release version, without the leading "v".
+    required: false
+    default: "8.30.1"
+  sha256:
+    description: SHA-256 of gitleaks_<version>_linux_x64.tar.gz.
+    required: false
+    default: "551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb"
+
+outputs:
+  gitleaks-bin:
+    description: Absolute path to the verified gitleaks binary.
+    value: ${{ steps.install.outputs.gitleaks-bin }}
+
+runs:
+  using: composite
+  steps:
+    - name: Download and verify gitleaks
+      id: install
+      shell: bash
+      # Inputs are passed through env, never interpolated into the script body.
+      env:
+        GITLEAKS_VERSION: ${{ inputs.version }}
+        GITLEAKS_SHA256: ${{ inputs.sha256 }}
+        GITLEAKS_DEST: ${{ runner.temp }}/pinned-gitleaks
+      run: |
+        set -euo pipefail
+        if [ "$(uname -s)" != "Linux" ] || [ "$(uname -m)" != "x86_64" ]; then
+          echo "setup-gitleaks: only the linux x64 release is pinned here; got $(uname -s)/$(uname -m)." >&2
+          exit 1
+        fi
+        tmp="$(mktemp -d)"
+        url="https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz"
+        curl --proto '=https' --tlsv1.2 --silent --show-error --location \
+          --retry 3 --retry-connrefused --max-time 120 \
+          --output "$tmp/gitleaks.tar.gz" "$url"
+        echo "${GITLEAKS_SHA256}  $tmp/gitleaks.tar.gz" | sha256sum --check --strict -
+        tar -xzf "$tmp/gitleaks.tar.gz" -C "$tmp" gitleaks
+        mkdir -p "$GITLEAKS_DEST"
+        install -m 0755 "$tmp/gitleaks" "$GITLEAKS_DEST/gitleaks"
+        rm -rf "$tmp"
+        "$GITLEAKS_DEST/gitleaks" version
+        echo "gitleaks-bin=$GITLEAKS_DEST/gitleaks" >>"$GITHUB_OUTPUT"
