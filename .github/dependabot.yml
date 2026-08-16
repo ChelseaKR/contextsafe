@@ -1,0 +1,29 @@
+# SEC-14 (update automation) and SEC-26 (SHAs kept current, 72h cooldown).
+# Two ecosystems, because this repository pins in two places: `uv` for the Python
+# lock (uv.lock, which pip-audit and `make verify` both read) and `github-actions`
+# for the SHA-pinned actions in ci.yml, security.yml, and release.yml. A pinned SHA
+# is only safe while something bumps it.
+#
+# `cooldown` holds each update for seven days after the upstream release, which is
+# longer than the 72 hours SEC-26 asks for and is what keeps Semgrep's
+# `dependabot-missing-cooldown` rule quiet. Python updates are grouped so the lock
+# moves in one reviewable pull request rather than one per package.
+version: 2
+updates:
+  - package-ecosystem: uv
+    directory: /
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    cooldown:
+      default-days: 7
+    groups:
+      python-dependencies:
+        patterns: ["*"]
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    cooldown:
+      default-days: 7
