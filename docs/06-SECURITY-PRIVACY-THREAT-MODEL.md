@@ -2,13 +2,31 @@
 
 Status: pre-implementation threat model  
 Owner: security/privacy lead  
-Review cadence: before pilot, before v1, annually, and after any architecture or incident change
+Review cadence: before pilot, before v1, annually, after any architecture or incident change, and before any change in publication posture or repository visibility
 
 ## 1. Security objective
 
 ContextSafe must not turn a safety test for trans and nonbinary people into a new source of patient exposure, credentials, or sensitive organizational findings. V1's strongest control is architectural: synthetic records, non-production execution, local processing, minimal transfer, and no hosted raw-evidence service.
 
 “No PHI” is a product boundary and operating discipline, not a magical property of synthetic data. Misconfigured staging environments and exports can contain real patient data. Detection is layered and fallible.
+
+### The inversion
+
+One property of this product shapes every section below, so it is stated first
+rather than derived later: **a tool that reports where transgender and nonbinary
+identity data is lost is, in the same breath, reporting where it is retained.** A
+finding that says “the value was absent at the laboratory” also says “the value
+was present in the EHR at version X, in this field, at this boundary.” A pack
+that tells an evaluator where to look is a list of where to look. That is the
+artifact's purpose and also its dual use, and no control removes it.
+
+Two consequences follow. First, the controls in section 6 keep patient data out
+of the workspace; they say nothing about what the findings themselves disclose
+once they exist, so the findings need their own controls — T-16 below and the
+[publication policy](17-PUBLICATION-POLICY.md). Second, the safest form of a
+finding is the least specific one that is still true and actionable, which is why
+receipts carry hashes, statuses, and counts rather than values, and why that
+choice is a safety control and not only a privacy one.
 
 ## 2. Assets
 
@@ -20,10 +38,14 @@ ContextSafe must not turn a safety test for trans and nonbinary people into a ne
 - A-SEC-06: customer and trans-community reviewer relationships.
 - A-SEC-07: signing keys and release artifacts.
 - A-SEC-08: trust in the product's bounded claims.
+- A-SEC-09: published project material — documentation, schemas, packs, assertions, fixtures, talks, and repository history. It is an asset because the project's credibility depends on it being open, and a liability because of the inversion in section 1: some of it describes where identity data lives.
+- A-SEC-10: the public association between a named contributor or reviewer and this subject matter, which publication creates and cannot later remove.
 
 ## 3. Trust boundaries
 
-TB-01 incoming customer evidence; TB-02 optional staging FHIR connection; TB-03 mapping profiles; TB-04 pack update; TB-05 local workspace and OS account; TB-06 reviewer identity/signing; TB-07 receipt transfer; TB-08 dependency/build chain; TB-09 support channel.
+TB-01 incoming customer evidence; TB-02 optional staging FHIR connection; TB-03 mapping profiles; TB-04 pack update; TB-05 local workspace and OS account; TB-06 reviewer identity/signing; TB-07 receipt transfer; TB-08 dependency/build chain; TB-09 support channel; TB-10 publication.
+
+TB-01 through TB-09 are operational: each is a place where data crosses into or out of a controlled process. **TB-10 is different in kind.** It is the boundary between everything this project knows and everyone, forever, and it is crossed deliberately rather than by attack. Its distinguishing property is irreversibility: a repository can be made private again, but it cannot be made unread. Everything crossing TB-10 is governed by the [publication policy](17-PUBLICATION-POLICY.md), which classifies material as method, locator, or instance and assigns approval accordingly.
 
 ## 4. Threat actors and misuse
 
@@ -35,6 +57,9 @@ TB-01 incoming customer evidence; TB-02 optional staging FHIR connection; TB-03 
 - Actor using customer/reviewer relationships to identify trans people or organizations.
 - Overconfident clinician treating a synthetic oracle as patient-specific guidance.
 - Founder overriding governance to close a sale.
+- **Reader of published project material seeking to locate trans and nonbinary people, or to pressure the organizations serving them.** This actor needs no access, breaks nothing, and violates no license. They read the documentation, the pack, and the fault library the way an intended user does, and they take from it the retention map that the loss map implies. They are the only actor here whose capability grows every time the project does good work in public.
+- **Party using lawful process** — subpoena, civil discovery, state investigative demand, or public-records request against a public-institution customer — to obtain receipts, customer identities, reviewer identities, or pack content. Not an attacker; the control is having little to produce, not resisting the request.
+- **Maintainer publishing under time pressure**, shipping a talk, post, case study, or pack artifact without the review the material's class requires. This is the realistic form of the publication failure, and it is why section 6 of the publication policy blocks a class of material rather than trusting a habit.
 
 ## 5. STRIDE threats and controls
 
@@ -55,6 +80,9 @@ TB-01 incoming customer evidence; TB-02 optional staging FHIR connection; TB-03 
 | T-13 | Safety misuse | Receipt marketed as certification | claims policy, contract restriction, watermark, public correction/withdrawal right | screenshot stripped of context |
 | T-14 | Network | Read-only adapter queries real patients | staging host allowlist, exact synthetic identifier query, least-scope credential, result cap, kill switch | endpoint misroutes |
 | T-15 | Privacy | Support ticket receives raw evidence | portal warning, attachment block where possible, staff script, secure exception path, deletion | user bypass |
+| T-16 | Information disclosure (TB-10) | Published material functions as a retention map: a pack, assertion predicate, mapping profile, or worked example tells a hostile reader which fields at which boundaries carry trans identity data | [publication policy](17-PUBLICATION-POLICY.md) three-class rule; locator material not published without recorded approval; named approvers with a community co-chair veto; no receipt, customer, vendor, or version ever published; no small-population aggregates; re-review of already-public material before a governed pack lands | irreducible: the concepts are documented in public standards, so withholding buys curation friction and not secrecy. Publication cannot be undone |
+| T-17 | Privacy (TB-10) | Public participation exposes a contributor or reviewer as associated with trans-health work | attribution choice offered before first contribution, pseudonymous contribution accepted, no roster or acknowledgement without individual written consent, consent revocable going forward | authorship in a public history is permanent; revocation cannot reach forks, mirrors, or archives |
+| T-18 | Information disclosure (TB-10) | Lawful process compels production of receipts, customer or reviewer identities, or pack content | minimization by design — hashes not values, evidence stays customer-local, no hosted findings store, small confidential roster; counsel-owned response; contract terms set the customer's own posture before the first paid pilot | no technical control defeats valid legal process; the only real control is having little to produce |
 
 ## 6. PHI boundary controls
 
@@ -128,6 +156,7 @@ V1 local operation uses the customer's OS identity and filesystem. ContextSafe d
 - Secret, SAST, dependency, license, and SBOM gates.
 - Pinned CI actions and least-privilege tokens.
 - Signed tags and artifacts; public checksums.
+- Every artifact crossing TB-10 is classified and approved under the [publication policy](17-PUBLICATION-POLICY.md) before it is released, including documentation and examples shipped alongside code.
 - No external pilot or release with an open critical/high vulnerability. A demonstrably unaffected report is formally reclassified with evidence and independent security-lead approval; critical/high status itself is never waived.
 - Coordinated vulnerability disclosure policy before pilot.
 
@@ -143,10 +172,14 @@ Trans and nonbinary people are the intended beneficiaries but are not data subje
 - Organization participation could reveal unremediated safety defects.
 - Test scenarios could normalize excessive collection of sensitive fields.
 - Published output could encourage surveillance or forced disclosure.
+- Published project material could serve as a curated map of where identity data is retained (section 1, T-16), even when every individual statement in it is about synthetic data.
+- Public contribution could out a contributor, permanently and outside their control (T-17).
 
 ### Controls
 
 - Reviewers choose public attribution, private attribution, or pseudonymity in external material.
+- The same choice is offered to every contributor before their first contribution, and pseudonymous contribution is accepted.
+- Publication follows the [publication policy](17-PUBLICATION-POLICY.md): method and concept material is open, locator material needs recorded approval, and instance material about a real organization or person is never published.
 - Do not collect a reviewer's gender identity unless they volunteer it for governance composition; store separately with explicit consent.
 - Every case follows a necessity test: no field exists merely for completeness.
 - The pack tests “declined” and “not collected” as legitimate states.
@@ -198,5 +231,8 @@ A suspected clinical emergency is handed to the customer's clinical safety proce
 - A clinically approved fixture may still be wrong or become stale.
 - Local endpoint security is outside ContextSafe control.
 - A recipient can strip limitations from a screenshot.
+- Publication is irreversible. Nothing in this model returns a published artifact to private, and the classification decision that let it out was a human judgment made once.
+- Withholding locator material buys friction, not secrecy: the underlying representations are published standards, and a determined reader can reconstruct them.
+- Apache-2.0 permits a fork that adopts none of these publication controls.
 
-These risks must appear in the customer receipt and [risk register](14-RISK-REGISTER.md).
+These risks must appear in the [risk register](14-RISK-REGISTER.md). Those that bear on how a customer should read a result must also appear in the customer receipt; the publication residuals are project risks, carried by the register and the [publication policy](17-PUBLICATION-POLICY.md) rather than by a receipt.

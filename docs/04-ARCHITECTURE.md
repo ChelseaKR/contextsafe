@@ -2,7 +2,7 @@
 
 Status: proposed v1 design  
 Owner: technical lead  
-Decision boundary: [ADR 0001](decisions/0001-v1-boundary.md)
+Decision boundary: [ADR 0001](adr/0001-v1-boundary.md)
 
 ## 1. Drivers
 
@@ -249,7 +249,7 @@ FHIR conformance may be delegated to Inferno; ContextSafe should consume validat
 
 ## 12. Security boundaries
 
-Trust boundaries are incoming evidence, mapping profiles, pack updates, reviewer identity/signing, optional staging network, and receipt transfer. Controls and threats are in [Security and privacy](06-SECURITY-PRIVACY-THREAT-MODEL.md).
+Trust boundaries are incoming evidence, mapping profiles, pack updates, reviewer identity/signing, optional staging network, receipt transfer, and publication of project material. Controls and threats are in [Security and privacy](06-SECURITY-PRIVACY-THREAT-MODEL.md).
 
 ## 13. Observability
 
