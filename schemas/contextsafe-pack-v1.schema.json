@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://contextsafe.dev/schemas/contextsafe-pack-v1.schema.json",
+  "$id": "https://contextsafe.invalid/schemas/contextsafe-pack-v1.schema.json",
   "title": "ContextSafe unsigned governed pack envelope v1",
   "type": "object",
   "additionalProperties": false,

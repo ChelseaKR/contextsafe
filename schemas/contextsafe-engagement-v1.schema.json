@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://contextsafe.dev/schemas/contextsafe-engagement-v1.schema.json",
+  "$id": "https://contextsafe.invalid/schemas/contextsafe-engagement-v1.schema.json",
   "title": "ContextSafe non-production engagement contract v1",
   "type": "object",
   "additionalProperties": false,
