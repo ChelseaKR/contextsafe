@@ -6,6 +6,17 @@ release yet, so everything to date lives under Unreleased.
 
 ## [Unreleased]
 
+### Changed
+
+- `CONTRIBUTING.md` documents the environment as `uv sync --locked`. The
+  Makefile and `ci.yml` already used `--locked` and explained why; the setup
+  instructions still told contributors to run `--frozen`, which installs a
+  drifted lock and exits 0.
+- The README's Standards Conformance table declares all fifteen standards.
+  Performance, AI Development Measurement, Incident Response, and Data
+  Governance had no row, and the state column was headed "Status".
+
+
 ### Added
 
 - Full-history secret scan (SEC-19): `tools/secret-scan-full-history.sh`, run by
