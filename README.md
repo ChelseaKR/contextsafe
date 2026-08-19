@@ -345,19 +345,23 @@ not replace those standards.
 Status against those standards, with applicability judged per standard
 (current code is an offline synthetic fixture validator/evaluator CLI):
 
-| Standard | Status |
+| Standard | State |
 | --- | --- |
 | Responsible-Tech Framework | Applies — governance, community accountability, and fail-closed safety posture documented in `docs/07-GOVERNANCE-LEGAL-SAFETY.md` |
 | Code Quality | Applies — ruff (incl. bandit rules, complexity ≤10), mypy `--strict`, branch coverage ≥90% (≥95% on safety-critical modules) via `make verify` |
 | Security & Supply-Chain | Applies — Semgrep SAST, gitleaks secret scan at three scopes (pre-commit diff, full-history CI gate over every ref, every object, and the working tree via `make secret-scan`, and that same scan again at a release tag), pip-audit dependency audit (`.github/workflows/security.yml` + `make audit`), pinned `uv.lock`, SHA-pinned actions kept current by Dependabot (`.github/dependabot.yml`, weekly, 7-day cooldown), `SECURITY.md` |
 | CI/CD | Applies — `ci.yml` runs the identical `make verify` gate on every push and pull request that touches code; docs-only changes are skipped by design (`paths-ignore`), and the security workflow has no such skip |
 | Observability | Applies — deterministic, hash-covered JSON receipts and evidence records are the audit/observability surface of this offline CLI |
+| Performance | N/A — offline library/CLI with no hosted route and no shipped HTML, so there is no served surface to budget |
 | Accessibility | N/A — offline CLI/library with no human-facing HTML |
 | Internationalization | N/A — synthetic non-production validation CLI; English-only operator output by design (see `docs/I18N.md`) |
 | AI Evaluation | N/A — deterministic fixture evaluator; no LLM/model component |
 | Quality & Metrics | Applies — coverage floors enforced in `pyproject.toml` and `make test`; hygiene gate bans TODO/FIXME/HACK |
 | Documentation | Applies — the planning corpus in `docs/`, ADR log in `docs/adr/`, published contracts in `schemas/`, `CONTRIBUTING.md`, `CHANGELOG.md` |
 | Release & Versioning | Applies — tag-triggered `release.yml` re-runs `make verify` at the tag and gates on a matching CHANGELOG section. No tag and no release exist yet, so it has never fired, and `CITATION.cff` deliberately carries no `version` or `date-released` |
+| AI Development Measurement | Applies — no AI-development baseline is recorded in this repo yet. The merge-blocking gates that do exist are outcome-side, not activity counters: `make verify` runs branch-coverage floors, mypy `--strict`, and the hygiene gate on every change |
+| Incident Response | Applies — the private vulnerability channel and acknowledgement expectation are in [SECURITY.md](SECURITY.md); the confirmed safety-defect withdrawal timeline is in `docs/10-OPERATIONS-SRE.md` and the recall procedure in `docs/07-GOVERNANCE-LEGAL-SAFETY.md`. No incident has been recorded, so there is no `docs/incidents/` directory yet |
+| Data Governance | Applies — data classification, retention, and the prohibited-data boundary are set out in `docs/05-DATA-AND-EVIDENCE.md` section 11. Every fixture in this repo is synthetic by construction, and the synthetic-only namespaces, PHI canaries, and direct-identifier checks fail closed rather than warn |
 
 Licensed under [Apache-2.0](LICENSE). Cite via [CITATION.cff](CITATION.cff).
 

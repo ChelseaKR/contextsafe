@@ -21,11 +21,14 @@ scrubbed.
 ## Getting set up
 
 ContextSafe targets Python 3.12+ and uses [`uv`](https://docs.astral.sh/uv/) for a
-reproducible, frozen environment:
+reproducible, locked environment:
 
 ```sh
-uv sync --frozen
+uv sync --locked
 ```
+
+`--locked`, not `--frozen`: `--frozen` installs a lockfile that has drifted from
+`pyproject.toml` and still exits 0, so it cannot gate drift. `--locked` exits 1 instead.
 
 Optionally install the pre-commit hooks (they run the same ruff/mypy/gitleaks as CI):
 
@@ -43,7 +46,7 @@ make verify
 
 `make verify` runs sync + lint + format-check + typecheck + test/coverage + audit +
 hygiene + publication sweep — the exact same target `ci.yml` invokes, on the same pinned
-(`uv sync --frozen`) toolchain, so green locally means green in CI.
+(`uv sync --locked`) toolchain, so green locally means green in CI.
 
 | Gate | Command | What it checks |
 | --- | --- | --- |

@@ -6,6 +6,17 @@ release yet, so everything to date lives under Unreleased.
 
 ## [Unreleased]
 
+### Changed
+
+- `CONTRIBUTING.md` documents the environment as `uv sync --locked`. The
+  Makefile and `ci.yml` already used `--locked` and explained why; the setup
+  instructions still told contributors to run `--frozen`, which installs a
+  drifted lock and exits 0.
+- The README's Standards Conformance table declares all fifteen standards.
+  Performance, AI Development Measurement, Incident Response, and Data
+  Governance had no row, and the state column was headed "Status".
+
+
 ### Added
 
 - B-043 slice: `tools/a11y_gate.py`, `make a11y` (in `make verify`), and
