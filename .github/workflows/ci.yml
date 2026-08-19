@@ -140,8 +140,9 @@ jobs:
       - name: Install the pinned accessibility harness
         run: make a11y-install
 
-      - name: Install the frozen dependency graph
-        run: uv sync --frozen
+      # --locked fails on lockfile drift; --frozen exits 0 and cannot gate it.
+      - name: Install the locked dependency graph, failing on drift
+        run: uv sync --locked
 
       - name: Accessibility gate (built-in checks plus axe-core)
         run: make a11y-full

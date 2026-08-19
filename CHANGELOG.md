@@ -15,6 +15,10 @@ release yet, so everything to date lives under Unreleased.
 - The README's Standards Conformance table declares all fifteen standards.
   Performance, AI Development Measurement, Incident Response, and Data
   Governance had no row, and the state column was headed "Status".
+- The `accessibility` CI job installs with `uv sync --locked` like every other
+  job. It was the last `--frozen` left in the repository, and a job whose whole
+  purpose is refusing to pass on an unverified input should not itself install a
+  lockfile it declined to check.
 
 
 ### Added
@@ -26,7 +30,8 @@ release yet, so everything to date lives under Unreleased.
   checks each page against the *receipt document* — payload hash, case id, every
   mandated limitation — before auditing it, so an error page, an empty file, or
   a page rendered from a different receipt is `wrong-subject` and is not counted
-  as audited. An empty page set is `no-pages`; a check that examined nothing is
+  as audited. An empty page set is `no-pages`; a run that requested no engine at
+  all is `no-engines`; a check that examined nothing is
   `check-examined-nothing`; a requested engine that cannot run is
   `engine-unavailable`, never a skip; an engine that executed no rules against a
   page is `engine-examined-nothing`. Rules axe cannot decide in a DOM with no
@@ -50,6 +55,12 @@ release yet, so everything to date lives under Unreleased.
 
 ### Fixed
 
+- `a11y_gate.py --engines ''` rendered both real pages, ran no check at all, and
+  printed `a11y-gate: clean` with exit 0 — the gate committing, on its own
+  command line, the exact defect it exists to catch. The report body was honest
+  throughout (`engines executed: none`), which is the shape this keeps taking:
+  the absence is computed correctly and then dropped by the line a human reads
+  and the exit code a pipeline reads. An empty engine set is now `no-engines`.
 - The machine-translation notice carried `role="note"`, which overrides the
   implicit `complementary` landmark of `<aside>` and put the notice outside
   every landmark on the page — making the one element addressed to readers who

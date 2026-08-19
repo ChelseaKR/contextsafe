@@ -305,6 +305,25 @@ def test_an_unknown_engine_is_a_finding(
     assert "engine-unknown" in _rules(report)
 
 
+def test_requesting_no_engine_at_all_is_a_finding(
+    subjects: tuple[object, ...], tmp_path: Path
+) -> None:
+    """`--engines ''` used to render two real pages and call them clean."""
+
+    report = _audit(subjects, tmp_path, engines=())
+    assert "no-engines" in _rules(report)
+    assert report.engines_executed == []  # type: ignore[attr-defined]
+
+
+def test_the_cli_refuses_to_pass_when_no_engine_was_requested(
+    capsys: pytest.CaptureFixture[str], tmp_path: Path
+) -> None:
+    """The exit code has to disagree too, not just the report body."""
+
+    assert gate.main(["--engines", "", "--workdir", str(tmp_path)]) == 1
+    assert "no-engines" in capsys.readouterr().out
+
+
 def test_a_requested_engine_that_cannot_run_fails_rather_than_skipping(
     monkeypatch: pytest.MonkeyPatch, subjects: tuple[object, ...], tmp_path: Path
 ) -> None:

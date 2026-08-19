@@ -60,7 +60,11 @@ Checks
 
 Engines are requested explicitly and a requested engine that cannot run is a
 failure, never a skip: ``--engines builtin,axe`` fails with
-``engine-unavailable`` if the node harness is not installed.
+``engine-unavailable`` if the node harness is not installed. Requesting no
+engine at all is ``no-engines`` for the same reason ``no-pages`` exists: a run
+that examined nothing has not earned the word "clean", and ``--engines ''``
+reaching exit 0 would be this gate committing the defect it was written to
+catch.
 
 pa11y is not available here. Its engine, HTML_CodeSniffer, loads its rulesets by
 injecting script tags and does not complete in a headless DOM without a browser;
@@ -705,6 +709,15 @@ def audit(
     """Audit ``subjects`` and return a report that counts what it examined."""
 
     report = Report(declared=len(subjects), engines_requested=tuple(engines))
+    if not engines:
+        report.findings.append(
+            Finding(
+                "no-engines",
+                "-",
+                "no engine was requested, so no check ran; a page nothing "
+                "examined is not a page that passed",
+            )
+        )
     if not subjects:
         report.findings.append(
             Finding(
