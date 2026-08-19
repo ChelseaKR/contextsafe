@@ -15,9 +15,107 @@ release yet, so everything to date lives under Unreleased.
 - The README's Standards Conformance table declares all fifteen standards.
   Performance, AI Development Measurement, Incident Response, and Data
   Governance had no row, and the state column was headed "Status".
+- The `accessibility` CI job installs with `uv sync --locked` like every other
+  job. It was the last `--frozen` left in the repository, and a job whose whole
+  purpose is refusing to pass on an unverified input should not itself install a
+  lockfile it declined to check.
 
 
 ### Added
+
+- B-043 slice: `tools/a11y_gate.py`, `make a11y` (in `make verify`), and
+  `make a11y-full` plus an `accessibility` CI job that adds axe-core in a
+  headless DOM. The whole design is a refusal to report a pass it did not earn.
+  The gate renders its own subjects from the bundled reference fixture and
+  checks each page against the *receipt document* — payload hash, case id, every
+  mandated limitation — before auditing it, so an error page, an empty file, or
+  a page rendered from a different receipt is `wrong-subject` and is not counted
+  as audited. An empty page set is `no-pages`; a run that requested no engine at
+  all is `no-engines`; a check that examined nothing is
+  `check-examined-nothing`; a requested engine that cannot run is
+  `engine-unavailable`, never a skip; an engine that executed no rules against a
+  page is `engine-examined-nothing`. Rules axe cannot decide in a DOM with no
+  layout — `color-contrast`, `landmark-one-main`, `page-has-heading-one` — are
+  listed by name, never counted as passes, and each must map to a built-in check
+  that does decide it, so "could not determine" cannot quietly become "fine".
+  Built-in checks cover structural validity (landmarks, heading order, duplicate
+  ids, table captions and header scope, resolvable `aria-labelledby` and in-page
+  links, no script, no external resource), WCAG 2.2 contrast computed from the
+  stylesheet for screen and print rules alike, colour-only status encoding, and
+  a print block that does not hide a mandated disclosure. Every failure mode has
+  a negative control in `tests/test_a11y_gate.py` that was watched to fail.
+  Dependabot now covers the npm harness, because a gate running a stale ruleset
+  reports yesterday's answer.
+- pa11y is deliberately absent rather than skipped: HTML_CodeSniffer, the engine
+  pa11y drives, loads its rulesets by injecting script tags and does not
+  complete in a headless DOM without a browser. Wiring it in as an optional
+  engine that silently does nothing would be worse than not having it, and the
+  rules it would add over axe — contrast, colour-only encoding, print — are the
+  three the built-in checks compute.
+
+### Fixed
+
+- `a11y_gate.py --engines ''` rendered both real pages, ran no check at all, and
+  printed `a11y-gate: clean` with exit 0 — the gate committing, on its own
+  command line, the exact defect it exists to catch. The report body was honest
+  throughout (`engines executed: none`), which is the shape this keeps taking:
+  the absence is computed correctly and then dropped by the line a human reads
+  and the exit code a pipeline reads. An empty engine set is now `no-engines`.
+- The machine-translation notice carried `role="note"`, which overrides the
+  implicit `complementary` landmark of `<aside>` and put the notice outside
+  every landmark on the page — making the one element addressed to readers who
+  cannot rely on the translation skippable by landmark navigation. axe's
+  `region` rule caught it on the first run of the new gate. The notice is now
+  named by its own heading through `aria-labelledby`.
+
+- B-034 slice: `contextsafe render` and `src/contextsafe/html_receipt.py`, the
+  script-free semantic HTML rendering of a receipt document. The package had no
+  human-facing surface at all before this — every command emitted canonical
+  JSON — which is why B-041 was blocked and why the old i18n declaration could
+  truthfully say "N/A". The page is one self-contained file with no script, no
+  event-handler attribute, no external stylesheet, font, or image, and no
+  network reference; it is deterministic in the receipt document and the
+  catalog, reads no clock and no environment, and a three-environment
+  subprocess test pins byte equality across time zone, locale, and hash seed.
+  Every status carries its word and a distinct symbol rather than a colour, so
+  nothing is lost in black-and-white print or to any colour vision; `<main>`
+  carries `data-cs-payload-sha256` and `data-cs-case-id` so a checker can prove
+  which receipt it examined rather than reporting zero findings against
+  whatever page it was handed. Unpublished enum values, non-boolean scope
+  entries, and any envelope claiming a signature or trusted time are refused
+  rather than printed. B-034 is not closed: this is the receipt surface only,
+  the print stylesheet has had no B-038 evidence-minimization pass, and
+  independent accessibility review remains B-043 and B-044.
+- B-041 slice: message catalogs, and the rule that an unreviewed translation
+  says so. Every user-facing string now lives in `src/contextsafe/locales/`,
+  and `src/contextsafe/i18n.py` hands back a `Message` carrying its text *and*
+  the provenance of its wording — never a bare string — so "we forgot to check
+  whether this was reviewed" is not a reachable state. A `Surface` declares
+  what it claims about the text it shows, and a surface claiming
+  `human_reviewed` refuses an unreviewed string by construction. B-042, the
+  professional translation and independent community review, has not happened,
+  so the shipped `es-US` catalog is marked machine-translated on every entry
+  and no surface claims review: the rendered page carries the notice in Spanish
+  *and* in English, marks each string with `data-cs-review`, and renders every
+  mandated safety disclosure next to its `en-US` original, because a machine
+  translation of "not an approved clinical oracle" is exactly the sentence a
+  reader must not be left alone with. Limitation translations are matched by
+  the source sentence rather than by position, so rewording a mandated
+  limitation drops its translation and says so instead of keeping a stale one.
+  Hash-covered artifacts stay in one fixed language and a test pins that no
+  catalog string reaches one; CLI help is externalized but rendered only in the
+  source locale, because `--help` and usage errors are part of the byte surface
+  `tests/test_determinism.py` guards. `make i18n` (`tools/i18n_gate.py`, in
+  `make verify`) fails on catalog-key drift, placeholder drift, empty or
+  mismarked strings, a review record nobody signed, an unreviewed string
+  reaching a claiming surface, a missing or spurious disclosure, and any
+  visible text on the pseudolocalized page that no catalog message accounts
+  for — which is how "externalize every string" is checked rather than
+  asserted. It also fails, rather than passing, when it has examined no catalog
+  at all. Every rule has a negative control in `tests/test_i18n.py` that was
+  watched to fail. B-041 is not closed while its only translation is
+  unreviewed; `docs/I18N.md` now records "Partial" and supersedes the
+  2026-07-16 "N/A" declaration.
 
 - Full-history secret scan (SEC-19): `tools/secret-scan-full-history.sh`, run by
   `make secret-scan`, by the `security` workflow on every push, pull request,

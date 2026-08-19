@@ -4,6 +4,11 @@
 # for the SHA-pinned actions in ci.yml, security.yml, and release.yml. A pinned SHA
 # is only safe while something bumps it.
 #
+# A third ecosystem, `npm`, covers the dev-only accessibility harness in
+# tools/a11y. Nothing there ships with the Python package, but axe-core is a
+# gate this repository trusts, and a gate running a stale ruleset is a gate
+# quietly reporting yesterday's answer.
+#
 # `cooldown` holds each update for seven days after the upstream release, which is
 # longer than the 72 hours SEC-26 asks for and is what keeps Semgrep's
 # `dependabot-missing-cooldown` rule quiet. Python updates are grouped so the lock
@@ -27,3 +32,13 @@ updates:
     open-pull-requests-limit: 5
     cooldown:
       default-days: 7
+  - package-ecosystem: npm
+    directory: /tools/a11y
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    cooldown:
+      default-days: 7
+    groups:
+      a11y-harness:
+        patterns: ["*"]

@@ -11,6 +11,8 @@ from contextsafe.contract_validation import date_value, timestamp_value
 from contextsafe.errors import ContextSafeError
 from contextsafe.evaluator import evaluate
 from contextsafe.evidence import build_evidence_scope
+from contextsafe.html_receipt import render_receipt_page
+from contextsafe.i18n import SOURCE_LOCALE, Surface, available_locales, source_catalog
 from contextsafe.jsonio import load_json
 from contextsafe.pack import compile_pack
 from contextsafe.plan import parse_plan, validate_plan
@@ -26,6 +28,17 @@ EXIT_CONTRACT_ERROR = 2
 
 EXIT_USAGE_ERROR = 64
 """The command line itself was invalid before any input file was opened."""
+
+_HELP = Surface(name="cli-help", catalog=source_catalog())
+"""Help text comes from the catalog, and only ever in the source locale.
+
+Externalizing it removes the second copy of every sentence, but the CLI is
+deliberately not localized at runtime: stdout, stderr, and ``--output`` bytes
+are pinned across time zones, locales, and platforms by
+``tests/test_determinism.py``, and text that changed with the environment
+would break the guarantee those artifacts exist to give. The localized surface
+is the rendered HTML page, where a reader — not a hash — is the consumer.
+"""
 
 
 def _emit(stream: TextIO, text: str) -> None:
@@ -64,20 +77,10 @@ class _Parser(argparse.ArgumentParser):
 def _mode_flags() -> "_Parser":
     parent = _Parser(add_help=False)
     parent.add_argument(
-        "--quiet",
-        action="store_true",
-        help=(
-            "suppress the success payload on stdout; exit codes, --output "
-            "files, and stderr JSON errors are unchanged"
-        ),
+        "--quiet", action="store_true", help=_HELP.text("cli.flag.quiet")
     )
     parent.add_argument(
-        "--no-color",
-        action="store_true",
-        help=(
-            "pin the plain-output contract; contextsafe output never "
-            "contains ANSI escape sequences, with or without this flag"
-        ),
+        "--no-color", action="store_true", help=_HELP.text("cli.flag.no_color")
     )
     return parent
 
@@ -86,15 +89,14 @@ def _parser() -> argparse.ArgumentParser:
     modes = _mode_flags()
     parser = _Parser(
         prog="contextsafe",
-        description="Validate or evaluate bounded synthetic ContextSafe fixtures.",
-        epilog=(
-            "exit codes: 0 success, 2 contract rejection with one JSON error "
-            "object on stderr, 64 command-line usage error"
-        ),
+        description=_HELP.text("cli.description"),
+        epilog=_HELP.text("cli.epilog"),
     )
     subparsers = parser.add_subparsers(dest="command", required=True)
     for command in ("validate", "evaluate"):
-        subparser = subparsers.add_parser(command, parents=[modes])
+        subparser = subparsers.add_parser(
+            command, parents=[modes], help=_HELP.text(f"cli.command.{command}")
+        )
         subparser.add_argument("--case", required=True, type=Path)
         subparser.add_argument("--observations", required=True, type=Path)
         subparser.add_argument("--rules", required=True, type=Path)
@@ -102,37 +104,48 @@ def _parser() -> argparse.ArgumentParser:
             subparser.add_argument("--output", type=Path)
             subparser.add_argument(
                 "--claimed-generated-at",
-                help=(
-                    "Optional caller-declared whole-second UTC timestamp "
-                    "(YYYY-MM-DDThh:mm:ssZ) recorded only in the untrusted "
-                    "receipt envelope, never in the deterministic payload."
-                ),
+                help=_HELP.text("cli.flag.claimed_generated_at"),
             )
-    pack_parser = subparsers.add_parser(
-        "pack", help="Compile and validate an unsigned governed pack."
+    render_parser = subparsers.add_parser(
+        "render", parents=[modes], help=_HELP.text("cli.command.render")
     )
+    render_parser.add_argument(
+        "--receipt", required=True, type=Path, help=_HELP.text("cli.flag.receipt")
+    )
+    render_parser.add_argument(
+        "--lang",
+        default=SOURCE_LOCALE,
+        choices=available_locales(),
+        help=_HELP.text("cli.flag.lang"),
+    )
+    render_parser.add_argument("--output", type=Path)
+    pack_parser = subparsers.add_parser("pack", help=_HELP.text("cli.command.pack"))
     pack_subparsers = pack_parser.add_subparsers(dest="pack_command", required=True)
-    pack_validate = pack_subparsers.add_parser("validate", parents=[modes])
+    pack_validate = pack_subparsers.add_parser(
+        "validate", parents=[modes], help=_HELP.text("cli.command.pack.validate")
+    )
     pack_validate.add_argument("--pack", required=True, type=Path)
     pack_validate.add_argument("--as-of", required=True)
     pack_validate.add_argument("--output", type=Path)
-    plan_parser = subparsers.add_parser(
-        "plan", help="Validate an unsigned non-production execution plan."
-    )
+    plan_parser = subparsers.add_parser("plan", help=_HELP.text("cli.command.plan"))
     plan_subparsers = plan_parser.add_subparsers(dest="plan_command", required=True)
-    plan_validate = plan_subparsers.add_parser("validate", parents=[modes])
+    plan_validate = plan_subparsers.add_parser(
+        "validate", parents=[modes], help=_HELP.text("cli.command.plan.validate")
+    )
     plan_validate.add_argument("--engagement", required=True, type=Path)
     plan_validate.add_argument("--plan", required=True, type=Path)
     plan_validate.add_argument("--pack", required=True, type=Path)
     plan_validate.add_argument("--as-of", required=True)
     plan_validate.add_argument("--output", type=Path)
     evidence_parser = subparsers.add_parser(
-        "evidence", help="Run a read-only synthetic-evidence boundary check."
+        "evidence", help=_HELP.text("cli.command.evidence")
     )
     evidence_subparsers = evidence_parser.add_subparsers(
         dest="evidence_command", required=True
     )
-    evidence_preflight = evidence_subparsers.add_parser("preflight", parents=[modes])
+    evidence_preflight = evidence_subparsers.add_parser(
+        "preflight", parents=[modes], help=_HELP.text("cli.command.evidence.preflight")
+    )
     evidence_preflight.add_argument("--source", required=True, type=Path)
     evidence_preflight.add_argument("--plan", required=True, type=Path)
     evidence_preflight.add_argument("--case-token", required=True)
@@ -154,6 +167,15 @@ def _validated_inputs(
 
 
 def _run(args: argparse.Namespace) -> str:
+    if args.command == "render":
+        document = load_json(args.receipt)
+        if not isinstance(document, dict):
+            raise ContextSafeError(
+                "invalid_receipt_document",
+                "$",
+                "receipt document must be a JSON object",
+            )
+        return render_receipt_page(document, locale=args.lang)
     if args.command == "pack":
         if args.pack_command != "validate":
             raise ContextSafeError(

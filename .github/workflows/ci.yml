@@ -96,3 +96,61 @@ jobs:
 
       - name: Three-run determinism suite
         run: uv run pytest tests/test_determinism.py
+
+  accessibility:
+    # `make verify` runs the stdlib half of B-043 on every push. This job adds
+    # axe-core in a headless DOM, which needs the node harness a clean clone does
+    # not carry. It is a separate job rather than part of `verify` for that
+    # reason — and `make a11y-full` fails with `engine-unavailable` if the
+    # harness is missing, so this job cannot silently degrade into the checks
+    # `verify` already ran and report the same green.
+    name: accessibility (axe-core + built-in checks)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    env:
+      UV_PYTHON: "3.12"
+      UV_PYTHON_DOWNLOADS: never
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.3.0
+        with:
+          python-version: "3.12"
+          check-latest: false
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@11f9893b081a58869d3b5fccaea48c9e9e46f990 # v8.3.2
+        with:
+          version: "0.11.28"
+          enable-cache: true
+
+      - name: Set up Node
+        uses: actions/setup-node@2028fbc5c25fe9cf00d9f06a71cc4710d4507903 # v6.0.0
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: tools/a11y/package-lock.json
+
+      - name: Install the pinned accessibility harness
+        run: make a11y-install
+
+      # --locked fails on lockfile drift; --frozen exits 0 and cannot gate it.
+      - name: Install the locked dependency graph, failing on drift
+        run: uv sync --locked
+
+      - name: Accessibility gate (built-in checks plus axe-core)
+        run: make a11y-full
+
+      - name: Upload the accessibility report
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: a11y-report
+          path: .a11y/report.json
+          if-no-files-found: error

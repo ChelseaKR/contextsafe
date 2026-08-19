@@ -144,3 +144,44 @@ Feedback is logged by issue, decision, rationale, version, and compensation. Sen
 ## 10. Maintenance
 
 Re-run automated gates on every template/catalog change and manual review on every major receipt restructure. Review terminology every six months and when HL7 artifacts or community guidance change. Correct harmful language as a safety patch and notify affected customers when prior receipts could be misunderstood.
+
+## 11. Implementation status (2026-08-15)
+
+What is automated today, and what is still a person's job.
+
+**Automated (B-043).** `make a11y` runs `tools/a11y_gate.py` on every rendered
+locale as part of `make verify`; `make a11y-full` adds axe-core in a headless
+DOM and runs as its own CI job. The gate is built around refusing a pass it did
+not earn:
+
+- it renders its own subjects from the bundled synthetic reference fixture and
+  checks each page against the *receipt document* — payload hash, case id, and
+  every mandated limitation — before auditing it, so an error page, a truncated
+  file, or a page rendered from a different receipt is reported as
+  `wrong-subject` and is not counted as audited;
+- declared pages, audited pages, and per-check examined counts are all in the
+  report; an empty page set is `no-pages` and a check that examined nothing is
+  `check-examined-nothing`, both failures;
+- a requested engine that cannot run is `engine-unavailable`, never a skip, and
+  an engine that executed no rules against a page is `engine-examined-nothing`;
+- axe cannot evaluate colour contrast, one-main, or heading-one in a DOM with no
+  layout, so those arrive as undetermined. They are listed by name, never
+  counted as passes, and each must map to a built-in check that does decide it —
+  an undetermined rule with no covering check is itself a failure.
+
+Built-in checks: structural HTML validity (landmarks, heading order, duplicate
+ids, table captions and header scope, resolvable `aria-labelledby` and in-page
+links, no script, no external resource), WCAG 2.2 contrast computed from the
+stylesheet for both screen and print rules, no colour-only status encoding, and
+a print block that does not hide a mandated disclosure.
+
+**Not automated, and not claimed.** pa11y is not wired in: its engine,
+HTML_CodeSniffer, loads rulesets by injecting script tags and does not complete
+in a headless DOM without a browser. It is left out rather than wired in and
+quietly skipped, and the rules it would add over axe — contrast, colour-only
+encoding, print — are the ones the built-in checks compute. B-044 (manual NVDA,
+VoiceOver, keyboard, zoom, and high-contrast evaluation in both languages) has
+not happened and needs a person. So does B-042, so the Spanish surface remains
+an unreviewed machine translation that says so on every page. Section 8's
+"zero placeholder or untranslated-key defects" target is gated by
+`make i18n`; the comprehension target in section 8 remains B-053.

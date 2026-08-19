@@ -20,3 +20,8 @@ build/
 .vscode/
 artifacts/customer/
 receipts/private/
+
+# Accessibility harness: node dependencies and the pages the gate renders.
+tools/a11y/node_modules/
+.a11y/
+.scratch2/
