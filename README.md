@@ -220,6 +220,10 @@ uv run contextsafe evaluate \
   --rules fixtures/reference/rules.json \
   --claimed-generated-at 2026-07-17T00:00:00Z \
   --output receipt.json
+# evaluate exits 0 whenever it produces a receipt, even one whose payload
+# records fail outcomes. To block a pipeline on findings instead, add
+# --fail-on finding: the receipt is emitted byte-identically and the process
+# then exits 1 if the payload contains at least one fail outcome.
 
 # Requires current approval declarations but still emits an unsigned artifact.
 # The committed draft intentionally fails.

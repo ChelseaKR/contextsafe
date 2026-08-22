@@ -23,6 +23,16 @@ release yet, so everything to date lives under Unreleased.
 
 ### Added
 
+- Opt-in gate threshold for `evaluate`: `--fail-on finding`. Issue #22 observed
+  that a receipt recording a semantic mismatch still exits 0, which is correct
+  for a receipt generator but leaves a pipeline nothing to block on. The
+  default behaviour is unchanged and is now pinned by test rather than left as
+  an accident; with `--fail-on finding`, a valid receipt containing at least
+  one `fail` outcome exits `EXIT_FINDING` (1) after its artifact is fully
+  emitted — stdout, `--output`, and stderr bytes are identical either way, and
+  the new code is documented in `main()` beside the others. Whether findings
+  should block remains the caller's decision; the flag asserts no threshold of
+  its own.
 - B-043 slice: `tools/a11y_gate.py`, `make a11y` (in `make verify`), and
   `make a11y-full` plus an `accessibility` CI job that adds axe-core in a
   headless DOM. The whole design is a refusal to report a pass it did not earn.

@@ -21,6 +21,7 @@ from contextsafe.evidence import build_evidence_scope
 from contextsafe.html_receipt import render_receipt_page
 from contextsafe.i18n import SOURCE_LOCALE, Surface, available_locales, source_catalog
 from contextsafe.jsonio import load_json
+from contextsafe.models import EvaluationBundle, OutcomeStatus
 from contextsafe.pack import compile_pack
 from contextsafe.plan import parse_plan, validate_plan
 from contextsafe.preflight import preflight_source
@@ -29,6 +30,14 @@ from contextsafe.validation import parse_bundle
 
 EXIT_SUCCESS = 0
 """The command completed and every requested contract check passed."""
+
+EXIT_FINDING = 1
+"""A receipt was produced, and an opt-in ``--fail-on`` threshold was met.
+
+The artifact is valid and fully emitted; the exit code reports what the
+receipt found, so a caller wiring ``evaluate`` into a pipeline can block on
+findings without re-parsing the document. Default behaviour is unchanged.
+"""
 
 EXIT_CONTRACT_ERROR = 2
 """A fail-closed contract rejection; stderr carries one stable JSON error."""
@@ -123,6 +132,13 @@ def _parser() -> argparse.ArgumentParser:
                 "--claimed-generated-at",
                 help=_HELP.text("cli.flag.claimed_generated_at"),
             )
+            subparser.add_argument(
+                "--fail-on",
+                choices=("nothing", "finding"),
+                default="nothing",
+                help=_HELP.text("cli.flag.fail_on"),
+            )
+            subparser.set_defaults(fail_on="nothing", receipt_failing_outcomes=0)
     render_parser = subparsers.add_parser(
         "render", parents=[modes], help=_HELP.text("cli.command.render")
     )
@@ -326,27 +342,38 @@ def _run(args: argparse.Namespace) -> str:
             "valid": True,
         }
         return f"{canonical_json(report)}\n"
+    return _evaluate_command(args, bundle)
+
+
+def _evaluate_command(args: argparse.Namespace, bundle: EvaluationBundle) -> str:
     claimed_raw: str | None = args.claimed_generated_at
     claimed = (
         None
         if claimed_raw is None
         else timestamp_value(claimed_raw, "$.claimed_generated_at")
     )
-    document = build_receipt_document(
-        bundle, evaluate(bundle), claimed_generated_at=claimed
-    )
+    outcomes = evaluate(bundle)
+    if args.fail_on == "finding":
+        args.receipt_failing_outcomes = sum(
+            1 for outcome in outcomes if outcome.status is OutcomeStatus.FAIL
+        )
+    document = build_receipt_document(bundle, outcomes, claimed_generated_at=claimed)
     return render_receipt(document)
 
 
 def main(argv: Sequence[str] | None = None) -> int:
     """Run the CLI and return a stable, documented process exit code.
 
-    ``EXIT_SUCCESS`` (0) reports success, ``EXIT_CONTRACT_ERROR`` (2) reports a
-    fail-closed contract rejection with one JSON error object on stderr, and
-    ``EXIT_USAGE_ERROR`` (64) reports an invalid command line; ``--help`` exits
-    0. Output never contains ANSI escape sequences in any mode, and every
-    success payload, ``--output`` artifact, and stderr error object is the
-    same UTF-8 byte sequence on every supported platform.
+    ``EXIT_SUCCESS`` (0) reports success, ``EXIT_FINDING`` (1) reports that
+    ``evaluate --fail-on finding`` produced a valid receipt whose payload
+    contains at least one ``fail`` outcome — the artifact is fully emitted
+    first and is byte-identical to its ``EXIT_SUCCESS`` form,
+    ``EXIT_CONTRACT_ERROR`` (2) reports a fail-closed contract rejection with
+    one JSON error object on stderr, and ``EXIT_USAGE_ERROR`` (64) reports an
+    invalid command line; ``--help`` exits 0. Output never contains ANSI
+    escape sequences in any mode, and every success payload, ``--output``
+    artifact, and stderr error object is the same UTF-8 byte sequence on every
+    supported platform.
     """
 
     args = _parser().parse_args(argv)
@@ -363,6 +390,11 @@ def main(argv: Sequence[str] | None = None) -> int:
         elif not args.quiet:
             _emit(sys.stdout, output)
         _log(args, Outcome.ACCEPTED, None)
+        if (
+            getattr(args, "fail_on", "nothing") == "finding"
+            and args.receipt_failing_outcomes > 0
+        ):
+            return EXIT_FINDING
         return EXIT_SUCCESS
     except ContextSafeError as exc:
         error: dict[str, JsonValue] = {"error": as_json_value(exc.to_dict())}

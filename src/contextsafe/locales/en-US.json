@@ -72,6 +72,10 @@
       "review": "source",
       "text": "Optional caller-declared whole-second UTC timestamp (YYYY-MM-DDThh:mm:ssZ) recorded only in the untrusted receipt envelope, never in the deterministic payload."
     },
+    "cli.flag.fail_on": {
+      "review": "source",
+      "text": "evaluate gate threshold: 'finding' exits 1 when the generated receipt contains at least one fail outcome; the receipt itself is still emitted unchanged. 'nothing' keeps the default behaviour of exiting 0 whenever a receipt is produced"
+    },
     "cli.flag.lang": {
       "review": "source",
       "text": "Interface locale for the rendered page. Never read from the environment, because command output is a byte-pinned artifact."
