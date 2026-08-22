@@ -72,6 +72,10 @@
       "review": "machine",
       "text": "Marca de tiempo UTC opcional, en segundos enteros (AAAA-MM-DDThh:mm:ssZ), declarada por quien ejecuta el comando y registrada solo en el sobre no confiable del recibo, nunca en la carga determinista."
     },
+    "cli.flag.fail_on": {
+      "review": "machine",
+      "text": "umbral de evaluación para evaluate: 'finding' sale con 1 cuando el recibo generado contiene al menos un resultado fail; el recibo en sí se emite sin cambios. 'nothing' mantiene el comportamiento predeterminado de salir con 0 siempre que se produzca un recibo"
+    },
     "cli.flag.lang": {
       "review": "machine",
       "text": "Idioma de la interfaz para la página representada. Nunca se lee del entorno, porque la salida del comando es un artefacto fijado byte a byte."

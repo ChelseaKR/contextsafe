@@ -53,6 +53,100 @@ def test_validate_cli_emits_machine_readable_summary(capsys: object) -> None:
     assert captured.err == ""
 
 
+def _mismatched_observations_args(tmp_path: Path) -> list[str]:
+    """The issue-22 reproduction: one pronoun observation the EHR contradicts."""
+
+    observations = json.loads(
+        (REFERENCE / "observations.json").read_text(encoding="utf-8")
+    )
+    observations["observations"][4]["value"]["value"] = "ze/hir"
+    path = tmp_path / "mismatched-observations.json"
+    path.write_text(json.dumps(observations), encoding="utf-8")
+    args = _args("evaluate")
+    args[4] = str(path)
+    return args
+
+
+def test_evaluate_default_exit_stays_zero_when_a_receipt_records_findings(
+    tmp_path: Path, capsys: object
+) -> None:
+    """The documented contract is preserved: a receipt generator that ran.
+
+    Issue #22 reports that ``evaluate`` exits 0 on a semantic mismatch. That
+    remains true by default — this test pins it as the documented behaviour,
+    not as an accident — while ``--fail-on finding`` becomes the opt-in gate.
+    """
+
+    assert main(_mismatched_observations_args(tmp_path)) == 0
+    document = json.loads(capsys.readouterr().out)
+    assert document["payload"]["summary"]["fail"] == 1
+    assert document["payload"]["summary"]["pass"] == 4
+
+
+def test_evaluate_fail_on_finding_exits_one_and_still_emits_the_receipt(
+    tmp_path: Path, capsys: object
+) -> None:
+    args = [*_mismatched_observations_args(tmp_path), "--fail-on", "finding"]
+    assert main(args) == 1
+    captured = capsys.readouterr()
+    document = json.loads(captured.out)
+    assert document["payload"]["summary"]["fail"] == 1
+    assert captured.err == ""
+
+
+def test_evaluate_fail_on_finding_clean_fixture_exits_zero(capsys: object) -> None:
+    assert main([*_args("evaluate"), "--fail-on", "finding"]) == 0
+    document = json.loads(capsys.readouterr().out)
+    assert document["payload"]["summary"]["fail"] == 0
+
+
+def test_evaluate_fail_on_finding_writes_output_file_before_exiting_one(
+    tmp_path: Path,
+) -> None:
+    output = tmp_path / "receipt.json"
+    args = [
+        *_mismatched_observations_args(tmp_path),
+        "--fail-on",
+        "finding",
+        "--output",
+        str(output),
+    ]
+    assert main(args) == 1
+    document = json.loads(output.read_text(encoding="utf-8"))
+    assert document["payload"]["summary"]["fail"] == 1
+
+
+def test_evaluate_fail_on_finding_artifact_is_byte_identical_to_default(
+    tmp_path: Path,
+) -> None:
+    default_path = tmp_path / "default.json"
+    finding_path = tmp_path / "finding.json"
+    assert (
+        main([*_mismatched_observations_args(tmp_path), "--output", str(default_path)])
+        == 0
+    )
+    assert (
+        main(
+            [
+                *_mismatched_observations_args(tmp_path),
+                "--output",
+                str(finding_path),
+                "--fail-on",
+                "finding",
+            ]
+        )
+        == 1
+    )
+    assert default_path.read_bytes() == finding_path.read_bytes()
+
+
+def test_evaluate_rejects_unknown_fail_on_value(capsys: object) -> None:
+    with pytest.raises(SystemExit) as excinfo:
+        main([*_args("evaluate"), "--fail-on", "sometimes"])
+    assert excinfo.value.code == EXIT_USAGE_ERROR
+    assert "invalid choice" in capsys.readouterr().err
+
+
 def test_evaluate_cli_can_write_receipt(tmp_path: Path, capsys: object) -> None:
     output = tmp_path / "receipt.json"
     assert main([*_args("evaluate"), "--output", str(output)]) == 0
