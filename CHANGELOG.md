@@ -55,6 +55,9 @@ release yet, so everything to date lives under Unreleased.
 
 ### Fixed
 
+- `make verify` could fail at its own audit gate: pip 26.1.2, seeded into the
+  environment through the lockfile, matched PYSEC-2026-3721. The lock now
+  carries pip 26.2.1 and `make audit` is green again.
 - `a11y_gate.py --engines ''` rendered both real pages, ran no check at all, and
   printed `a11y-gate: clean` with exit 0 — the gate committing, on its own
   command line, the exact defect it exists to catch. The report body was honest
