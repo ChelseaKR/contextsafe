@@ -275,6 +275,59 @@ audit, so coverage of the surfaces in
 gate is a substitute for B-044, and the Spanish page is auditable but its
 wording is still unreviewed (B-042).
 
+Implementation note (2026-08-15, B-046): `contextsafe diagnostics`, `contextsafe
+cleanup`, `contextsafe support-bundle`, and an opt-in local event log
+(`--log-dir` on every command). B-018 and B-020, the dependencies, are both in
+place, so nothing here is forced.
+
+The support bundle is the part that had to be right, because a bundle from this
+tool could carry exactly the identity data the product exists to protect. It is
+redacted by construction rather than by filter: every field is a `SafeValue`
+from `src/contextsafe/safe_value.py`, there is no constructor that accepts free
+text, and the serializer raises on anything that is not one. A caller holding a
+string with a patient name in it has nowhere to put it. The assembled bundle is
+then scanned with the boundary detectors before it is written and refuses to
+emit if anything fires — belt and braces, documented as such, because trusting
+that scan would be trusting the denylist again.
+
+`tests/test_diagnostics.py` carries the hostile fixture that motivates the
+design: a workspace path with a synthetic patient name in a *directory*
+component, a name spelled with a Cyrillic homoglyph, and a record number
+written with spaces between its digits. One test runs the repository's own
+detectors over those strings and asserts they come back clean, so the claim
+"a filter would have shipped these" is checked rather than asserted. A second
+control replaced `path_shape` with a regex scrubber and watched the suite fail.
+Writing that property test also found a real weakness: the version constructor
+accepted `exports-Jordan-Rivera-1987` as a version string, and now requires a
+dotted numeric form.
+
+The cleanup enumerator classifies every entry under a workspace — index,
+object, staging, directory, and anything it cannot classify — and reports
+shapes, counts, and sizes rather than names. Removal is a separate act
+requiring `--remove --confirm`, never follows a symlink, never leaves the
+workspace, and never deletes an entry it could not classify; a directory still
+holding a retained entry is retained with it.
+
+The local log is deliberately minimal. It is off unless `--log-dir` is passed
+and is never enabled from the environment, because output that varies with the
+environment is what `tests/test_determinism.py` exists to prevent. A record is
+a closed vocabulary — command, outcome, error code — with no message field, so
+there is nowhere for an exception string or a path to land. It carries no
+clock reading: the runner does not read a clock anywhere else and a log is not
+a good reason to start, so records carry a per-file sequence number instead.
+That is a real limitation and correlating these records with anything external
+needs a timestamp captured outside the tool. Nothing imports `logging`, so the
+structural log canary in `tests/test_privacy_canaries.py` still holds, and a
+logging failure never changes the exit code of the command it logged.
+
+B-046 is not closed. RG-12 also expects governed cleanup at a design partner
+(B-047, B-049), and this cleanup enumerates a local workspace, not a partner's
+non-production environment. The bundle covers the surfaces that exist; a signing
+path (B-035), FHIR/HL7/LIS adapters (B-023–B-025), and a review surface
+(B-032) would each add sections, and each would need the same constructive
+treatment. No independent security review of the bundle contents has happened
+(B-040).
+
 ## Phase 6 — pilot and v1
 
 | ID | Trace | Deliverable and acceptance | Owner | Dependency | Estimate |

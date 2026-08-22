@@ -53,6 +53,51 @@ release yet, so everything to date lives under Unreleased.
   rules it would add over axe — contrast, colour-only encoding, print — are the
   three the built-in checks compute.
 
+- B-046 slice: `contextsafe diagnostics`, `contextsafe cleanup`,
+  `contextsafe support-bundle`, and an opt-in local event log via `--log-dir`.
+  The support bundle is redacted **by construction**, not by filter. Every
+  field is a typed `SafeValue` (`src/contextsafe/safe_value.py`): a count, a
+  flag, a member of a closed set declared at the call site, a SHA-256 of text
+  that does not itself survive, a dotted numeric version, or the *shape* of a
+  path — depth, published extension, and a digest of the final component, with
+  no directory name and no filename kept. There is no constructor that accepts
+  free text and no escape hatch, so a caller holding a string with a patient
+  name in it has nowhere to put it, and the serializer raises on anything that
+  is not a `SafeValue`. The assembled bundle is then scanned with the
+  repository's boundary detectors and refuses to be emitted if anything fires;
+  that pass is belt and braces and is documented as such, because a detector
+  firing would mean the constructive layer is broken rather than that the
+  redaction worked.
+- The hostile fixture behind that design is in `tests/test_diagnostics.py`: a
+  workspace path carrying a synthetic patient name in a *directory* component,
+  a name spelled with a Cyrillic homoglyph, and a record number written with
+  spaces between its digits. One test runs the repository's own detectors over
+  those strings and asserts they come back clean, so "a filter would have
+  shipped these" is checked rather than claimed; a second control replaced the
+  path constructor with a regex scrubber and watched the suite fail. Writing
+  the property test found a real weakness, now fixed: the version constructor
+  accepted `exports-Jordan-Rivera-1987` as a version string.
+- The cleanup enumerator classifies every entry under a workspace — index,
+  content-addressed object, staging leftover, directory, and anything it cannot
+  classify — and reports shapes, counts, and sizes rather than names. Removal
+  needs `--remove --confirm`, never follows a symbolic link, never leaves the
+  workspace, and never deletes an entry it could not classify; a directory
+  still holding a retained entry is retained with it.
+- The local event log is off unless `--log-dir` is given and is never enabled
+  from the environment, because output that varies with the environment is what
+  `tests/test_determinism.py` exists to prevent. A record is a closed
+  vocabulary — command, outcome, error code — with no message field, so there is
+  nowhere for an exception string, a path, or a token to land. It carries no
+  clock reading: the runner reads no clock anywhere else, so records carry a
+  per-file sequence number instead, which is a real limitation for anyone
+  correlating them with external events. Nothing imports `logging`, so the
+  structural log canary still holds, the log is owner-only, it refuses a
+  symbolic link, it stops at a published size limit, and a logging failure
+  never changes the exit code of the command it logged.
+- `safe_value.py`, `diagnostics.py`, and `eventlog.py` are now in the
+  `SAFETY_MODULES` coverage gate, which requires 95% rather than the 90%
+  applied to the package as a whole.
+
 ### Fixed
 
 - `make verify` could fail at its own audit gate: pip 26.1.2, seeded into the

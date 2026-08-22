@@ -156,6 +156,28 @@ string catalogs):
   rule axe could not determine as a pass. pa11y is not wired in, and
   [Accessibility §11](docs/08-ACCESSIBILITY-I18N.md) says why.
 
+The same iteration adds the operator surface (the B-046 slice):
+
+- `contextsafe diagnostics` reports what an installation can do — interpreter,
+  platform, whether descriptor-relative no-follow reads exist here, whether a
+  workspace is present and how many records its index holds. Not what it has
+  seen: no case, no token, no path;
+- `contextsafe cleanup --workspace DIR` lists what the tool created there,
+  classified as index, object, staging leftover, directory, or unclassifiable,
+  and reported as shapes and sizes rather than names. Deleting takes
+  `--remove --confirm`, never follows a symbolic link, never leaves the
+  workspace, and never removes an entry it could not classify;
+- `contextsafe support-bundle` assembles a bundle **redacted by construction**.
+  Every field is a typed value — a count, a flag, a member of a closed set, a
+  digest, a dotted numeric version, or the shape of a path — and there is no
+  constructor that accepts free text, so a patient name in an export path has
+  nowhere to go. A filter would have to recognise the name; this cannot contain
+  it. The assembled bundle is scanned again before it is written, as a check on
+  the construction rather than as the thing that makes it safe;
+- every command accepts `--log-dir`, which appends one closed-vocabulary record
+  (command, outcome, error code) to a local append-only log. Off unless asked,
+  never enabled from the environment, no message field, and no clock reading.
+
 The durable primitive has no CLI import route. Every iteration-3 evidence record says
 `authorization_status: not_verified_internal_test_only` and
 `usable_for_execution: false`; a future signature-verification layer may not relabel
