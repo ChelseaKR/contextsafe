@@ -34,6 +34,7 @@ denylist again.
 
 from __future__ import annotations
 
+import errno
 import os
 import platform
 import sys
@@ -231,9 +232,13 @@ def remove_cleanup(plan: CleanupPlan) -> tuple[int, int]:
             # deleting the thing we just declined to delete.
             try:
                 target.rmdir()
-            except OSError:
-                retained += 1
-                continue
+            except OSError as exc:
+                if exc.errno in (errno.ENOTEMPTY, errno.EEXIST):
+                    retained += 1
+                    continue
+                raise ContextSafeError(
+                    "cleanup_io_error", "$", "a workspace entry could not be removed"
+                ) from exc
         else:
             try:
                 target.unlink()

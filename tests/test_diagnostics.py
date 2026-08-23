@@ -16,6 +16,7 @@ there is no constructor that accepts free text.
 
 from __future__ import annotations
 
+import errno
 import json
 import os
 import unicodedata
@@ -544,6 +545,23 @@ def test_removal_reports_a_file_it_cannot_delete(
 
     plan = enumerate_cleanup(populated_workspace)
     monkeypatch.setattr(Path, "unlink", refuse)
+    with pytest.raises(ContextSafeError) as excinfo:
+        remove_cleanup(plan)
+    assert excinfo.value.code == "cleanup_io_error"
+
+
+def test_removal_reports_a_directory_it_cannot_delete_for_non_empty_reason(
+    monkeypatch: pytest.MonkeyPatch, populated_workspace: Path
+) -> None:
+    """A directory rmdir failure with unexpected errno raises cleanup_io_error."""
+
+    def refuse(self: Path, *args: Any, **kwargs: Any) -> None:
+        err = OSError("permission denied")
+        err.errno = errno.EACCES
+        raise err
+
+    plan = enumerate_cleanup(populated_workspace)
+    monkeypatch.setattr(Path, "rmdir", refuse)
     with pytest.raises(ContextSafeError) as excinfo:
         remove_cleanup(plan)
     assert excinfo.value.code == "cleanup_io_error"
