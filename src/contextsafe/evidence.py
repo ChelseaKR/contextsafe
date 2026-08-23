@@ -205,6 +205,11 @@ class EvidenceMetadata:
 
     def __post_init__(self) -> None:
         _require_canonical_utc(self.captured_at, "$.captured_at")
+        from contextsafe.preflight import _reject_unsafe_string
+
+        _reject_unsafe_string(self.collector_id, "$.collector_id")
+        _reject_unsafe_string(self.system_id, "$.system_id")
+        _reject_unsafe_string(self.system_version, "$.system_version")
 
     def to_dict(self) -> dict[str, JsonValue]:
         return {
@@ -549,23 +554,31 @@ def parse_evidence_source(
 def parse_evidence_metadata(value: object) -> EvidenceMetadata:
     """Parse deterministic provenance supplied outside the raw source."""
 
+    from contextsafe.preflight import _reject_unsafe_string
+
     data = object_value(value, "$")
     exact_keys(
         data,
         frozenset({"captured_at", "collector_id", "system_id", "system_version"}),
         "$",
     )
+    collector_id = bounded_string(
+        data["collector_id"], "$.collector_id", pattern=SAFE_TOKEN_PATTERN
+    )
+    _reject_unsafe_string(collector_id, "$.collector_id")
+    system_id = bounded_string(data["system_id"], "$.system_id", pattern=ID_PATTERN)
+    _reject_unsafe_string(system_id, "$.system_id")
+    system_version = bounded_string(
+        data["system_version"],
+        "$.system_version",
+        pattern=SAFE_TOKEN_PATTERN,
+    )
+    _reject_unsafe_string(system_version, "$.system_version")
     return EvidenceMetadata(
         captured_at=timestamp_value(data["captured_at"], "$.captured_at"),
-        collector_id=bounded_string(
-            data["collector_id"], "$.collector_id", pattern=SAFE_TOKEN_PATTERN
-        ),
-        system_id=bounded_string(data["system_id"], "$.system_id", pattern=ID_PATTERN),
-        system_version=bounded_string(
-            data["system_version"],
-            "$.system_version",
-            pattern=SAFE_TOKEN_PATTERN,
-        ),
+        collector_id=collector_id,
+        system_id=system_id,
+        system_version=system_version,
     )
 
 
@@ -681,6 +694,20 @@ def parse_evidence_record(value: object) -> EvidenceRecord:
         raise contract_error(
             "unsupported_media_type", "$.media_type", "media type is unsupported"
         )
+    collector_id = bounded_string(
+        data["collector_id"], "$.collector_id", pattern=SAFE_TOKEN_PATTERN
+    )
+    from contextsafe.preflight import _reject_unsafe_string
+
+    _reject_unsafe_string(collector_id, "$.collector_id")
+    system_id = bounded_string(data["system_id"], "$.system_id", pattern=ID_PATTERN)
+    _reject_unsafe_string(system_id, "$.system_id")
+    system_version = bounded_string(
+        data["system_version"],
+        "$.system_version",
+        pattern=SAFE_TOKEN_PATTERN,
+    )
+    _reject_unsafe_string(system_version, "$.system_version")
     record = EvidenceRecord(
         schema_version=schema_version,
         evidence_id=evidence_id,
@@ -695,15 +722,9 @@ def parse_evidence_record(value: object) -> EvidenceRecord:
         ),
         raw_byte_count=_positive_integer(data["raw_byte_count"], "$.raw_byte_count"),
         captured_at=timestamp_value(data["captured_at"], "$.captured_at"),
-        collector_id=bounded_string(
-            data["collector_id"], "$.collector_id", pattern=SAFE_TOKEN_PATTERN
-        ),
-        system_id=bounded_string(data["system_id"], "$.system_id", pattern=ID_PATTERN),
-        system_version=bounded_string(
-            data["system_version"],
-            "$.system_version",
-            pattern=SAFE_TOKEN_PATTERN,
-        ),
+        collector_id=collector_id,
+        system_id=system_id,
+        system_version=system_version,
         boundary_profile_version=enum_string(
             data["boundary_profile_version"],
             "$.boundary_profile_version",

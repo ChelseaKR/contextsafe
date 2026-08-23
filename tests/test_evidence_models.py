@@ -19,6 +19,7 @@ from contextsafe.evidence import (
     build_evidence_record,
     build_evidence_scope,
     parse_canonical_observation,
+    parse_evidence_metadata,
     parse_evidence_record,
     parse_evidence_source,
 )
@@ -267,6 +268,74 @@ def test_evidence_timestamp_schema_and_models_require_canonical_utc(
                 system_version="fixture-1.0",
             )
         assert raised.value.code == "invalid_timestamp"
+
+
+@pytest.mark.parametrize(
+    ("field", "unsafe_value", "expected_code"),
+    [
+        ("collector_id", "realpatientcanary", "phi_canary_detected"),
+        ("collector_id", "123-45-6789", "direct_identifier_detected"),
+        ("collector_id", "http://patient.org", "direct_identifier_detected"),
+        ("collector_id", "MRN:1234567", "direct_identifier_detected"),
+        ("system_id", "SYS-CANARY-REALPATIENTCANARY", "phi_canary_detected"),
+        ("system_version", "realpatientcanary", "phi_canary_detected"),
+        ("system_version", "2026-08-23", "direct_identifier_detected"),
+    ],
+)
+def test_evidence_metadata_and_parser_reject_phi_and_direct_identifiers(
+    field: str, unsafe_value: str, expected_code: str
+) -> None:
+    valid_payload = {
+        "captured_at": "2026-07-13T12:00:00Z",
+        "collector_id": "TEST-COLLECTOR",
+        "system_id": "SYS-STAGING-EHR",
+        "system_version": "fixture-1.0",
+    }
+    payload = dict(valid_payload)
+    payload[field] = unsafe_value
+
+    with pytest.raises(ContextSafeError) as raised:
+        parse_evidence_metadata(payload)
+    assert raised.value.code == expected_code
+    assert raised.value.path == f"$.{field}"
+
+    collector_id = unsafe_value if field == "collector_id" else "TEST-COLLECTOR"
+    system_id = unsafe_value if field == "system_id" else "SYS-STAGING-EHR"
+    system_version = unsafe_value if field == "system_version" else "fixture-1.0"
+    with pytest.raises(ContextSafeError) as raised:
+        EvidenceMetadata(
+            captured_at=datetime(2026, 7, 13, 12, tzinfo=UTC),
+            collector_id=collector_id,
+            system_id=system_id,
+            system_version=system_version,
+        )
+    assert raised.value.code == expected_code
+    assert raised.value.path == f"$.{field}"
+
+
+def test_parse_evidence_record_rejects_unsafe_metadata_fields(
+    tmp_path: Path,
+    evidence_source_json: dict[str, Any],
+    evidence_scope: Any,
+    evidence_metadata: Any,
+) -> None:
+    source = tmp_path / "source.json"
+    source.write_text(json.dumps(evidence_source_json), encoding="utf-8")
+    record = build_evidence_record(
+        preflight_source(source, evidence_scope), evidence_metadata
+    ).to_dict()
+
+    for field, unsafe_value, expected_code in [
+        ("collector_id", "realpatientcanary", "phi_canary_detected"),
+        ("system_id", "SYS-CANARY-REALPATIENTCANARY", "phi_canary_detected"),
+        ("system_version", "realpatientcanary", "phi_canary_detected"),
+    ]:
+        bad_record = dict(record)
+        bad_record[field] = unsafe_value
+        with pytest.raises(ContextSafeError) as raised:
+            parse_evidence_record(bad_record)
+        assert raised.value.code == expected_code
+        assert raised.value.path == f"$.{field}"
 
 
 @pytest.mark.parametrize(
