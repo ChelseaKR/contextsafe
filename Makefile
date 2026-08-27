@@ -66,6 +66,13 @@ a11y-full:
 a11y-install:
 	npm ci --prefix tools/a11y
 
+# Unowned markers and stray tool configs. This was two shell lines, and neither
+# could fail on a machine missing the tool it called: `! rg ...` maps "ripgrep
+# is not installed" (exit 2) onto success exactly as it maps "ripgrep matched
+# nothing" (exit 1), and `! find ... | grep .` takes its status from `grep`, so
+# a `find` that never ran produced no output and reported success too. Neither
+# tool is in uv.lock or installed by any CI step. Stdlib Python now, like the
+# sweep and the i18n gate, so `verify` still needs nothing a clean clone lacks;
+# it exits 1 on a finding and 2 when it could not examine anything.
 hygiene:
-	! rg -n '(TODO|FIXME|HACK)' src tests
-	! find . -maxdepth 2 -type f \( -name 'ruff.toml' -o -name 'pytest.ini' -o -name 'mypy.ini' -o -name 'setup.cfg' -o -name 'setup.py' -o -name 'tox.ini' -o -name '.flake8' -o -name 'requirements.txt' \) | grep .
+	uv run python tools/hygiene_gate.py

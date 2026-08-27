@@ -69,7 +69,11 @@ Only tracked files are scanned, because only tracked files get published. A
 brand-new file is invisible to the sweep until it is `git add`-ed, which is why
 CI — where everything is tracked — is the authoritative run.
 
-Exit 0 when clean, 1 when anything is found, 2 on a usage error.
+Exit 0 when clean, 1 when anything is found, 2 on a usage error or when the
+sweep could not examine what it claims to cover: no source read at all, or an
+object it enumerated and then could not read. A sweep of nothing is not clean,
+and the count of sources examined is printed with the clean line so a pass that
+covered less than it should is visible rather than indistinguishable.
 """
 
 from __future__ import annotations
@@ -140,6 +144,10 @@ CROSS_REPO = re.compile(r"\bChelseaKR/([A-Za-z0-9._-]+)")
 RELATIVE_LINK = re.compile(r"(?<![A-Za-z0-9._~/-])(\.\./[A-Za-z0-9._/-]+)")
 
 
+class SweepUnavailable(Exception):
+    """The sweep could not examine what it claims to cover, which is not a pass."""
+
+
 def _run_git(args: Sequence[str], repo_root: Path) -> bytes:
     completed = subprocess.run(  # noqa: S603 — fixed argv, no shell, trusted binary
         ["git", *args],  # noqa: S607 — `git` from PATH is the project's own toolchain
@@ -197,8 +205,14 @@ def history_sources(root: Path) -> Iterator[tuple[str, str]]:
             continue
         try:
             blob = _run_git(["cat-file", "blob", oid], root)
-        except subprocess.CalledProcessError:
-            continue
+        except subprocess.CalledProcessError as exc:
+            # An object the sweep enumerated but could not read is content it
+            # did not examine. Skipping it quietly would let `--history` report
+            # clean over a blob nobody looked at.
+            raise SweepUnavailable(
+                f"could not read blob {oid[:12]} from the object database; "
+                "a sweep that skipped an object it enumerated cannot report clean"
+            ) from exc
         if len(blob) > MAX_BYTES:
             continue
         try:
@@ -325,13 +339,26 @@ def main(argv: Sequence[str] | None = None) -> int:
         denylist_path = Path(from_env) if from_env else None
     terms = load_denylist(denylist_path)
 
-    sources: Iterator[tuple[str, str]] = tracked_sources(root)
     scope = "tracked files"
-    if args.history:
-        sources = iter([*tracked_sources(root), *history_sources(root)])
-        scope = "tracked files and every blob in the object database"
+    try:
+        sources = list(tracked_sources(root))
+        if args.history:
+            sources.extend(history_sources(root))
+            scope = "tracked files and every blob in the object database"
+        if not sources:
+            raise SweepUnavailable(
+                f"no source was read from {root}, so the sweep examined nothing, "
+                "and a sweep of nothing is not a clean result"
+            )
+        findings = sweep(sources, terms)
+    except SweepUnavailable as exc:
+        print(f"publication-sweep: {exc}.", file=sys.stderr)
+        print(
+            "publication-sweep: this is a failure to run the sweep, not a clean result.",
+            file=sys.stderr,
+        )
+        return 2
 
-    findings = sweep(sources, terms)
     if findings:
         print(
             f"publication-sweep: {len(findings)} finding(s) over {scope}",
@@ -352,7 +379,9 @@ def main(argv: Sequence[str] | None = None) -> int:
     denylist_note = (
         f", {len(terms)} denylisted term(s)" if terms else ", no denylist supplied"
     )
-    print(f"publication-sweep: clean over {scope}{denylist_note}")
+    print(
+        f"publication-sweep: clean over {len(sources)} source(s), {scope}{denylist_note}"
+    )
     return 0
 
 

@@ -15,6 +15,45 @@ release yet, so everything to date lives under Unreleased.
   silently not happened will now correctly not run. The success path, the
   documented retain path, and the emitted JSON on success are all unchanged,
   and no exit code moves in the other direction. See Fixed, below.
+- `make hygiene` is `tools/hygiene_gate.py`, and it can now fail. The target was
+  two shell lines — `! rg -n '(TODO|FIXME|HACK)' src tests` and
+  `! find . -maxdepth 2 ... | grep .` — and neither could report anything but
+  success on a machine without the tool it called. `rg` exits 1 when it matches
+  nothing and 2 when it cannot run at all, including when it is not installed,
+  and the leading `!` maps both onto a pass; ripgrep is not in `uv.lock`, no CI
+  step installs it, and a clean clone does not carry it, so the gate that is
+  supposed to keep markers out of `src` and `tests` was passing over zero bytes
+  anywhere it was absent. The `find` line has the same defect one step removed:
+  `!` negates the status of `grep`, the last stage of the pipe, so a `find` that
+  never ran produced no output, `grep` exited 1 on the empty input, and the
+  negation called that clean. Measured before the change,
+  `env PATH=/var/empty make hygiene` exited 0 with `rg: command not found` and
+  `find: command not found` on stderr. The replacement is stdlib Python, like
+  the publication sweep and the i18n gate, so `verify` still needs nothing a
+  clean clone lacks, and it separates the three states the shell version
+  conflated: exit 0 with a count of what it read, exit 1 on a finding, exit 2
+  when it could not examine anything — no git, no repository, or no tracked file
+  under `src`/`tests`. Both checks read tracked files now, so an ignored
+  directory is never searched and an untracked local config cannot trip the
+  config check; CI, where everything is tracked, was always the authoritative
+  run. `tests/test_hygiene_gate.py` watches every state, including a planted
+  marker for each of the three words in each scanned tree and a `git` removed
+  from `PATH`. Nothing had slipped through in the meantime: the tree carried no
+  marker in `src` or `tests` when the gate was replaced.
+- The publication sweep refuses to report clean over nothing. It printed
+  `clean over tracked files` whatever the file list contained, including an
+  empty one, which is the same false green in a different shape: the sweep now
+  counts its sources, prints the count with the clean line, and exits 2 rather
+  than 0 when it read none. In `--history` mode, an object it enumerated and
+  then could not read was `except CalledProcessError: continue` — a blob nobody
+  looked at, inside a run that would still say clean. That is now exit 2 with
+  the object id.
+- The full-history secret scan stops on an object it cannot read. Phase 2 wrote
+  every blob and commit out with `git cat-file ... || true`, then counted the
+  object as materialized regardless, so a damaged or unreadable object was
+  scanned by nobody and reported by nothing. The script already refused to
+  report success after enumerating zero blobs; it now refuses to report success
+  after failing to read one.
 - `CONTRIBUTING.md` documents the environment as `uv sync --locked`. The
   Makefile and `ci.yml` already used `--locked` and explained why; the setup
   instructions still told contributors to run `--frozen`, which installs a
