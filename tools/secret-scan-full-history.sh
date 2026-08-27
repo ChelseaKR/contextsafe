@@ -120,16 +120,28 @@ echo "secret-scan: [2/3] every object in the object database (including unreacha
 objects_dir="$(mktemp -d)"
 trap 'rm -rf "$objects_dir"' EXIT
 
+# An object that cannot be read is an object this scan did not cover. It used
+# to be `|| true`, which counted it as materialized anyway and let the phase
+# report clean over content nobody looked at. A failure here means the object
+# database is damaged or unreadable, and that is a reason to stop, not to skip.
 blob_count=0
 commit_count=0
 while read -r oid otype; do
   case "$otype" in
     blob)
-      git cat-file blob "$oid" >"$objects_dir/blob-$oid" 2>/dev/null || true
+      if ! git cat-file blob "$oid" >"$objects_dir/blob-$oid" 2>/dev/null; then
+        echo "secret-scan: could not read blob ${oid} from the object database." >&2
+        echo "  Refusing to report a scan that skipped an object it enumerated." >&2
+        exit 1
+      fi
       blob_count=$((blob_count + 1))
       ;;
     commit)
-      git cat-file commit "$oid" >"$objects_dir/commit-$oid" 2>/dev/null || true
+      if ! git cat-file commit "$oid" >"$objects_dir/commit-$oid" 2>/dev/null; then
+        echo "secret-scan: could not read commit object ${oid}." >&2
+        echo "  Refusing to report a scan that skipped an object it enumerated." >&2
+        exit 1
+      fi
       commit_count=$((commit_count + 1))
       ;;
   esac
