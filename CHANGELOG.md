@@ -8,6 +8,13 @@ release yet, so everything to date lives under Unreleased.
 
 ### Changed
 
+- **`cleanup --remove --confirm` now exits 2 instead of 0 when a directory it
+  set out to remove could not be removed.** This is a deliberate exit-code
+  change on a failure path, called out here because a caller chaining on `&&`
+  or checking `$?` will see it: work that used to run after a cleanup that had
+  silently not happened will now correctly not run. The success path, the
+  documented retain path, and the emitted JSON on success are all unchanged,
+  and no exit code moves in the other direction. See Fixed, below.
 - `CONTRIBUTING.md` documents the environment as `uv sync --locked`. The
   Makefile and `ci.yml` already used `--locked` and explained why; the setup
   instructions still told contributors to run `--frozen`, which installs a
@@ -20,6 +27,23 @@ release yet, so everything to date lives under Unreleased.
   purpose is refusing to pass on an unverified input should not itself install a
   lockfile it declined to check.
 
+
+### Fixed
+
+- `remove_cleanup` reported a failed directory removal as a retained entry.
+  The `rmdir` call was wrapped in a bare `except OSError`, so a permission
+  bit, a read-only mount, or a device error was counted into `retained_count`
+  and the command exited 0 with the directories still on disk, while the file
+  branch immediately below raised `cleanup_io_error` on exactly the same
+  condition. The two halves now agree. The directory branch absorbs one errno
+  set — `ENOTEMPTY`/`EEXIST`, the "still holding something the enumerator
+  refused to touch" case that `docs/13-BACKLOG.md` describes and that the
+  deepest-first walk makes the only legitimate one — and raises
+  `cleanup_io_error` on everything else. A retained count now reports a choice
+  and never a failure. Two tests cover it, both watched to fail first: one
+  drives a real read-only parent rather than a patched `rmdir`, and one pins
+  the CLI exit code at 2 so the change recorded under Changed cannot silently
+  revert.
 
 ### Added
 

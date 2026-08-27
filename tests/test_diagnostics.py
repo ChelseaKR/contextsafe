@@ -593,3 +593,66 @@ def test_a_log_file_that_cannot_be_opened_is_reported(
     with pytest.raises(ContextSafeError) as excinfo:
         append_event(tmp_path / "logs", command="evaluate", outcome=Outcome.ACCEPTED)
     assert excinfo.value.code == "log_io_error"
+
+
+@pytest.mark.skipif(os.name == "nt", reason="POSIX directory permissions")
+@pytest.mark.skipif(
+    hasattr(os, "geteuid") and os.geteuid() == 0,
+    reason="root bypasses the permission bit this test relies on",
+)
+def test_removal_reports_a_directory_it_cannot_delete(
+    populated_workspace: Path,
+) -> None:
+    """A directory that will not rmdir is an error, exactly as a file is.
+
+    Not a mock: the parent is made read-only, so ``rmdir`` fails the way it
+    fails on an operator's machine. Before the narrowing this returned a
+    retained count and a success exit, and the directory was still there.
+    """
+
+    store = EvidenceStore(populated_workspace)
+    plan = enumerate_cleanup(populated_workspace)
+    guarded = store.raw_root
+    guarded.chmod(0o500)
+    try:
+        with pytest.raises(ContextSafeError) as excinfo:
+            remove_cleanup(plan)
+    finally:
+        guarded.chmod(0o700)
+    assert excinfo.value.code == "cleanup_io_error"
+
+
+@pytest.mark.skipif(os.name == "nt", reason="POSIX directory permissions")
+@pytest.mark.skipif(
+    hasattr(os, "geteuid") and os.geteuid() == 0,
+    reason="root bypasses the permission bit this test relies on",
+)
+def test_the_cleanup_command_exits_two_when_a_removal_fails(
+    populated_workspace: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """The exit code this change moves, pinned so it cannot move back.
+
+    A removal that fails used to leave the command on ``EXIT_SUCCESS`` with a
+    ``retained_count`` covering for it. It is a contract error now, and an
+    operator's ``&&`` no longer runs on a cleanup that did not happen.
+    """
+
+    store = EvidenceStore(populated_workspace)
+    guarded = store.raw_root
+    guarded.chmod(0o500)
+    try:
+        code = main(
+            [
+                "cleanup",
+                "--workspace",
+                str(populated_workspace),
+                "--remove",
+                "--confirm",
+            ]
+        )
+    finally:
+        guarded.chmod(0o700)
+    assert code == EXIT_CONTRACT_ERROR
+    captured = capsys.readouterr()
+    assert captured.out == ""
+    assert json.loads(captured.err)["error"]["code"] == "cleanup_io_error"
