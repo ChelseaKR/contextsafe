@@ -34,6 +34,7 @@ denylist again.
 
 from __future__ import annotations
 
+import errno
 import os
 import platform
 import sys
@@ -72,6 +73,14 @@ REMOVABLE = frozenset(
     {EntryKind.INDEX, EntryKind.OBJECT, EntryKind.STAGING, EntryKind.DIRECTORY}
 )
 """Kinds removal will touch. ``UNEXPECTED`` is reported and left alone."""
+
+_DIRECTORY_NOT_EMPTY = frozenset({errno.ENOTEMPTY, errno.EEXIST})
+"""The one ``rmdir`` failure that means a retained entry, not a broken cleanup.
+
+POSIX lets ``rmdir`` report a non-empty directory as either ``ENOTEMPTY`` or
+``EEXIST`` and platforms differ, so both are read as the same answer. Nothing
+else is: an errno outside this set is a removal that did not happen.
+"""
 
 _PLATFORMS = frozenset({"Linux", "Darwin", "Windows", "unknown"})
 _OUTCOMES = frozenset({"ok", "absent", "unreadable", "rejected"})
@@ -211,6 +220,11 @@ def remove_cleanup(plan: CleanupPlan) -> tuple[int, int]:
     the enumerator classified, never a symlink, and never the workspace root
     itself. An unclassifiable entry is somebody else's file until they say
     otherwise.
+
+    A retained count reports a choice, never a failure. Any entry that could
+    not be removed for a reason this function did not choose raises
+    ``cleanup_io_error``, which the CLI reports as a contract error, so a
+    cleanup that did not happen cannot be read as one that did.
     """
 
     if not plan.exists:
@@ -229,11 +243,23 @@ def remove_cleanup(plan: CleanupPlan) -> tuple[int, int]:
             # A directory still holding something the enumerator refused to
             # touch is retained with its contents. Emptying it would mean
             # deleting the thing we just declined to delete.
+            #
+            # That is the only failure this branch absorbs, and it is
+            # recognised by errno rather than by catching everything: the walk
+            # is deepest-first, so a directory is non-empty here only because
+            # something under it was deliberately left behind. Every other
+            # errno — a permission bit, a read-only mount, a device error —
+            # means the removal did not happen for a reason nobody chose, and
+            # it raises exactly as the file branch below does.
             try:
                 target.rmdir()
-            except OSError:
-                retained += 1
-                continue
+            except OSError as exc:
+                if exc.errno in _DIRECTORY_NOT_EMPTY:
+                    retained += 1
+                    continue
+                raise ContextSafeError(
+                    "cleanup_io_error", "$", "a workspace entry could not be removed"
+                ) from exc
         else:
             try:
                 target.unlink()
