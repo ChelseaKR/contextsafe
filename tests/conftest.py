@@ -125,6 +125,6 @@ def evidence_metadata() -> EvidenceMetadata:
             "captured_at": "2026-07-13T12:00:00Z",
             "collector_id": "TEST-COLLECTOR",
             "system_id": "SYS-STAGING-EHR",
-            "system_version": "fixture-1.0",
+            "system_version": "1.0.0",
         }
     )
