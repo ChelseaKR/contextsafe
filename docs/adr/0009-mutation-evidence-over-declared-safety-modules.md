@@ -29,7 +29,7 @@ ADR 0006, and the PHI canary and direct-identifier detectors. That is a subset
 of `SAFETY_MODULES`, and it is written down for the same reason `make scope`
 writes its exceptions down.
 
-**Mutants come only from lines the tests execute**, measured with `coverage` in
+**Mutants come only from lines the suite executes**, measured with `coverage` in
 the same run rather than assumed. A mutant on a line nothing runs would survive
 for a reason mutation testing was not asked about. The run prints the covered
 line count, so the denominator is visible.
@@ -56,9 +56,19 @@ copy, because a stale `.pyc` beside a mutated source would be imported instead
 of it and every mutant would survive for a reason unrelated to the tests.
 
 **Three states, like every other gate.** Exit 0 when every mutant died, 1 on a
-survivor, 2 when the gate produced no evidence: the tests do not pass unmutated,
-a declared target no test imports, or no mutant generated. A run of zero mutants
-is not a suite that killed them all.
+survivor, 2 when the gate produced no evidence: the suite does not pass
+unmutated, a declared target no test imports, or no mutant generated. A run of
+zero mutants is not a suite that killed them all.
+
+**The baseline is the suite, and that is load-bearing.** The kill decision in
+the second stage belongs to the suite, so the baseline has to be the suite too.
+It was not, at first. The baseline ran only the screening set, and while an
+unrelated contract test was failing, every mutant's second stage returned
+non-zero, every mutant was recorded as killed, and this gate printed `clean`
+over 35 mutants it had proved nothing about. That is this program's own defect
+class committed by the gate written to close it, and it was found by re-running
+the measurement in isolation rather than by reading the code. One coverage run
+over the suite now both checks it passes and produces the lines to mutate.
 
 **Not in `make verify`,** for runtime alone. The declared set takes about two
 minutes against roughly a second for everything else in `verify`, so it is its
@@ -67,10 +77,18 @@ a clean clone lacks.
 
 ## Consequences
 
-- Measured on this repository: **35 mutants over 124 covered lines, every one
-  killed by the suite**, in 2 minutes 12 seconds. That is a real result and not
-  a vacuous one; the same measurement showed 14 of those 35 surviving the fast
-  screening set, which is why the second stage exists.
+- The first honest run reported **nine survivors of 35**, and all nine were real
+  gaps in a pair of modules at 95% branch coverage: `frozen=True, slots=True`
+  unasserted on both records the boundary layer is built from, the non-string
+  and empty-string branch of `provenance_string`, a value of exactly
+  `max_length` in `bounded_string`, the upper end of the surrogate block, the
+  256-byte relative-path bound and the 253-byte host bound. Two of those are
+  gaps introduced by ADR 0006's own change; five predate it.
+  `tests/test_contracts.py` now pins each, which is the argument for this gate
+  stated as concrete assertions rather than as a claim.
+- With those pinned, measured in isolation: **35 mutants over 143 covered lines,
+  every one killed by the suite**, exit 0. The same measurement showed 14 of the
+  35 surviving the fast screening set, which is why the second stage exists.
 - Because the gate is green here, the only way to know it can fail is a
   repository where it must. `tests/test_mutation_gate.py` builds one: the same
   three-line module, tested at its boundary and not, and the gate has to tell

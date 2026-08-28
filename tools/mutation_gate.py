@@ -23,8 +23,8 @@ it is a declaration rather than a silence: `make scope` is the model, and the
 same rule applies here, that a declaration which no longer matches the tree is
 itself a finding.
 
-Mutants are generated only on lines the declared tests actually execute,
-measured with `coverage` in the same run rather than assumed. A mutant on a line
+Mutants are generated only on lines the suite actually executes, measured with
+`coverage` in the same run rather than assumed. A mutant on a line
 nothing runs would survive for a reason mutation testing was not asked about,
 and the run prints how many lines it covered so the denominator is visible.
 
@@ -55,8 +55,8 @@ Usage
     tools/mutation_gate.py --root PATH
 
 Exit 0 when every mutant was killed, 1 when one survived, 2 when the gate could
-not produce evidence: the declared tests do not pass unmutated, no line was
-covered, or no mutant was generated.
+not produce evidence: the suite does not pass unmutated, no line was covered, or
+no mutant was generated.
 """
 
 from __future__ import annotations
@@ -284,13 +284,19 @@ def _pytest_argv(root: Path, selection: Sequence[str]) -> list[str]:
 def baseline_coverage(
     root: Path,
     targets: Sequence[str] | None = None,
-    screening: Sequence[str] | None = None,
+    suite: str | None = None,
     package: str | None = None,
 ) -> dict[str, frozenset[int]]:
-    """Run the declared tests once and return the lines they execute.
+    """Run the whole suite once and return the lines it executes.
 
-    Raises ``GateUnavailable`` when they do not pass, because a mutant killed by
-    an already-failing suite is not evidence of anything.
+    Raises ``GateUnavailable`` when it does not pass, because a mutant killed by
+    an already-failing suite is not evidence of anything. The baseline is the
+    *suite*, not the screening set, and that distinction is load-bearing: the
+    kill decision in the second stage is the suite's, so a suite already red for
+    an unrelated reason would make every mutant look killed and this gate would
+    print `clean`. It did, once, on 2026-08-27, while an unrelated contract test
+    was failing. That is this program's own defect class committed by the gate
+    written to close it, and it is why the baseline moved here.
 
     The declared constants are read at call time rather than bound as argument
     defaults, so what this gate measures can be pointed somewhere else without
@@ -299,7 +305,7 @@ def baseline_coverage(
     """
 
     targets = DECLARED_TARGETS if targets is None else targets
-    screening = SCREENING_TESTS if screening is None else screening
+    suite = SUITE if suite is None else suite
     package = PACKAGE_DIR if package is None else package
 
     with tempfile.TemporaryDirectory() as workspace:
@@ -327,12 +333,12 @@ def baseline_coverage(
             "-p",
             "no:cacheprovider",
             "--no-cov",
-            *[str(root / test) for test in screening],
+            str(root / suite),
         ]
         if _run(argv, root, env) != 0:
             raise GateUnavailable(
-                "the declared tests do not pass against unmutated source, so "
-                "nothing this gate reports about a mutant would mean anything"
+                "the suite does not pass against unmutated source, so nothing "
+                "this gate reports about a mutant would mean anything"
             )
         # `--fail-under=0` because `[tool.coverage.report]` sets a 90% floor and
         # `coverage json` exits non-zero under it. That floor is `make test`'s
@@ -355,12 +361,12 @@ def baseline_coverage(
         entry = report["files"].get(target)
         if entry is None:
             raise GateUnavailable(
-                f"the declared tests never imported {target}, so there is no "
-                "line for this gate to mutate"
+                f"the suite never imported {target}, so there is no line for "
+                "this gate to mutate"
             )
         covered[target] = frozenset(entry["executed_lines"])
         if not covered[target]:
-            raise GateUnavailable(f"the declared tests executed no line of {target}")
+            raise GateUnavailable(f"the suite executed no line of {target}")
     return covered
 
 
@@ -389,7 +395,7 @@ def run_gate(
     screening = SCREENING_TESTS if screening is None else screening
     package = PACKAGE_DIR if package is None else package
     suite = SUITE if suite is None else suite
-    covered = baseline_coverage(root, targets, screening, package)
+    covered = baseline_coverage(root, targets, suite, package)
     plans: list[tuple[Mutant, str]] = []
     for target in targets:
         source = (root / target).read_text(encoding="utf-8")

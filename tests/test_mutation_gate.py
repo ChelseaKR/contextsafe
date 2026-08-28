@@ -208,7 +208,7 @@ def test_a_suite_that_fails_unmutated_is_a_refusal(tmp_path: Path) -> None:
     """A mutant killed by an already-broken suite is evidence of nothing."""
 
     root = _fixture(tmp_path, "def test_broken() -> None:\n    assert False\n")
-    with pytest.raises(gate.GateUnavailable, match="do not pass"):
+    with pytest.raises(gate.GateUnavailable, match="does not pass"):
         _run(root)
 
 

@@ -17,20 +17,32 @@ release yet, so everything to date lives under Unreleased.
   neighbour, a boolean operator flipped, a `not` removed, a boolean constant
   flipped, a numeric bound moved by one. String constants are never mutated,
   because a mutated regular expression is a different program rather than a
-  probe for a missing assertion. Mutants come only from lines the tests execute,
+  probe for a missing assertion. Mutants come only from lines the suite executes,
   measured with `coverage` in the same run, and the covered line count is
   printed so the denominator is visible. Two stages: a mutant the four fast
   screening modules do not kill meets the whole suite before being reported,
   because the claim is about the suite and 14 of the 35 mutants here survive
-  screening while none survives the suite. Measured: 35 mutants over 124 covered
-  lines in `contract_validation.py` and `identifiers.py`, every one killed, in
-  about two minutes. Not part of `make verify`, for runtime alone. It writes
+  screening while none survives the suite. The baseline is the suite for the
+  same reason: while it was only the screening set, an unrelated failing test
+  made every mutant's second stage return non-zero and this gate reported
+  `clean` over 35 mutants it had proved nothing about, which is the defect class
+  this program exists to close committed by the gate written to close it.
+  Measured in isolation once fixed: 35 mutants over 143 covered lines in
+  `contract_validation.py` and `identifiers.py`, every one killed. Not part of `make verify`, for runtime alone. It writes
   nothing into the working tree: the package is copied to a temporary directory,
   mutated there, and put ahead of the editable install with `PYTHONPATH`, and a
   test asserts the tree is unchanged after a run. See
   [ADR 0009](docs/adr/0009-mutation-evidence-over-declared-safety-modules.md).
 
 ### Changed
+
+- **Nine boundaries the suite executed and did not check are now asserted.**
+  `make mutants`, run honestly for the first time, reported nine survivors:
+  `Grammar` and `Detector` being `frozen=True, slots=True`, the non-string and
+  empty-string branch of `provenance_string`, a value of exactly `max_length` in
+  `bounded_string`, the upper end of the surrogate block, the 256-byte
+  relative-path bound, and the 253-byte host bound. Every one sat in a module at
+  95% branch coverage. `tests/test_contracts.py` pins each.
 
 - **`make secret-scan` exits 2 instead of 127 when gitleaks is not installed,
   and 2 instead of 1 for every other failure to scan.** This is a deliberate
