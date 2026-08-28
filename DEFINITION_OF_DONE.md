@@ -16,8 +16,13 @@ assert clinical approval, production readiness, or V1 completion.
 
 ## Automated merge gate
 
-- The required GitHub `verify` check runs exactly `make verify` on Python 3.12
-  with the frozen `uv.lock` dependency graph.
+- The GitHub `verify` check runs exactly `make verify` on Python 3.12 with the
+  frozen `uv.lock` dependency graph, and is green before merge. It is not a
+  *required* status check: the `protect-main` ruleset carries only the deletion
+  and non-fast-forward rules, so nothing mechanically refuses a merge over a red
+  or absent `verify`. Until that setting exists, this item is enforced by review,
+  and saying so is the point — a gate named in a definition of done and absent
+  from the repository is the defect class `docs/18-ASSURANCE-PROGRAM.md` tracks.
 - Formatting and lint pass with Ruff, strict typing passes with mypy, and all
   tests pass with at least 90% overall branch coverage and 95% coverage across
   the safety modules named by the Makefile.
