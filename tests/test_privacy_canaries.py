@@ -24,23 +24,43 @@ import traceback
 from pathlib import Path
 from typing import Any
 
+import jsonschema
 import pytest
+from hypothesis import HealthCheck, assume, given, settings
+from hypothesis import strategies as st
 
 import contextsafe.preflight as preflight_module
 from contextsafe.cli import main
+from contextsafe.contract_validation import (
+    PROVENANCE_LABEL_GRAMMAR,
+    PROVENANCE_SYSTEM_GRAMMAR,
+    PROVENANCE_VERSION_GRAMMAR,
+    Grammar,
+)
 from contextsafe.errors import ContextSafeError
 from contextsafe.evidence import (
     CANONICAL_JSON_MEDIA_TYPE,
     CANONICAL_JSON_SOURCE_TYPE,
     EvidenceMetadata,
     EvidenceScope,
+    parse_evidence_metadata,
 )
 from contextsafe.evidence_store import store_internal_synthetic_evidence
+from contextsafe.identifiers import (
+    DETECTORS,
+    PROVENANCE_EXEMPT_DETECTORS,
+    provenance_hits,
+)
 from contextsafe.plan import ExecutionPlan
 from contextsafe.preflight import preflight_source
 
 ROOT = Path(__file__).resolve().parents[1]
 SOURCE_MODULES = tuple(sorted((ROOT / "src" / "contextsafe").glob("*.py")))
+EVIDENCE_SCHEMA: dict[str, Any] = json.loads(
+    (ROOT / "schemas" / "contextsafe-evidence-v1.schema.json").read_text(
+        encoding="utf-8"
+    )
+)
 
 _LEAK_CANARY = "CSYN-LEAKCANARY-ZQXJ"
 """A grammar-valid synthetic code used to trace content through the boundary."""
@@ -67,6 +87,67 @@ _REJECTED_NEAR_MISSES = (
     ("CSYN-CODÉ", "unapproved_free_text"),
 )
 """Values one character from acceptable that must fail, and the code they fail with."""
+
+_ACCEPTED_PROVENANCE = (
+    ("collector_id", "TEST-COLLECTOR"),
+    ("collector_id", "collector.staging_v02"),
+    ("collector_id", "SYS-MEDICAL-RECORD-EXPORT"),
+    ("system_id", "SYS-STAGING-EHR"),
+    ("system_id", "SYS-MEDICAL-RECORD-SYSTEM"),
+    ("system_id", "EPIC-V2"),
+    ("system_version", "1.0.0"),
+    ("system_version", "2026.8.27"),
+    ("system_version", "10.2.1-rc.4"),
+)
+"""Provenance the published schema declares valid and that must be accepted.
+
+PR #38 was closed for rejecting values of this kind. Each of these is checked
+against the published schema as well as against the parser, so "the schema says
+yes and the code says no" is a test failure rather than a support ticket.
+"""
+
+_REJECTED_PROVENANCE = (
+    ("collector_id", "realpatientcanary", "phi_canary_detected"),
+    ("collector_id", "REAL-PATIENT-CANARY", "phi_canary_detected"),
+    ("collector_id", "ctxsafephicanaryalice", "phi_canary_detected"),
+    ("system_id", "REALPATIENTCANARY", "phi_canary_detected"),
+    ("collector_id", "1987-03-14", "invalid_format"),
+    ("collector_id", "123-45-6789", "invalid_format"),
+    ("collector_id", "collector-1234567", "invalid_format"),
+    ("collector_id", "www.collector.example", "invalid_format"),
+    ("collector_id", "https://collector.example/agent", "invalid_format"),
+    ("collector_id", "415-555-0199", "invalid_format"),
+    ("collector_id", "nurse@example.org", "invalid_format"),
+    ("system_id", "EPIC-2026-08-27", "invalid_format"),
+    ("system_id", "SYS-1234567", "invalid_format"),
+    ("system_id", "MRN-1234567", "invalid_format"),
+    ("system_version", "1234567", "invalid_format"),
+    ("system_version", "123.456.7890", "invalid_format"),
+    ("system_version", "exports-Jordan-Rivera-1987", "invalid_format"),
+    ("system_version", "1.0-www.example", "invalid_format"),
+    # The shortest canary is seventeen characters and a version prerelease is
+    # bounded at sixteen, so the grammar refuses this one before the scan runs.
+    ("system_version", "1.0.0-realpatientcanary", "invalid_format"),
+)
+"""Provenance that must fail closed, and the code it must fail with.
+
+The canary rows are the ones this file exists for: a canary is ordinary
+letters, so no grammar excludes it and only content inspection finds it. Every
+other row is caught by the grammar before any detector runs, which is the point
+of ADR 0006 -- the type is the control and the scan is the second pass.
+"""
+
+_DOCUMENTED_PROVENANCE_BLIND_SPOTS = (
+    ("collector_id", "MRN-ABCDE", "record-locator does not apply to a bounded token"),
+    ("system_id", "ACCOUNT-CODE", "record-locator does not apply to a bounded token"),
+)
+"""Locator vocabulary the provenance scan deliberately allows through.
+
+``PROVENANCE_EXEMPT_DETECTORS`` names ``record-locator`` and says why: it fires
+on ``SYS-MEDICAL-RECORD-SYSTEM``, which is an ordinary system name. What bounds
+the residual is the grammar, and these tests assert both halves -- the locator
+word next to letters is accepted, and the same word next to a number is not.
+"""
 
 _DOCUMENTED_BLIND_SPOTS = (
     ("CSYN-1899-01-02", "date outside the pattern's 19xx/20xx window"),
@@ -301,6 +382,145 @@ def test_evidence_index_records_hashes_while_content_stays_in_the_object(
     assert re.fullmatch(r"EVD-[0-9a-f]{64}", evidence_id) is not None
     assert _LEAK_CANARY not in record_json
     assert json.loads(record_json)["usable_for_execution"] is False
+
+
+# --- the provenance fields on an accepted record ----------------------------
+#
+# `EvidenceRecord` carries `boundary_check_status: "passed"`. Until this suite
+# grew this section, three of that record's own fields had never been examined
+# by any boundary check: `collector_id`, `system_id` and `system_version` were
+# validated for token shape and nothing else, so `collector_id='realpatientcanary'`
+# was accepted, hashed into the evidence id, and written to contextsafe.sqlite.
+
+
+def _metadata_json(field: str, value: str) -> dict[str, Any]:
+    base = {
+        "captured_at": "2026-07-14T00:00:00Z",
+        "collector_id": "TEST-COLLECTOR",
+        "system_id": "SYS-STAGING-EHR",
+        "system_version": "1.0.0",
+    }
+    base[field] = value
+    return base
+
+
+@pytest.mark.parametrize(("field", "value"), _ACCEPTED_PROVENANCE)
+def test_provenance_the_schema_declares_valid_is_accepted(
+    field: str, value: str
+) -> None:
+    """A boundary check that rejects published-valid provenance is a defect."""
+
+    jsonschema.Draft202012Validator(EVIDENCE_SCHEMA["properties"][field]).validate(
+        value
+    )
+    assert (
+        getattr(parse_evidence_metadata(_metadata_json(field, value)), field) == value
+    )
+
+
+@pytest.mark.parametrize(("field", "value", "expected_code"), _REJECTED_PROVENANCE)
+def test_provenance_that_must_fail_closed_does(
+    field: str, value: str, expected_code: str
+) -> None:
+    """Both layers hold: the grammar first, then the canary scan."""
+
+    with pytest.raises(ContextSafeError) as raised:
+        parse_evidence_metadata(_metadata_json(field, value))
+    assert raised.value.code == expected_code
+    assert raised.value.path == f"$.{field}"
+    assert value not in str(raised.value)
+
+
+@pytest.mark.parametrize(("field", "value", "gap"), _DOCUMENTED_PROVENANCE_BLIND_SPOTS)
+def test_documented_provenance_blind_spots_are_pinned_for_security_review(
+    field: str, value: str, gap: str
+) -> None:
+    """The one exempted detector, recorded where a reviewer can see it."""
+
+    assert gap
+    assert (
+        getattr(parse_evidence_metadata(_metadata_json(field, value)), field) == value
+    )
+    assert re.search(r"[0-9]{4}", value) is None
+
+
+def test_a_canary_in_provenance_never_reaches_the_index(
+    tmp_path: Path,
+    evidence_source_json: dict[str, Any],
+    evidence_scope: EvidenceScope,
+) -> None:
+    """The surface this file exists to protect, exercised end to end.
+
+    ``store_internal_synthetic_evidence`` is the only caller of
+    ``parse_evidence_metadata``. Before this change it accepted a canary
+    ``collector_id``, hashed it into the evidence id and wrote it into
+    ``contextsafe.sqlite``, inside a record whose own field says the boundary
+    check passed.
+    """
+
+    workspace = tmp_path / "workspace"
+    source = _source_with(tmp_path, evidence_source_json, _LEAK_CANARY)
+    with pytest.raises(ContextSafeError) as raised:
+        store_internal_synthetic_evidence(
+            source,
+            workspace=workspace,
+            scope=evidence_scope,
+            metadata=parse_evidence_metadata(
+                _metadata_json("collector_id", "realpatientcanary")
+            ),
+        )
+    assert raised.value.code == "phi_canary_detected"
+    database = workspace / "contextsafe.sqlite"
+    if database.exists():  # pragma: no cover - the store never gets this far
+        assert b"realpatientcanary" not in database.read_bytes()
+
+
+@pytest.mark.parametrize(
+    "grammar",
+    [PROVENANCE_LABEL_GRAMMAR, PROVENANCE_SYSTEM_GRAMMAR, PROVENANCE_VERSION_GRAMMAR],
+    ids=["label", "system", "version"],
+)
+@given(data=st.data())
+@settings(max_examples=300, deadline=None, suppress_health_check=list(HealthCheck))
+def test_every_value_the_schema_admits_passes_the_provenance_scan(
+    grammar: Grammar, data: st.DataObject
+) -> None:
+    """The property that keeps the grammar and the detectors from disagreeing.
+
+    A detector firing on a value the published grammar admits would mean the
+    code rejects something the contract declares valid, which is the defect
+    that closed PR #38. Rather than asserting that of a handful of examples,
+    this draws from the published base shape and asserts it of anything the
+    exclusions then let through.
+    """
+
+    value = data.draw(st.from_regex(grammar.base, fullmatch=True))
+    assume(grammar.rejection(value) is None)
+    assert [
+        hit for hit in provenance_hits(value) if hit.startswith("direct-identifier:")
+    ] == []
+
+
+def test_the_published_schema_carries_the_grammars_the_code_enforces() -> None:
+    """Code and contract cannot drift: the strings are compared, not described."""
+
+    for field, grammar in (
+        ("collector_id", PROVENANCE_LABEL_GRAMMAR),
+        ("system_id", PROVENANCE_SYSTEM_GRAMMAR),
+        ("system_version", PROVENANCE_VERSION_GRAMMAR),
+    ):
+        published = EVIDENCE_SCHEMA["properties"][field]
+        assert published["maxLength"] == grammar.max_length
+        clauses = published["allOf"]
+        assert clauses[0]["pattern"] == grammar.base
+        assert [clause["not"]["pattern"] for clause in clauses[1:]] == [
+            expression for expression, _ in grammar.exclusions
+        ]
+
+
+def test_the_only_exempt_detector_is_the_one_the_blind_spots_record() -> None:
+    assert frozenset({"record-locator"}) == PROVENANCE_EXEMPT_DETECTORS
+    assert "record-locator" in {detector.name for detector in DETECTORS}
 
 
 def test_no_rejection_ever_echoes_the_value_that_triggered_it(

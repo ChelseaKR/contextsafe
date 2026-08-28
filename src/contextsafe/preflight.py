@@ -17,7 +17,19 @@ from contextsafe.evidence import (
     PreflightResult,
     parse_evidence_source,
 )
+from contextsafe.identifiers import (
+    DETECTORS,
+    KNOWN_CANARIES,
+    identifier_hits,
+    normalized,
+)
 from contextsafe.jsonio import parse_json_bytes
+
+# The detectors themselves live in `identifiers`, a leaf module, so the evidence
+# layer can reach one definition of them without importing this one and creating
+# a cycle. `identifier_hits` is re-exported here because that is the documented
+# extension point and where every caller already imports it from.
+__all__ = ["MAX_EVIDENCE_BYTES", "identifier_hits", "open_preflighted_source"]
 
 MAX_EVIDENCE_BYTES = 1_048_576
 _CHUNK_BYTES = 65_536
@@ -67,26 +79,6 @@ _SAFE_PATH_KEYS = frozenset(
         "value",
         "value_code",
     }
-)
-_KNOWN_CANARIES = frozenset(
-    {
-        "contextsafephicanary",
-        "ctxsafephicanaryalice",
-        "realpatientcanary",
-    }
-)
-_DIRECT_IDENTIFIER_PATTERNS = (
-    re.compile(
-        r"(?i)(?<![A-Za-z0-9._%+-])[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}(?![A-Za-z0-9])"
-    ),
-    re.compile(r"(?<![0-9])[0-9]{3}-[0-9]{2}-[0-9]{4}(?![0-9])"),
-    re.compile(
-        r"(?<![0-9])(?:\+?1[ .-]?)?(?:\([0-9]{3}\)|[0-9]{3})[ .-][0-9]{3}[ .-][0-9]{4}(?![0-9])"
-    ),
-    re.compile(r"(?i)(?:https?://|www\.)"),
-    re.compile(r"(?<![0-9])(?:19|20)[0-9]{2}-[0-9]{2}-[0-9]{2}(?![0-9])"),
-    re.compile(r"(?i)\b(?:mrn|medical[ _-]?record|account)[ :#_-]+[A-Za-z0-9]{4,}\b"),
-    re.compile(r"(?<![A-Za-z0-9])[0-9]{7,}(?![A-Za-z0-9])"),
 )
 
 
@@ -284,35 +276,6 @@ def _read_first_pass(file_descriptor: int) -> tuple[bytes, str]:
     return b"".join(chunks), digest.hexdigest()
 
 
-def _normalized(value: str) -> str:
-    return unicodedata.normalize("NFKC", value)
-
-
-def identifier_hits(value: str) -> tuple[str, ...]:
-    """Return the names of the boundary detectors ``value`` trips.
-
-    Exposed so that a second, independent pass can be run over something this
-    module did not produce — the redacted support bundle in ``diagnostics``
-    checks its own output here before writing it. That pass is belt and braces:
-    the bundle is redacted by construction and cannot carry free text in the
-    first place, and a detector that fires on it is a defect in the
-    construction rather than a redaction that saved the day. Detector coverage
-    is bounded, and ``tests/test_privacy_canaries.py`` records where.
-    """
-
-    normalized = _normalized(value)
-    compact = re.sub(r"[^a-z0-9]", "", normalized.casefold())
-    hits = [
-        f"canary:{canary}" for canary in sorted(_KNOWN_CANARIES) if canary in compact
-    ]
-    hits.extend(
-        f"direct-identifier:{index}"
-        for index, pattern in enumerate(_DIRECT_IDENTIFIER_PATTERNS)
-        if pattern.search(normalized) is not None
-    )
-    return tuple(hits)
-
-
 def _reject_unsafe_string(value: str, path: str) -> None:
     if value != value.strip():
         raise ContextSafeError(
@@ -326,16 +289,13 @@ def _reject_unsafe_string(value: str, path: str) -> None:
             path,
             "control and format characters are prohibited",
         )
-    normalized = _normalized(value)
-    compact = re.sub(r"[^a-z0-9]", "", normalized.casefold())
-    if any(canary in compact for canary in _KNOWN_CANARIES):
+    text = normalized(value)
+    compact = re.sub(r"[^a-z0-9]", "", text.casefold())
+    if any(canary in compact for canary in KNOWN_CANARIES):
         raise ContextSafeError(
             "phi_canary_detected", path, "a configured PHI canary was detected"
         )
-    if any(
-        pattern.search(normalized) is not None
-        for pattern in _DIRECT_IDENTIFIER_PATTERNS
-    ):
+    if any(detector.pattern.search(text) is not None for detector in DETECTORS):
         raise ContextSafeError(
             "direct_identifier_detected",
             path,
@@ -344,7 +304,7 @@ def _reject_unsafe_string(value: str, path: str) -> None:
 
 
 def _normalized_key(value: str) -> str:
-    return re.sub(r"[^a-z0-9]", "", _normalized(value).casefold())
+    return re.sub(r"[^a-z0-9]", "", normalized(value).casefold())
 
 
 def _boundary_scan(value: object) -> None:
