@@ -264,7 +264,7 @@ def test_evidence_timestamp_schema_and_models_require_canonical_utc(
                 captured_at=captured_at,
                 collector_id="TEST-COLLECTOR",
                 system_id="SYS-STAGING-EHR",
-                system_version="fixture-1.0",
+                system_version="1.0.0",
             )
         assert raised.value.code == "invalid_timestamp"
 
