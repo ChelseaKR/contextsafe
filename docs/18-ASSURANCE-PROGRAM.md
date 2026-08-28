@@ -1,6 +1,6 @@
 # Assurance program: a multiyear plan for the gates themselves
 
-Status: proposed, phases 1 to 5 built
+Status: phases 1 to 5 built; phase 6 blocked, see below
 Owner: technical owner
 Planning unit: ordinal phases with entry conditions, not dates
 
@@ -242,7 +242,38 @@ one that will ship, and B-039's canary suite settled.
 
 ### Phase 6 — The apparatus reviewed by someone who did not write it
 
-**Status: planned, not built.**
+**Status: blocked. Not built, and not buildable here.**
+
+What blocks it, precisely:
+
+- **A named independent reviewer.** The whole content of this phase is a person
+  who did not write the gates reading them. Nothing produced inside this
+  repository can stand in for that, and a document that looked like a review
+  would be this program's own defect class committed by the program itself: a
+  green mark over something nobody examined.
+- **Funding.** B-040 buys an independent threat-model and security design
+  review. R-09 ("no budget owner; interest remains unfunded DEI") is open at
+  score 16, and the roadmap's capacity checkpoint has the `E` pool at 94.3%
+  loaded at DG-04. This is not a technical condition.
+- **A release dossier that does not exist.** B-054 assembles it from pilot
+  evidence produced in B-049 to B-053. There is no pilot, so there is nothing
+  for gate-coverage evidence to be filed into yet.
+- **A decision that is the owner's.** Widening B-040's acceptance criteria to
+  cover the assurance apparatus changes what a paid reviewer is contracted for.
+  That is a scope and spend decision, so this document proposes it and does not
+  make it.
+
+What would unblock it: DG-01's funding path resolved, B-040 scheduled with a
+named reviewer, and B-054 opened. At that point the work is small, because
+phases 1 to 5 produced the material a reviewer would ask for: five ADRs stating
+what each gate examines and what it declares away, three gates that print their
+denominator on every run, and one that prints every exemption.
+
+Deliberately **not** done in the meantime: no review checklist, no reviewer
+brief, no placeholder dossier section, and no change to B-040's acceptance
+criteria. Each of those would be building for a reviewer who does not exist,
+and the first one that got skimmed and marked complete would be worse than the
+gap it filled.
 
 Every phase above is the author of the gates auditing the gates. B-040 already
 buys an independent threat-model and security design review; the release dossier
@@ -273,6 +304,17 @@ cannot, and saying so is part of the plan rather than an omission from it.
 | 4 | the contract and its local proof, yes | a CI run per absent tool, which needs GitHub Actions on this account |
 | 5 | yes, bounded to a declared module set | judgement on where the bound sits |
 | 6 | **no** | a named independent reviewer, funded per B-040, and a release dossier that does not exist yet |
+
+Built, as of 2026-08-27:
+
+| Phase | State | Where it landed |
+|---|---|---|
+| 1 | built | ADR 0005; `make hygiene` covers `tools`, the sweep names unread sources, the coverage floor measures the gates |
+| 2 | built | ADR 0006; provenance grammars and the boundary scan on `parse_evidence_metadata`, closing issue #35 |
+| 3 | built | ADR 0007; `make scope` |
+| 4 | built, with one substitution | ADR 0008; the three-state contract, proved locally rather than by a CI job nobody has watched run |
+| 5 | built over two of fifteen safety modules | ADR 0009; `make mutants` |
+| 6 | **blocked on people and money** | nothing, deliberately |
 
 Phase 6 is blocked on people and money, not on code. Nothing in this repository
 can stand in for a review by someone who did not write the gates, and a
