@@ -71,11 +71,13 @@ the case that exists — is exempted with `hygiene: allow` on the same line,
 honored exemption is printed on every run so the mechanism stays countable. See
 [ADR 0005](docs/adr/0005-hygiene-marker-exemptions.md).
 
-One gate sits outside `make verify`, because it needs a tool a clean clone does
-not have and `make verify` must stay exactly what CI runs:
+Two gates sit outside `make verify`. One needs a tool a clean clone does not
+have, and `make verify` must stay exactly what CI runs; the other costs
+minutes rather than a second:
 
 | Gate | Command | What it checks |
 | --- | --- | --- |
+| Mutation evidence | `make mutants` | changes one operator or constant in a declared safety module and requires the suite to fail. Branch coverage says a line ran; this says a change to it would be noticed. Stdlib only, writes nothing into the working tree, and takes about two minutes, which is why it is not in `verify`. Exit 1 on a survivor, exit 2 when it produced no evidence. See [ADR 0009](docs/adr/0009-mutation-evidence-over-declared-safety-modules.md). |
 | Full-history secret scan | `make secret-scan` | gitleaks over every ref, every object in the object database (including unreachable ones and every commit message), and the working tree. Needs gitleaks 8.30.1 on `PATH` (`brew install gitleaks`); CI and the release pipeline run this same target. Exit 1 on a finding; exit 2 when gitleaks is absent, is not the pinned version, cannot read an object it enumerated, or enumerated zero blobs. Its three states are covered by `tests/test_gate_exit_contract.py`, which drives it with a stand-in scanner and therefore runs without gitleaks installed. |
 
 ## Design constraints that reviews enforce

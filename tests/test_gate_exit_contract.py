@@ -261,12 +261,20 @@ def _a11y_unavailable(tmp_path: Path) -> int:
         shutil.which = real  # type: ignore[assignment]
 
 
+def _mutation_unavailable(tmp_path: Path) -> int:
+    gate = _load("mutation_gate")
+    root = tmp_path / "mutants"
+    root.mkdir(parents=True, exist_ok=True)
+    return int(gate.main(["--root", str(root)]))
+
+
 UNAVAILABLE_CASES: tuple[tuple[str, Callable[[Path], int]], ...] = (
     ("hygiene_gate", _hygiene_unavailable),
     ("publication_sweep", _sweep_unavailable),
     ("scope_gate", _scope_unavailable),
     ("i18n_gate", _i18n_unavailable),
     ("a11y_gate", _a11y_unavailable),
+    ("mutation_gate", _mutation_unavailable),
 )
 
 
