@@ -1,6 +1,6 @@
 # Assurance program: a multiyear plan for the gates themselves
 
-Status: proposed, phases 1 to 3 built
+Status: proposed, phases 1 to 4 built
 Owner: technical owner
 Planning unit: ordinal phases with entry conditions, not dates
 
@@ -185,7 +185,8 @@ system that is still moving.
 
 ### Phase 4 — One contract for the gates that cannot always run
 
-**Status: planned, not built.**
+**Status: built,** with the CI-side proof replaced by a local one. See
+[ADR 0008](adr/0008-one-exit-code-contract-for-every-gate.md).
 
 Three gates sit outside `make verify` because each needs something a clean clone
 does not have: `make secret-scan` needs gitleaks 8.30.1, `make a11y-full` needs
@@ -203,7 +204,14 @@ rather than a fourth variant.
 Entry condition: B-045 (packaged artifacts with SBOM and signatures) or B-040
 (independent security review), whichever comes first, because both add a gate
 with an external dependency and phase 4 is cheap to do once and expensive to
-retrofit per gate.
+retrofit per gate. Brought forward because the measurement was cheap and the
+result was three live conflations, not because either entry condition arrived.
+
+One part of this phase as planned was **not** built the way it was written. The
+plan said CI would prove it by removing the tool and asserting the job fails.
+That needs a GitHub Actions run to observe, and CI is unavailable on this
+account. A stand-in gitleaks inside `make verify` gives the same evidence in a
+place CI already runs, so the proof exists and the workflow does not.
 
 ### Phase 5 — Evidence that the suite can detect a regression
 
