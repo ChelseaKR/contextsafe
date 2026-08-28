@@ -8,8 +8,12 @@ from enum import StrEnum
 from contextsafe.canonical import JsonValue, sha256_json
 from contextsafe.contract_validation import (
     ID_PATTERN,
+    PROVENANCE_LABEL_GRAMMAR,
+    PROVENANCE_SYSTEM_GRAMMAR,
+    PROVENANCE_VERSION_GRAMMAR,
     SAFE_TOKEN_PATTERN,
     SHA256_PATTERN,
+    Grammar,
     array_value,
     boolean_value,
     bounded_string,
@@ -17,9 +21,11 @@ from contextsafe.contract_validation import (
     enum_string,
     exact_keys,
     object_value,
+    provenance_string,
     timestamp_value,
     unique_strings,
 )
+from contextsafe.identifiers import provenance_hits
 from contextsafe.models import (
     Checkpoint,
     ConceptKind,
@@ -546,6 +552,43 @@ def parse_evidence_source(
     )
 
 
+def _provenance_token(value: object, path: str, grammar: Grammar) -> str:
+    """Parse one provenance token, then scan it at the boundary.
+
+    Two layers, and they are not the same layer twice. The grammar is the
+    control: it makes a bare number, a date, a telephone number, a social
+    security number and a URL scheme unwritable in these fields, so most of what
+    the detectors look for cannot be expressed here at all. The scan is what a
+    grammar cannot do: a PHI canary is ordinary letters, and only inspecting the
+    content finds one.
+
+    A detector that fires on a value the grammar admitted is therefore a defect
+    in the grammar rather than a filter that saved the day. That is the same
+    relationship ``diagnostics.build_support_bundle`` already has with
+    ``identifier_hits``, and ``tests/test_privacy_canaries.py`` pins it in both
+    directions.
+
+    ``provenance_hits`` is reached through :mod:`contextsafe.identifiers`, the
+    leaf module that defines the detectors, rather than through a function-local
+    import of a private name in :mod:`contextsafe.preflight`, which imports this
+    module and cannot be imported from it.
+    """
+
+    token = provenance_string(value, path, grammar)
+    hits = provenance_hits(token)
+    if any(hit.startswith("canary:") for hit in hits):
+        raise contract_error(
+            "phi_canary_detected", path, "a configured PHI canary was detected"
+        )
+    if hits:
+        raise contract_error(
+            "direct_identifier_detected",
+            path,
+            "a direct-identifier pattern was detected",
+        )
+    return token
+
+
 def parse_evidence_metadata(value: object) -> EvidenceMetadata:
     """Parse deterministic provenance supplied outside the raw source."""
 
@@ -557,14 +600,14 @@ def parse_evidence_metadata(value: object) -> EvidenceMetadata:
     )
     return EvidenceMetadata(
         captured_at=timestamp_value(data["captured_at"], "$.captured_at"),
-        collector_id=bounded_string(
-            data["collector_id"], "$.collector_id", pattern=SAFE_TOKEN_PATTERN
+        collector_id=_provenance_token(
+            data["collector_id"], "$.collector_id", PROVENANCE_LABEL_GRAMMAR
         ),
-        system_id=bounded_string(data["system_id"], "$.system_id", pattern=ID_PATTERN),
-        system_version=bounded_string(
-            data["system_version"],
-            "$.system_version",
-            pattern=SAFE_TOKEN_PATTERN,
+        system_id=_provenance_token(
+            data["system_id"], "$.system_id", PROVENANCE_SYSTEM_GRAMMAR
+        ),
+        system_version=_provenance_token(
+            data["system_version"], "$.system_version", PROVENANCE_VERSION_GRAMMAR
         ),
     )
 
