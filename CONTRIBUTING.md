@@ -55,8 +55,14 @@ hygiene + publication sweep — the exact same target `ci.yml` invokes, on the s
 | Types | `make typecheck` | `mypy --strict` over `src` |
 | Tests + coverage | `make test` | pytest; branch coverage ≥90% overall, ≥95% on safety-critical modules |
 | Dependency audit | `make audit` | `pip-audit` against the locked environment |
-| Hygiene | `make hygiene` | no TODO/FIXME/HACK in tracked files under `src`/`tests`; no stray tool config within two path segments of the root. Exit 1 on a finding, exit 2 when it could not examine anything, and the clean line says how many files it read. |
-| Publication sweep | `make publication-sweep` | nothing unpublishable in tracked files: no personal filesystem path, no internal hostname, no pointer to a repository a reader cannot open, no relative link escaping the repository. Add `publication-sweep: allow` to a line only with a reason in review. |
+| Hygiene | `make hygiene` | no TODO/FIXME/HACK in tracked files under `src`/`tests`/`tools`; no stray tool config within two path segments of the root. Exit 1 on a finding, exit 2 when it could not examine anything, and the clean line says how many files it read and how many exemptions it honored. |
+| Publication sweep | `make publication-sweep` | nothing unpublishable in tracked files: no personal filesystem path, no internal hostname, no pointer to a repository a reader cannot open, no relative link escaping the repository, and no source it listed and then could not read. Add `publication-sweep: allow` to a line only with a reason in review. |
+
+A marker the hygiene gate must not report — the rule naming the words it bans is
+the case that exists — is exempted with `hygiene: allow` on the same line,
+**followed by a reason**. An exemption without one is a finding, and every
+honored exemption is printed on every run so the mechanism stays countable. See
+[ADR 0005](docs/adr/0005-hygiene-marker-exemptions.md).
 
 One gate sits outside `make verify`, because it needs a tool a clean clone does
 not have and `make verify` must stay exactly what CI runs:

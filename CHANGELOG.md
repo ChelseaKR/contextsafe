@@ -8,6 +8,41 @@ release yet, so everything to date lives under Unreleased.
 
 ### Changed
 
+- **The gate implementations are now inside the trees they scan and inside the
+  coverage floor.** `tools/` held four gate programs and one shell script that
+  between them decide whether anything merges, and it was the one tree exempt
+  from the marker rule those programs enforce; `[tool.coverage.run]` had
+  `source = ["contextsafe"]`, so the 90% branch floor never measured them
+  either. Measured on 2026-08-27 before the change, `tools/` sat at 91% branch
+  coverage overall with `tools/publication_sweep.py` at 77%, `main`,
+  `history_sources` and `load_denylist` almost entirely unexercised, which is
+  why the `SweepUnavailable` branch added the same week shipped untested.
+  `MARKER_ROOTS` is now `("src", "tests", "tools")` and the marker scan reads
+  55 files where it read 47. Because a rule has to be able to name what it
+  bans, `hygiene: allow` on the same line as a marker, **followed by a reason**,
+  exempts it; an allow with no reason after it is a new `unreasoned-exemption`
+  finding, and every honored exemption is printed on every run, pass or fail,
+  with the count in the clean line. Three exist, all in
+  `tools/hygiene_gate.py`, and a test pins that so a fourth anywhere else has to
+  be argued for. See
+  [ADR 0005](docs/adr/0005-hygiene-marker-exemptions.md) and
+  [docs/18-ASSURANCE-PROGRAM.md](docs/18-ASSURANCE-PROGRAM.md).
+- **The publication sweep reports the sources it did not read.** An oversized,
+  non-UTF-8, or non-regular tracked file was a bare `continue`, and the clean
+  line counted the files the sweep managed to read, which is the one number
+  that cannot reveal a file it failed to read. Demonstrated on a scratch
+  repository holding one readable file and one binary file, the sweep printed
+  `clean over 1 source(s)` and exited 0; the binary file would have been
+  published without anything having looked at it. Each of those is now an
+  `unexaminable-source` finding, in tracked mode and in `--history` mode, and
+  the clean line prints sources read over sources listed. The failure hint says
+  the line-marking exemption does not apply to an unexaminable source, because
+  there is no readable line to put it on. Measured on 2026-08-27: 117 tracked
+  paths, all read, and 2006 blobs in the object database, none over the bound
+  and none non-UTF-8, so this turns no green run red today. An object git
+  enumerates and then refuses to output stays exit 2, because there is nothing
+  to name.
+
 - **`cleanup --remove --confirm` now exits 2 instead of 0 when a directory it
   set out to remove could not be removed.** This is a deliberate exit-code
   change on a failure path, called out here because a caller chaining on `&&`

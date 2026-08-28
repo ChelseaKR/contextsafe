@@ -10,7 +10,7 @@ Why this replaced two shell lines
 
 `make hygiene` used to be::
 
-    ! rg -n '(TODO|FIXME|HACK)' src tests
+    ! rg -n '(TODO|FIXME|HACK)' src tests  # hygiene: allow quoted, not deferred work
     ! find . -maxdepth 2 -type f \( -name 'ruff.toml' -o ... \) | grep .
 
 Both lines report success when the tool they depend on never ran.
@@ -40,11 +40,23 @@ Checks
 ------
 
 ``marker``
-    ``TODO``, ``FIXME`` or ``HACK`` in a tracked file under ``src`` or
-    ``tests``. The Definition of Done bans an unowned marker in product code or
-    tests; a marker is a promise with nobody's name on it, and the repository's
-    answer is that the work is either done, tracked in `docs/13-BACKLOG.md`, or
-    written down in an ADR.
+    A tracked file under ``src``, ``tests`` or ``tools`` carrying one of the
+    three banned words: ``TODO``, ``FIXME``, ``HACK``.  hygiene: allow a rule has to be able to name what it bans
+    The Definition of Done bans an unowned marker in product code or tests; a
+    marker is a promise with nobody's name on it, and the repository's answer is
+    that the work is either done, tracked in `docs/13-BACKLOG.md`, or written
+    down in an ADR.
+
+    ``tools`` is in that list as of 2026-08-27. It was not before, so the four
+    gate implementations that decide whether this repository merges were the one
+    tree exempt from the rule they enforce. See ADR 0005.
+
+``unreasoned-exemption``
+    A line carrying both a banned word and ``hygiene: allow`` with nothing after
+    it. An exemption is the author's claim that a promise-shaped word is not a
+    promise, and that claim is not visible from the line it sits on, so the
+    reason is required rather than left to review. Every honored exemption is
+    printed on every run, so suppression is countable instead of silent.
 
 ``stray-config``
     A tracked ``ruff.toml``, ``pytest.ini``, ``mypy.ini``, ``setup.cfg``,
@@ -70,8 +82,9 @@ run, never with a clean line:
 * `git ls-files` lists no tracked file at all, so the stray-config check would
   have examined nothing.
 
-The clean line names how many files were read, so a pass that examined less
-than it should is visible rather than indistinguishable from a real one.
+The clean line names how many files were read and how many exemptions were
+honored, so a pass that examined less than it should, or that suppressed more
+than it should, is visible rather than indistinguishable from a real one.
 
 Only tracked files are scanned. Only tracked files reach CI, and `git ls-files`
 reads the index, so a newly `git add`-ed file counts before it is committed.
@@ -95,13 +108,22 @@ from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
 
-MARKERS: tuple[str, ...] = ("TODO", "FIXME", "HACK")
+# The three banned words. A rule has to be able to name what it bans, so this
+# line and the two docstring lines above it carry the gate's own exemption.
+MARKERS: tuple[str, ...] = ("TODO", "FIXME", "HACK")  # hygiene: allow the banned words
 MARKER_PATTERN = re.compile("|".join(MARKERS))
 
-# Where markers are banned. Kept identical to what the ripgrep line searched,
-# so this change fixes the gate's failure modes without quietly widening or
-# narrowing what it covers.
-MARKER_ROOTS: tuple[str, ...] = ("src", "tests")
+# Where markers are banned. `src` and `tests` are what the ripgrep line searched.
+# `tools` was added on 2026-08-27: the gate implementations were exempt from the
+# rule they enforce, which is the same false green this file was written to end,
+# one level up. ADR 0005 records the decision and why the scope stops here.
+MARKER_ROOTS: tuple[str, ...] = ("src", "tests", "tools")
+
+# The one exemption mechanism, and it is visible: put this on the same line,
+# followed by the reason. Mirrors `publication-sweep: allow`, with the reason
+# required rather than left to review, because a marker exemption asserts
+# something a reader cannot see in the line itself.
+ALLOW_MARKER = "hygiene: allow"
 
 STRAY_CONFIG_NAMES: frozenset[str] = frozenset(
     {
@@ -140,6 +162,19 @@ class Finding:
             f"{self.location}:{self.line_number}" if self.line_number else self.location
         )
         return f"{self.rule_id}: {where}: {self.detail}"
+
+
+@dataclass(frozen=True)
+class Exemption:
+    """One marker the gate found and did not report, and the stated reason."""
+
+    location: str
+    line_number: int
+    marker: str
+    reason: str
+
+    def __str__(self) -> str:
+        return f"{self.location}:{self.line_number}: {self.marker}: {self.reason}"
 
 
 def _git(args: Sequence[str], cwd: Path | None = None) -> bytes:
@@ -183,29 +218,57 @@ def tracked_files(root: Path, pathspecs: Sequence[str] = ()) -> tuple[str, ...]:
     return tuple(sorted(part for part in listing.split("\0") if part))
 
 
-def find_markers(location: str, text: str) -> list[Finding]:
-    """Return one finding per line carrying a marker, in file order."""
+def find_markers(location: str, text: str) -> tuple[list[Finding], list[Exemption]]:
+    """Return the findings and the honored exemptions for one file, in order.
+
+    A line carrying a marker is a finding unless it also carries ``ALLOW_MARKER``
+    followed by a reason. A reason is required: without one the line is an
+    ``unreasoned-exemption`` finding rather than a silent pass, so the mechanism
+    cannot become the hole it exists to avoid.
+    """
 
     findings: list[Finding] = []
+    exemptions: list[Exemption] = []
     for number, line in enumerate(text.splitlines(), start=1):
         match = MARKER_PATTERN.search(line)
         if match is None:
             continue
-        findings.append(
-            Finding(
-                "marker",
-                location,
-                number,
-                f"{match.group(0)}: {line.strip()[:DETAIL_WIDTH]}",
+        allow_at = line.find(ALLOW_MARKER)
+        if allow_at < 0:
+            findings.append(
+                Finding(
+                    "marker",
+                    location,
+                    number,
+                    f"{match.group(0)}: {line.strip()[:DETAIL_WIDTH]}",
+                )
             )
+            continue
+        reason = line[allow_at + len(ALLOW_MARKER) :].strip()
+        if not reason:
+            findings.append(
+                Finding(
+                    "unreasoned-exemption",
+                    location,
+                    number,
+                    f"`{ALLOW_MARKER}` with no reason after it; an exemption has to "
+                    "say why the marker is not deferred work",
+                )
+            )
+            continue
+        exemptions.append(
+            Exemption(location, number, match.group(0), reason[:DETAIL_WIDTH])
         )
-    return findings
+    return findings, exemptions
 
 
-def scan_markers(root: Path, files: Sequence[str]) -> tuple[list[Finding], int]:
-    """Search ``files`` for markers, returning the findings and the files read."""
+def scan_markers(
+    root: Path, files: Sequence[str]
+) -> tuple[list[Finding], int, list[Exemption]]:
+    """Search ``files`` for markers: findings, files read, honored exemptions."""
 
     findings: list[Finding] = []
+    exemptions: list[Exemption] = []
     examined = 0
     for rel in files:
         try:
@@ -222,8 +285,10 @@ def scan_markers(root: Path, files: Sequence[str]) -> tuple[list[Finding], int]:
             )
             continue
         examined += 1
-        findings.extend(find_markers(rel, text))
-    return findings, examined
+        file_findings, file_exemptions = find_markers(rel, text)
+        findings.extend(file_findings)
+        exemptions.extend(file_exemptions)
+    return findings, examined, exemptions
 
 
 def find_stray_configs(paths: Iterable[str]) -> list[Finding]:
@@ -246,8 +311,18 @@ def find_stray_configs(paths: Iterable[str]) -> list[Finding]:
     return findings
 
 
-def run_gate(root: Path) -> tuple[list[Finding], int, int]:
-    """Run both checks, returning findings, files read, and paths listed.
+@dataclass(frozen=True)
+class GateResult:
+    """What the gate found, and how much it read to find it."""
+
+    findings: list[Finding]
+    examined: int
+    listed: int
+    exemptions: list[Exemption]
+
+
+def run_gate(root: Path) -> GateResult:
+    """Run both checks and report what was found over how much was read.
 
     Raises ``GateUnavailable`` rather than returning a clean result whenever a
     check would have examined nothing.
@@ -265,9 +340,9 @@ def run_gate(root: Path) -> tuple[list[Finding], int, int]:
             f"git lists no tracked file under {', '.join(MARKER_ROOTS)} in {root}, "
             "so the marker scan examined nothing, and a scan of nothing is not a pass"
         )
-    findings, examined = scan_markers(root, marker_files)
+    findings, examined, exemptions = scan_markers(root, marker_files)
     findings.extend(find_stray_configs(all_files))
-    return findings, examined, len(all_files)
+    return GateResult(findings, examined, len(all_files), exemptions)
 
 
 def main(argv: Sequence[str] | None = None) -> int:
@@ -288,7 +363,7 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     try:
         root = args.root.resolve() if args.root is not None else repo_root()
-        findings, examined, listed = run_gate(root)
+        result = run_gate(root)
     except GateUnavailable as exc:
         print(f"hygiene: {exc}.", file=sys.stderr)
         print(
@@ -297,19 +372,27 @@ def main(argv: Sequence[str] | None = None) -> int:
         )
         return 2
 
-    if findings:
+    # Printed whether the run passes or fails. An exemption is the one thing
+    # this gate deliberately does not report as a finding, so it is the one
+    # thing that would otherwise be invisible in a green run.
+    for exemption in result.exemptions:
+        print(f"hygiene: exempted {exemption}")
+
+    if result.findings:
         print(
-            f"hygiene: {len(findings)} finding(s) over {examined} file(s)",
+            f"hygiene: {len(result.findings)} finding(s) over "
+            f"{result.examined} file(s)",
             file=sys.stderr,
         )
-        for finding in findings:
+        for finding in result.findings:
             print(f"  {finding}", file=sys.stderr)
         return 1
 
     print(
-        f"hygiene: clean - {examined} tracked file(s) under "
+        f"hygiene: clean - {result.examined} tracked file(s) under "
         f"{', '.join(MARKER_ROOTS)} read and searched for "
-        f"{'/'.join(MARKERS)}, {listed} tracked path(s) checked for stray tool config"
+        f"{'/'.join(MARKERS)}, {len(result.exemptions)} exemption(s) honored, "
+        f"{result.listed} tracked path(s) checked for stray tool config"
     )
     return 0
 
