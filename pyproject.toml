@@ -49,6 +49,10 @@ quote-style = "double"
 strict = true
 warn_return_any = true
 disallow_untyped_defs = true
+# The trees strict typing claims. Here rather than as an argument to `mypy` in
+# the Makefile so that tools/scope_gate.py can read the claim from the config
+# that makes it, and so a path on the command line cannot silently narrow it.
+files = ["src", "tools"]
 
 [tool.pytest.ini_options]
 minversion = "8.0"
@@ -63,7 +67,9 @@ branch = true
 # `tools` is here because the gate implementations decide whether this
 # repository merges, and until 2026-08-27 the coverage floor did not measure
 # them at all. See docs/18-ASSURANCE-PROGRAM.md phase 1.
-source = ["contextsafe", "tools"]
+# Paths rather than package names, so `make scope` can compare the claim
+# against the tree. `make test` passes a bare `--cov` for the same reason.
+source = ["src/contextsafe", "tools"]
 
 [tool.coverage.report]
 fail_under = 90

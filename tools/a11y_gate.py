@@ -601,10 +601,12 @@ def build_subjects(locales: Sequence[str]) -> tuple[Subject, ...]:
     def read(name: str) -> object:
         return json.loads((REFERENCE / name).read_text(encoding="utf-8"))
 
+    # `parse_bundle` takes three `object` parameters and validates them itself,
+    # so the three `type: ignore[arg-type]` comments that used to sit here
+    # suppressed nothing. A suppression that suppresses nothing is a claim about
+    # a problem that is not there, which is why `--strict` reports it.
     bundle = parse_bundle(
-        read("case.json"),  # type: ignore[arg-type]
-        read("observations.json"),  # type: ignore[arg-type]
-        read("rules.json"),  # type: ignore[arg-type]
+        read("case.json"), read("observations.json"), read("rules.json")
     )
     document = build_receipt_document(bundle, evaluate(bundle))
     payload = document["payload"]
