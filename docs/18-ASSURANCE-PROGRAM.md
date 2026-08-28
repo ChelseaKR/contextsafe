@@ -1,6 +1,6 @@
 # Assurance program: a multiyear plan for the gates themselves
 
-Status: proposed, phase 1 built
+Status: proposed, phases 1 and 2 built
 Owner: technical owner
 Planning unit: ordinal phases with entry conditions, not dates
 
@@ -115,7 +115,8 @@ Entry condition: none. This is the phase that makes the later ones checkable.
 
 ### Phase 2 — The boundary claim covers the fields it names
 
-**Status: planned, not built.** Tracked as issue #35.
+**Status: built.** Closes issue #35. See
+[ADR 0006](adr/0006-provenance-token-grammar-and-boundary-scan.md).
 
 `build_evidence_record` writes `boundary_check_status: "passed"` into every
 persisted `EvidenceRecord`. Three of that record's fields — `collector_id`,
