@@ -1,4 +1,4 @@
-.PHONY: a11y a11y-full a11y-install audit format format-fix hygiene i18n lint publication-sweep scope secret-scan sync test typecheck verify
+.PHONY: a11y a11y-full a11y-install audit format format-fix hygiene i18n lint mutants publication-sweep scope secret-scan sync test typecheck verify
 
 SAFETY_MODULES := src/contextsafe/identifiers.py,src/contextsafe/models.py,src/contextsafe/validation.py,src/contextsafe/evaluator.py,src/contextsafe/receipt.py,src/contextsafe/contract_validation.py,src/contextsafe/jsonio.py,src/contextsafe/pack.py,src/contextsafe/plan.py,src/contextsafe/evidence.py,src/contextsafe/preflight.py,src/contextsafe/evidence_store.py,src/contextsafe/safe_value.py,src/contextsafe/diagnostics.py,src/contextsafe/eventlog.py
 
@@ -37,6 +37,15 @@ audit:
 # target directly, so CI and a maintainer run the identical scan.
 secret-scan:
 	./tools/secret-scan-full-history.sh
+
+# Evidence that the suite would notice a change, not just execute the line.
+# Deliberately not part of `verify`: every mutant is a separate test run, so
+# this takes minutes against the second the rest of `verify` costs. It needs no
+# tool a clean clone lacks, and it writes nothing into the working tree: the
+# package is copied to a temporary directory, mutated there, and put in front of
+# the editable install with PYTHONPATH.
+mutants:
+	uv run python tools/mutation_gate.py
 
 # Keeps the publication-readiness sweep true as commits land, instead of true
 # as of the day somebody ran it by hand. Stdlib only, so it costs `verify`
