@@ -54,7 +54,7 @@ import argparse
 import json
 import re
 import sys
-from collections.abc import Iterable, Iterator, Sequence
+from collections.abc import Iterable, Iterator, Mapping, Sequence
 from dataclasses import dataclass
 from html.parser import HTMLParser
 from pathlib import Path
@@ -64,6 +64,7 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 if str(REPO_ROOT / "src") not in sys.path:  # pragma: no cover - import shim
     sys.path.insert(0, str(REPO_ROOT / "src"))
 
+from contextsafe.canonical import JsonValue  # noqa: E402
 from contextsafe.errors import ContextSafeError  # noqa: E402
 from contextsafe.evaluator import evaluate  # noqa: E402
 from contextsafe.html_receipt import render_receipt_page  # noqa: E402
@@ -144,16 +145,18 @@ def _placeholders(text: str) -> frozenset[str]:
     )
 
 
-def reference_document() -> dict[str, object]:
+def reference_document() -> dict[str, JsonValue]:
     """Build the bundled reference receipt document, in process."""
 
     def read(name: str) -> object:
         return json.loads((REFERENCE / name).read_text(encoding="utf-8"))
 
+    # `parse_bundle` takes three `object` parameters and validates them itself,
+    # so the three `type: ignore[arg-type]` comments that used to sit here
+    # suppressed nothing. A suppression that suppresses nothing is a claim about
+    # a problem that is not there, which is why `--strict` reports it.
     bundle = parse_bundle(
-        read("case.json"),  # type: ignore[arg-type]
-        read("observations.json"),  # type: ignore[arg-type]
-        read("rules.json"),  # type: ignore[arg-type]
+        read("case.json"), read("observations.json"), read("rules.json")
     )
     return build_receipt_document(bundle, evaluate(bundle))
 
@@ -276,7 +279,7 @@ def check_claiming_surface(catalog: Catalog) -> Iterator[Finding]:
 
 
 def _render(
-    locale: str, document: dict[str, object], catalog: Catalog | None = None
+    locale: str, document: Mapping[str, object], catalog: Catalog | None = None
 ) -> tuple[str | None, Finding | None]:
     """Render a page, turning a fail-closed rejection into a finding.
 
@@ -293,7 +296,7 @@ def _render(
 
 
 def check_disclosure(
-    catalog: Catalog, document: dict[str, object]
+    catalog: Catalog, document: Mapping[str, object]
 ) -> Iterator[Finding]:
     """The page must disclose an unreviewed translation, and only then."""
 
@@ -320,7 +323,7 @@ def check_disclosure(
         )
 
 
-def check_hardcoded_strings(document: dict[str, object]) -> Iterator[Finding]:
+def check_hardcoded_strings(document: Mapping[str, object]) -> Iterator[Finding]:
     """Find visible text on the page that no catalog message accounts for."""
 
     catalog = load_catalog(PSEUDO_LOCALE)

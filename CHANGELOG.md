@@ -6,7 +6,44 @@ release yet, so everything to date lives under Unreleased.
 
 ## [Unreleased]
 
+### Added
+
+- **`make scope` fails when a tree of Python exists that no analysis was ever
+  pointed at.** Every other gate can now tell "I looked and found nothing" from
+  "I could not look"; none of them could tell either from "nobody ever pointed
+  me at that tree", which is exactly what `tools/` was for the marker scan and
+  the coverage floor. `tools/scope_gate.py` scans no files. It reads the trees
+  each analysis claims, from the configuration that makes the claim rather than
+  a copy of it, and compares them against the tracked Python that exists: a file
+  under no claimed root, a claimed root with nothing under it, and a declared
+  exception that excuses nothing are each a finding. Narrowing `MARKER_ROOTS`
+  and `[tool.mypy] files` back to what the previous commit carried produces ten
+  findings and exit 1. It exits 2, never 0, when it cannot establish a claim:
+  no tracked Python, no `git`, an unreadable or unparseable `pyproject.toml`, a
+  missing key, a missing or unrecognised Makefile recipe, a `hygiene_gate.py`
+  that will not import, or a command that overrides the configured scope. Two
+  declared exceptions exist, both `tests/`, both printed on every run with the
+  reason, so coverage declared away is as visible as coverage achieved. See
+  [ADR 0007](docs/adr/0007-declared-analysis-scope.md).
+
 ### Changed
+
+- **Strict typing covers `tools/`.** `make typecheck` was `mypy --strict src`,
+  so the five gate programs that decide whether anything merges were never
+  type-checked. Running it over them found seven errors, six of them
+  `# type: ignore[arg-type]` comments on calls to `parse_bundle`, whose three
+  parameters are declared `object`: suppressions that suppressed nothing, which
+  is a claim about a problem that is not there. They are deleted.
+  `i18n_gate.reference_document` now returns the `dict[str, JsonValue]` it
+  actually returns, and the three functions that consume it take a covariant
+  `Mapping`.
+- The scope of strict typing and of the coverage floor moved into
+  `pyproject.toml` as `[tool.mypy] files` and `[tool.coverage.run] source`.
+  `make typecheck` passes no path and `make test` passes a bare `--cov`, because
+  an argument on the command line beats the config and the claim would then live
+  somewhere `make scope` is not reading. `.pre-commit-config.yaml` drops its
+  `src` argument for the same reason, so the hook and the gate check the same
+  trees.
 
 - **`collector_id`, `system_id` and `system_version` have narrower published
   grammars, and this is a breaking contract change.** They were

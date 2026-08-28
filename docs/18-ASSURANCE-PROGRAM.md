@@ -1,6 +1,6 @@
 # Assurance program: a multiyear plan for the gates themselves
 
-Status: proposed, phases 1 and 2 built
+Status: proposed, phases 1 to 3 built
 Owner: technical owner
 Planning unit: ordinal phases with entry conditions, not dates
 
@@ -157,7 +157,8 @@ directly on R-07 ("real PHI enters workspace", score 15, open).
 
 ### Phase 3 — Coverage is declared, and drift from it fails
 
-**Status: planned, not built.**
+**Status: built.** See
+[ADR 0007](adr/0007-declared-analysis-scope.md) and `make scope`.
 
 After phase 1, every gate knows its denominator but each states it in its own
 words, on stdout, where nothing compares them. A reader who wants to answer
