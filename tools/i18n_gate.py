@@ -363,12 +363,7 @@ def run_gate(catalogs: Iterable[Catalog]) -> list[Finding]:
         findings.extend(check_claiming_surface(catalog))
         findings.extend(check_disclosure(catalog, document))
     if seen == 0:
-        findings.append(
-            Finding(
-                "no-catalogs", "-", "no catalog was examined, so nothing was proved"
-            )
-        )
-        return findings
+        raise GateUnavailable("no catalog was examined, so nothing was proved")
     findings.extend(check_hardcoded_strings(document))
     return findings
 
@@ -383,8 +378,18 @@ def shipped_catalogs() -> tuple[Catalog, ...]:
     return tuple(load_catalog(locale) for locale in locales)
 
 
+class GateUnavailable(Exception):
+    """The gate examined nothing, which is never a clean result.
+
+    Exit 2, not exit 1. This gate used to report "no catalog was examined" as a
+    finding, which put it at the same exit code as a real parity failure and
+    lost the distinction the rest of the gates in this repository keep. See
+    ADR 0008.
+    """
+
+
 def main(argv: Sequence[str] | None = None) -> int:
-    """Run the gate and return 0 clean, 1 with findings, 2 on usage error."""
+    """Run the gate: 0 clean, 1 with findings, 2 when it examined nothing."""
 
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
@@ -396,12 +401,20 @@ def main(argv: Sequence[str] | None = None) -> int:
         args = parser.parse_args(argv)
     except SystemExit as exc:  # pragma: no cover - argparse exits directly
         return 2 if exc.code else 0
-    catalogs = (
-        tuple(load_catalog(locale) for locale in args.locale)
-        if args.locale
-        else shipped_catalogs()
-    )
-    findings = run_gate(catalogs)
+    try:
+        catalogs = (
+            tuple(load_catalog(locale) for locale in args.locale)
+            if args.locale
+            else shipped_catalogs()
+        )
+        findings = run_gate(catalogs)
+    except (GateUnavailable, ContextSafeError, OSError, json.JSONDecodeError) as exc:
+        print(f"i18n-gate: {exc}.", file=sys.stderr)
+        print(
+            "i18n-gate: this is a failure to run the gate, not a clean result.",
+            file=sys.stderr,
+        )
+        return 2
     if findings:
         print(f"i18n-gate: {len(findings)} finding(s)")
         for finding in findings:

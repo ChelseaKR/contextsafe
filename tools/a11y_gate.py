@@ -833,8 +833,35 @@ def _run_builtin(subjects: Iterable[Subject]) -> list[CheckResult]:
     return list(totals.values())
 
 
+# Findings that mean "this gate did not examine what it claims to", as opposed
+# to "this page has an accessibility defect". They exit 2 rather than 1, so a
+# missing node harness is never mistaken for a contrast failure and a passing
+# CI job can never be a job whose engine was absent. See ADR 0008.
+UNAVAILABLE_RULES: frozenset[str] = frozenset(
+    {
+        "check-examined-nothing",
+        "engine-examined-nothing",
+        "engine-not-executed",
+        "engine-unavailable",
+    }
+)
+
+
+def exit_code(findings: Sequence[Finding]) -> int:
+    """Return the gate's exit code for a finding set.
+
+    A run that could not examine everything it was asked to is exit 2 even when
+    it also has real findings, because those findings are over an incomplete
+    engine set and the reader cannot tell what is missing from them.
+    """
+
+    if any(finding.rule in UNAVAILABLE_RULES for finding in findings):
+        return 2
+    return 1 if findings else 0
+
+
 def main(argv: Sequence[str] | None = None) -> int:
-    """Run the gate and return 0 clean, 1 with findings, 2 on usage error."""
+    """Run the gate: 0 clean, 1 with findings, 2 when it examined nothing."""
 
     parser = argparse.ArgumentParser(description="Accessibility gate (B-043).")
     parser.add_argument(
@@ -874,11 +901,18 @@ def main(argv: Sequence[str] | None = None) -> int:
             "  undetermined by axe (never counted as a pass): "
             + ", ".join(sorted(set(report.undetermined)))
         )
+    code = exit_code(report.findings)
     if report.findings:
         print(f"a11y-gate: {len(report.findings)} finding(s)")
         for finding in report.findings:
             print(finding)
-        return 1
+        if code == 2:
+            print(
+                "a11y-gate: at least one finding is a failure to run a check, "
+                "not an accessibility defect, so this is not a clean result.",
+                file=sys.stderr,
+            )
+        return code
     print("a11y-gate: clean")
     return 0
 
