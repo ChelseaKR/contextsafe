@@ -41,6 +41,15 @@ What it looks for
     it applies to tracked files only and is skipped in ``--history`` mode,
     where a blob has content but no path.
 
+``unexaminable-source``
+    A source the sweep listed and then did not read: a tracked path that is not
+    a regular file, one larger than the scan bound, or one that is not valid
+    UTF-8. Each of those was a bare ``continue`` until 2026-08-27, so the clean
+    line counted the files the sweep managed to read — the one number that
+    cannot reveal a file it failed to read. A skipped file still gets published.
+    This matches the hygiene gate's ``unreadable`` rule: a file the gate could
+    not read is not a file it can vouch for.
+
 ``denylist-term``
     A term from an out-of-tree denylist file. Some strings must never appear in
     this repository and must also never appear *in this script*, because this
@@ -70,10 +79,14 @@ brand-new file is invisible to the sweep until it is `git add`-ed, which is why
 CI — where everything is tracked — is the authoritative run.
 
 Exit 0 when clean, 1 when anything is found, 2 on a usage error or when the
-sweep could not examine what it claims to cover: no source read at all, or an
-object it enumerated and then could not read. A sweep of nothing is not clean,
-and the count of sources examined is printed with the clean line so a pass that
-covered less than it should is visible rather than indistinguishable.
+sweep could not examine what it claims to cover: nothing listed at all, or an
+object it enumerated and git then refused to output. A sweep of nothing is not
+clean, and the clean line prints sources read over sources listed, so a pass
+that covered less than it should is visible rather than indistinguishable.
+
+A listed source that could not be read is a finding rather than a refusal,
+because the sweep knows exactly which one it is and can say so; a listing that
+is empty is a refusal, because there is nothing to name.
 """
 
 from __future__ import annotations
@@ -144,6 +157,26 @@ CROSS_REPO = re.compile(r"\bChelseaKR/([A-Za-z0-9._-]+)")
 RELATIVE_LINK = re.compile(r"(?<![A-Za-z0-9._~/-])(\.\./[A-Za-z0-9._/-]+)")
 
 
+@dataclass(frozen=True)
+class Sources:
+    """What the sweep read, and what it listed and then could not read."""
+
+    readable: list[tuple[str, str]]
+    unexaminable: list[Finding]
+    listed: int
+
+
+def _unexaminable(location: str, reason: str) -> Finding:
+    return Finding(
+        "unexaminable-source",
+        location,
+        0,
+        f"listed for the sweep and then not read ({reason}); it is published "
+        "either way, so a clean line that counted only what was read would be "
+        "reporting on a different set of files than the one being published",
+    )
+
+
 class SweepUnavailable(Exception):
     """The sweep could not examine what it claims to cover, which is not a pass."""
 
@@ -168,24 +201,32 @@ def repo_root() -> Path:
     return Path(out.stdout.strip())
 
 
-def tracked_sources(root: Path) -> Iterator[tuple[str, str]]:
-    """Yield ``(path, text)`` for every tracked file that decodes as UTF-8."""
-    listing = _run_git(["ls-files", "-z"], root).split(b"\0")
+def tracked_sources(root: Path) -> Sources:
+    """Read every tracked file, and name every one that could not be read."""
+    listing = [raw for raw in _run_git(["ls-files", "-z"], root).split(b"\0") if raw]
+    readable: list[tuple[str, str]] = []
+    unexaminable: list[Finding] = []
     for raw in listing:
-        if not raw:
-            continue
         rel = raw.decode("utf-8")
         path = root / rel
-        if not path.is_file() or path.stat().st_size > MAX_BYTES:
+        if not path.is_file():
+            unexaminable.append(_unexaminable(rel, "tracked but not a regular file"))
+            continue
+        size = path.stat().st_size
+        if size > MAX_BYTES:
+            unexaminable.append(
+                _unexaminable(rel, f"{size} bytes, over the {MAX_BYTES}-byte bound")
+            )
             continue
         try:
-            yield rel, path.read_text(encoding="utf-8")
+            readable.append((rel, path.read_text(encoding="utf-8")))
         except UnicodeDecodeError:
-            continue
+            unexaminable.append(_unexaminable(rel, "not valid UTF-8"))
+    return Sources(readable, unexaminable, len(listing))
 
 
-def history_sources(root: Path) -> Iterator[tuple[str, str]]:
-    """Yield ``(object-id, text)`` for every blob in the object database.
+def history_sources(root: Path) -> Sources:
+    """Read every blob in the object database, and name every one that was not.
 
     This includes unreachable blobs, which `git log -p --all` cannot reach and
     which remain recoverable from a published repository until they are
@@ -199,26 +240,37 @@ def history_sources(root: Path) -> Iterator[tuple[str, str]]:
         ],
         root,
     ).decode("utf-8", "replace")
+    readable: list[tuple[str, str]] = []
+    unexaminable: list[Finding] = []
+    blobs = 0
     for line in listing.splitlines():
         oid, _, otype = line.partition(" ")
         if otype != "blob":
             continue
+        blobs += 1
+        location = f"blob {oid[:12]}"
         try:
             blob = _run_git(["cat-file", "blob", oid], root)
         except subprocess.CalledProcessError as exc:
-            # An object the sweep enumerated but could not read is content it
-            # did not examine. Skipping it quietly would let `--history` report
-            # clean over a blob nobody looked at.
+            # git enumerated this object and then refused to output it. That is
+            # a damaged object database, not one unreadable file, so it is a
+            # refusal to run rather than a finding the sweep can name and move on.
             raise SweepUnavailable(
                 f"could not read blob {oid[:12]} from the object database; "
                 "a sweep that skipped an object it enumerated cannot report clean"
             ) from exc
         if len(blob) > MAX_BYTES:
+            unexaminable.append(
+                _unexaminable(
+                    location, f"{len(blob)} bytes, over the {MAX_BYTES}-byte bound"
+                )
+            )
             continue
         try:
-            yield f"blob {oid[:12]}", blob.decode("utf-8")
+            readable.append((location, blob.decode("utf-8")))
         except UnicodeDecodeError:
-            continue
+            unexaminable.append(_unexaminable(location, "not valid UTF-8"))
+    return Sources(readable, unexaminable, blobs)
 
 
 def _is_reserved(host: str) -> bool:
@@ -341,16 +393,22 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     scope = "tracked files"
     try:
-        sources = list(tracked_sources(root))
+        tracked = tracked_sources(root)
+        readable = tracked.readable
+        unexaminable = list(tracked.unexaminable)
+        listed = tracked.listed
         if args.history:
-            sources.extend(history_sources(root))
+            history = history_sources(root)
+            readable = readable + history.readable
+            unexaminable.extend(history.unexaminable)
+            listed += history.listed
             scope = "tracked files and every blob in the object database"
-        if not sources:
+        if not listed:
             raise SweepUnavailable(
-                f"no source was read from {root}, so the sweep examined nothing, "
+                f"no source was listed in {root}, so the sweep examined nothing, "
                 "and a sweep of nothing is not a clean result"
             )
-        findings = sweep(sources, terms)
+        findings = unexaminable + sweep(readable, terms)
     except SweepUnavailable as exc:
         print(f"publication-sweep: {exc}.", file=sys.stderr)
         print(
@@ -374,13 +432,22 @@ def main(argv: Sequence[str] | None = None) -> int:
             f"`{ALLOW_MARKER}` and say in review why it is safe to publish.",
             file=sys.stderr,
         )
+        if any(finding.rule_id == "unexaminable-source" for finding in findings):
+            # There is no line to mark in a source the sweep could not read, so
+            # the exemption mechanism is not the answer for this rule.
+            print(
+                "An unexaminable source has no line to mark: make it readable, "
+                "raise the bound, or stop tracking it.",
+                file=sys.stderr,
+            )
         return 1
 
     denylist_note = (
         f", {len(terms)} denylisted term(s)" if terms else ", no denylist supplied"
     )
     print(
-        f"publication-sweep: clean over {len(sources)} source(s), {scope}{denylist_note}"
+        f"publication-sweep: clean over {len(readable)} of {listed} source(s), "
+        f"{scope}{denylist_note}"
     )
     return 0
 

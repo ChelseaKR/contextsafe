@@ -85,6 +85,7 @@ def test_the_clean_line_says_how_much_was_read(
     out = capsys.readouterr().out
     assert "2 tracked file(s)" in out
     assert "3 tracked path(s)" in out
+    assert "0 exemption(s) honored" in out
 
 
 def test_this_repository_is_clean() -> None:
@@ -105,6 +106,26 @@ def test_a_marker_in_a_scanned_tree_is_a_finding(
 
 
 @pytest.mark.parametrize("marker", gate.MARKERS)
+def test_a_marker_in_the_gate_implementations_is_a_finding(
+    tmp_path: Path, marker: str
+) -> None:
+    """`tools` was the one tree exempt from the rule its own code enforces.
+
+    The parametrized test above walks ``MARKER_ROOTS``, so it grew this case
+    the moment the tuple grew. This one names the tree literally, so shrinking
+    the tuple back is a test failure rather than a silently smaller scan.
+    """
+
+    files = dict(CLEAN_FILES)
+    files["tools/some_gate.py"] = f"# {marker}: finish this later\n"
+    assert gate.main(["--root", str(_repo(tmp_path, files))]) == 1
+
+
+def test_the_gate_implementations_are_in_the_scanned_trees() -> None:
+    assert "tools" in gate.MARKER_ROOTS
+
+
+@pytest.mark.parametrize("marker", gate.MARKERS)
 def test_a_marker_outside_the_scanned_trees_is_not_a_finding(
     tmp_path: Path, marker: str
 ) -> None:
@@ -115,8 +136,9 @@ def test_a_marker_outside_the_scanned_trees_is_not_a_finding(
 
 def test_a_marker_finding_carries_its_line() -> None:
     text = "one\ntwo\n# " + gate.MARKERS[0] + " here\n"
-    findings = gate.find_markers("src/pkg/x.py", text)
+    findings, exemptions = gate.find_markers("src/pkg/x.py", text)
     assert [(f.rule_id, f.line_number) for f in findings] == [("marker", 3)]
+    assert exemptions == []
 
 
 def test_an_untracked_marker_file_is_not_yet_the_repository_s_problem(
@@ -155,10 +177,103 @@ def test_a_listed_file_that_cannot_be_read_is_reported_not_skipped(
 ) -> None:
     root = _repo(tmp_path, CLEAN_FILES)
     (root / "src" / "pkg" / "__init__.py").unlink()
-    findings, examined = gate.scan_markers(root, ["src/pkg/__init__.py"])
+    findings, examined, exemptions = gate.scan_markers(root, ["src/pkg/__init__.py"])
     assert [f.rule_id for f in findings] == ["unreadable"]
     assert examined == 0
+    assert exemptions == []
     assert gate.main(["--root", str(root)]) == 1
+
+
+# --- the exemption mechanism ------------------------------------------------
+
+
+def _exempted(marker: str, reason: str) -> str:
+    return f"# {marker} {gate.ALLOW_MARKER} {reason}\n"
+
+
+@pytest.mark.parametrize("marker", gate.MARKERS)
+def test_an_exempted_marker_is_not_a_finding(tmp_path: Path, marker: str) -> None:
+    files = dict(CLEAN_FILES)
+    files["src/pkg/documented.py"] = _exempted(marker, "quoted, not deferred work")
+    assert gate.main(["--root", str(_repo(tmp_path, files))]) == 0
+
+
+def test_an_exemption_is_printed_on_a_clean_run(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """The one thing the gate deliberately does not report as a finding.
+
+    An exemption that nobody can see is the hole the mechanism exists to avoid,
+    so it is printed whether the run passes or fails, and counted in the clean
+    line.
+    """
+
+    files = dict(CLEAN_FILES)
+    files["src/pkg/documented.py"] = _exempted(gate.MARKERS[0], "the stated reason")
+    assert gate.main(["--root", str(_repo(tmp_path, files))]) == 0
+    out = capsys.readouterr().out
+    assert "exempted src/pkg/documented.py:1" in out
+    assert "the stated reason" in out
+    assert "1 exemption(s) honored" in out
+
+
+def test_exemptions_are_printed_even_when_the_run_fails(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    files = dict(CLEAN_FILES)
+    files["src/pkg/documented.py"] = _exempted(gate.MARKERS[0], "the stated reason")
+    files["src/pkg/planted.py"] = f"# {gate.MARKERS[1]}\n"
+    assert gate.main(["--root", str(_repo(tmp_path, files))]) == 1
+    captured = capsys.readouterr()
+    assert "exempted src/pkg/documented.py:1" in captured.out
+    assert "marker: src/pkg/planted.py:1" in captured.err
+
+
+@pytest.mark.parametrize("trailing", ["", " ", "\t"])
+def test_an_exemption_without_a_reason_is_a_finding(
+    tmp_path: Path, trailing: str
+) -> None:
+    """An exemption asserts something a reader cannot see in the line itself."""
+
+    files = dict(CLEAN_FILES)
+    files["src/pkg/bare.py"] = f"# {gate.MARKERS[0]} {gate.ALLOW_MARKER}{trailing}\n"
+    assert gate.main(["--root", str(_repo(tmp_path, files))]) == 1
+
+
+def test_the_unreasoned_exemption_is_its_own_rule() -> None:
+    text = f"x = 1  # {gate.MARKERS[0]} {gate.ALLOW_MARKER}\n"
+    findings, exemptions = gate.find_markers("src/pkg/bare.py", text)
+    assert [f.rule_id for f in findings] == ["unreasoned-exemption"]
+    assert exemptions == []
+
+
+def test_an_exemption_records_the_marker_and_the_reason() -> None:
+    text = f"x = 1  # {gate.MARKERS[2]} {gate.ALLOW_MARKER} because it is quoted\n"
+    findings, exemptions = gate.find_markers("tools/some_gate.py", text)
+    assert findings == []
+    assert [(e.location, e.line_number, e.marker, e.reason) for e in exemptions] == [
+        ("tools/some_gate.py", 1, gate.MARKERS[2], "because it is quoted")
+    ]
+
+
+def test_an_allow_marker_on_a_line_with_no_marker_is_not_inspected() -> None:
+    """The gate's own source defines ``ALLOW_MARKER``; that line owes nothing."""
+
+    text = f'ALLOW_MARKER = "{gate.ALLOW_MARKER}"\n'
+    assert gate.find_markers("tools/some_gate.py", text) == ([], [])
+
+
+def test_this_repository_s_exemptions_all_sit_in_the_gate_that_defines_them() -> None:
+    """A marker word is legitimate in exactly one place: the rule that bans it.
+
+    Pinning that keeps the mechanism from spreading quietly. A new exemption
+    anywhere else fails here and has to be argued for in review.
+    """
+
+    result = gate.run_gate(gate.repo_root())
+    assert result.findings == []
+    assert {e.location for e in result.exemptions} == {"tools/hygiene_gate.py"}
+    assert all(e.reason for e in result.exemptions)
 
 
 # --- the tool did not run: exit 2, never a pass ----------------------------

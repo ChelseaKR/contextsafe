@@ -60,7 +60,10 @@ markers = [
 
 [tool.coverage.run]
 branch = true
-source = ["contextsafe"]
+# `tools` is here because the gate implementations decide whether this
+# repository merges, and until 2026-08-27 the coverage floor did not measure
+# them at all. See docs/18-ASSURANCE-PROGRAM.md phase 1.
+source = ["contextsafe", "tools"]
 
 [tool.coverage.report]
 fail_under = 90

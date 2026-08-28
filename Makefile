@@ -23,7 +23,7 @@ typecheck:
 	uv run mypy --strict src
 
 test:
-	uv run pytest --cov=contextsafe --cov-branch --cov-report=term-missing --cov-fail-under=90
+	uv run pytest --cov=contextsafe --cov=tools --cov-branch --cov-report=term-missing --cov-fail-under=90
 	uv run coverage report --include='$(SAFETY_MODULES)' --fail-under=95
 
 audit:

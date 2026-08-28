@@ -278,7 +278,14 @@ command-line usage error.
 `make verify` uses the frozen lockfile and gates lint, format, strict typing,
 90% overall branch coverage, 95% safety-module branch coverage, dependency audit,
 repository hygiene, and the publication sweep (no personal filesystem path, no
-internal hostname, no pointer a public reader cannot follow).
+internal hostname, no pointer a public reader cannot follow, and no source the
+sweep listed and then could not read).
+
+The gate implementations in `tools/` are inside the trees those gates scan and
+inside the coverage floor. They were not until 2026-08-27, which is the first
+phase of [the assurance program](docs/18-ASSURANCE-PROGRAM.md): a check that
+reports clean over content it did not examine is the defect class that document
+exists to track.
 
 The v1 product is deliberately a **service with a small local tool**, not a universal integration platform:
 
@@ -340,6 +347,7 @@ A successful v1 allows one design partner to:
 - [V1 release checklist](docs/15-V1-RELEASE-CHECKLIST.md)
 - [Research sources](docs/16-RESEARCH-SOURCES.md)
 - [Publication policy](docs/17-PUBLICATION-POLICY.md)
+- [Assurance program](docs/18-ASSURANCE-PROGRAM.md)
 - [Publication readiness](docs/PUBLICATION-READINESS.md)
 - [ADR 0000: record architecture decisions](docs/adr/0000-record-architecture-decisions.md)
 - [ADR 0001: v1 boundary](docs/adr/0001-v1-boundary.md)
@@ -382,7 +390,7 @@ Status against those standards, with applicability judged per standard
 | Accessibility | N/A — offline CLI/library with no human-facing HTML |
 | Internationalization | N/A — synthetic non-production validation CLI; English-only operator output by design (see `docs/I18N.md`) |
 | AI Evaluation | N/A — deterministic fixture evaluator; no LLM/model component |
-| Quality & Metrics | Applies — coverage floors enforced in `pyproject.toml` and `make test`; hygiene gate bans TODO/FIXME/HACK |
+| Quality & Metrics | Applies — coverage floors enforced in `pyproject.toml` and `make test`, over `src/contextsafe` and the gate implementations in `tools/`; hygiene gate bans TODO/FIXME/HACK in `src`, `tests` and `tools`, with line-level exemptions that must carry a reason and are printed on every run |
 | Documentation | Applies — the planning corpus in `docs/`, ADR log in `docs/adr/`, published contracts in `schemas/`, `CONTRIBUTING.md`, `CHANGELOG.md` |
 | Release & Versioning | Applies — tag-triggered `release.yml` re-runs `make verify` at the tag and gates on a matching CHANGELOG section. No tag and no release exist yet, so it has never fired, and `CITATION.cff` deliberately carries no `version` or `date-released` |
 | AI Development Measurement | Applies — no AI-development baseline is recorded in this repo yet. The merge-blocking gates that do exist are outcome-side, not activity counters: `make verify` runs branch-coverage floors, mypy `--strict`, and the hygiene gate on every change |
