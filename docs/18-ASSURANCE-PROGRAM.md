@@ -1,6 +1,6 @@
 # Assurance program: a multiyear plan for the gates themselves
 
-Status: proposed, phases 1 to 4 built
+Status: proposed, phases 1 to 5 built
 Owner: technical owner
 Planning unit: ordinal phases with entry conditions, not dates
 
@@ -215,7 +215,9 @@ place CI already runs, so the proof exists and the workflow does not.
 
 ### Phase 5 — Evidence that the suite can detect a regression
 
-**Status: planned, not built.**
+**Status: built,** over a declared subset of two modules. See
+[ADR 0009](adr/0009-mutation-evidence-over-declared-safety-modules.md) and
+`make mutants`.
 
 Everything above proves a gate can fail. None of it proves the *test suite* can
 fail — that the assertions covering the safety modules would actually catch a

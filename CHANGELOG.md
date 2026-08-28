@@ -6,6 +6,30 @@ release yet, so everything to date lives under Unreleased.
 
 ## [Unreleased]
 
+### Added
+
+- **`make mutants` asks whether the suite would notice a change, not whether it
+  ran the line.** The 95% branch floor over the safety modules is an execution
+  measure; a suite that imports every module and asserts almost nothing reports
+  the same number. `tools/mutation_gate.py` changes one operator or constant in
+  a declared safety module and requires the tests to fail. Five operators, each
+  a real defect shape in validation code: a comparison swapped with its
+  neighbour, a boolean operator flipped, a `not` removed, a boolean constant
+  flipped, a numeric bound moved by one. String constants are never mutated,
+  because a mutated regular expression is a different program rather than a
+  probe for a missing assertion. Mutants come only from lines the tests execute,
+  measured with `coverage` in the same run, and the covered line count is
+  printed so the denominator is visible. Two stages: a mutant the four fast
+  screening modules do not kill meets the whole suite before being reported,
+  because the claim is about the suite and 14 of the 35 mutants here survive
+  screening while none survives the suite. Measured: 35 mutants over 124 covered
+  lines in `contract_validation.py` and `identifiers.py`, every one killed, in
+  about two minutes. Not part of `make verify`, for runtime alone. It writes
+  nothing into the working tree: the package is copied to a temporary directory,
+  mutated there, and put ahead of the editable install with `PYTHONPATH`, and a
+  test asserts the tree is unchanged after a run. See
+  [ADR 0009](docs/adr/0009-mutation-evidence-over-declared-safety-modules.md).
+
 ### Changed
 
 - **`make secret-scan` exits 2 instead of 127 when gitleaks is not installed,
