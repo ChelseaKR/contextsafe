@@ -281,8 +281,9 @@ repository hygiene, and the publication sweep (no personal filesystem path, no
 internal hostname, no pointer a public reader cannot follow, and no source the
 sweep listed and then could not read).
 
-The gate implementations in `tools/` are inside the trees those gates scan and
-inside the coverage floor. They were not until 2026-08-27, which is the first
+The gate implementations in `tools/` are inside the trees those gates scan,
+inside strict typing, and inside the coverage floor, and `make scope` fails if a
+tree of Python ever exists that no analysis was pointed at. They were not until 2026-08-27, which is the first
 phase of [the assurance program](docs/18-ASSURANCE-PROGRAM.md): a check that
 reports clean over content it did not examine is the defect class that document
 exists to track.
