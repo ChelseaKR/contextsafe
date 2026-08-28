@@ -6,6 +6,41 @@ release yet, so everything to date lives under Unreleased.
 
 ## [Unreleased]
 
+### Changed
+
+- **`make secret-scan` exits 2 instead of 127 when gitleaks is not installed,
+  and 2 instead of 1 for every other failure to scan.** This is a deliberate
+  exit-code change on failure paths, called out here because a caller chaining
+  on `$?` will see it. Three states, and they are three because two is how a
+  gate lies: 0 examined and found nothing, 1 examined and found something, 2 did
+  not examine. Before this, a damaged object database and a leaked credential
+  were both exit 1, and "gitleaks is not installed" was 127. Now an absent
+  scanner, an unpinned scanner, an object the scan enumerated and could not
+  read, and zero blobs enumerated are all exit 2; a gitleaks finding stays 1.
+  `security.yml` and `release.yml` both fail on any non-zero, so no workflow
+  behaviour changes. See
+  [ADR 0008](docs/adr/0008-one-exit-code-contract-for-every-gate.md).
+- **`make a11y-full` exits 2 instead of 1 when the node harness is missing.**
+  `engine-unavailable`, `engine-not-executed`, `engine-examined-nothing` and
+  `check-examined-nothing` name a failure to run a check, not an accessibility
+  defect, and they now exit 2 even when the same run also has real findings,
+  because those findings were gathered without every requested engine and
+  nothing in the list says so. A real accessibility defect still exits 1.
+- **`make i18n` exits 2 instead of 1 when it examined no catalog.** The
+  `no-catalogs` rule id is gone; the gate refuses instead, and a `--locale` with
+  no published catalog is the same refusal rather than an unhandled traceback.
+- **`tools/secret-scan-full-history.sh` has tests.** It had none: it is the one
+  gate written in shell and the one whose dependency is not in `uv.lock`, so no
+  state of it was ever exercised. `tests/test_gate_exit_contract.py` drives it
+  with a stand-in gitleaks that answers `version` and returns a chosen code from
+  `detect`, which gives all three states on a machine with no gitleaks
+  installed, and asserts the three are three distinct codes. Those tests run
+  inside `make verify`.
+- One test now asserts the contract of all five Python gate programs at once,
+  and compares its case list against `tools/*.py`, so a gate added later that
+  sits outside the contract fails the suite rather than sitting outside it
+  quietly.
+
 ### Added
 
 - **`make scope` fails when a tree of Python exists that no analysis was ever

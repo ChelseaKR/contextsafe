@@ -58,8 +58,17 @@
 # ---------------------------------------------------------------------------
 #   tools/secret-scan-full-history.sh
 #
-# Exit 0 when clean, non-zero on any finding or any failure to scan. Findings
-# are redacted in output: this script must be safe to run in a public log.
+# Exit 0 when clean, 1 when gitleaks finds something, and 2 when this script
+# could not perform the scan it claims to: gitleaks absent, gitleaks at an
+# unpinned version, an object it enumerated and could not read, or zero blobs
+# enumerated. That is the same three-state contract every other gate here uses
+# (ADR 0008), so "the scanner was not installed" can never be read as "the
+# scanner found nothing". It used to exit 127 for an absent gitleaks and 1 for
+# every other failure to scan, which put a damaged object database at the same
+# exit code as a real leaked credential.
+#
+# Findings are redacted in output: this script must be safe to run in a public
+# log.
 #
 # Environment:
 #   GITLEAKS_BIN             gitleaks executable to use. Defaults to whatever is
@@ -84,7 +93,8 @@ if ! command -v "$GITLEAKS_BIN" >/dev/null 2>&1; then
   echo "secret-scan: gitleaks not found (looked for '${GITLEAKS_BIN}')." >&2
   echo "  macOS:  brew install gitleaks" >&2
   echo "  other:  https://github.com/gitleaks/gitleaks/releases/tag/v${GITLEAKS_PINNED_VERSION}" >&2
-  exit 127
+  echo "secret-scan: this is a failure to run the scan, not a clean result." >&2
+  exit 2
 fi
 
 installed_version="$("$GITLEAKS_BIN" version 2>/dev/null | tr -d '[:space:]')"
@@ -95,7 +105,8 @@ if [ "$installed_version" != "$GITLEAKS_PINNED_VERSION" ]; then
     echo "secret-scan: gitleaks ${installed_version} is installed, but this gate is pinned to ${GITLEAKS_PINNED_VERSION}." >&2
     echo "  A secret scan whose ruleset can change underneath it is not a gate." >&2
     echo "  Install the pinned version, or set ALLOW_GITLEAKS_VERSION_DRIFT=1 locally." >&2
-    exit 1
+    echo "secret-scan: this is a failure to run the scan, not a clean result." >&2
+    exit 2
   fi
 fi
 
@@ -132,7 +143,7 @@ while read -r oid otype; do
       if ! git cat-file blob "$oid" >"$objects_dir/blob-$oid" 2>/dev/null; then
         echo "secret-scan: could not read blob ${oid} from the object database." >&2
         echo "  Refusing to report a scan that skipped an object it enumerated." >&2
-        exit 1
+        exit 2
       fi
       blob_count=$((blob_count + 1))
       ;;
@@ -140,7 +151,7 @@ while read -r oid otype; do
       if ! git cat-file commit "$oid" >"$objects_dir/commit-$oid" 2>/dev/null; then
         echo "secret-scan: could not read commit object ${oid}." >&2
         echo "  Refusing to report a scan that skipped an object it enumerated." >&2
-        exit 1
+        exit 2
       fi
       commit_count=$((commit_count + 1))
       ;;
@@ -150,7 +161,7 @@ done < <(git cat-file --batch-all-objects --batch-check='%(objectname) %(objectt
 echo "secret-scan: materialized ${blob_count} blobs and ${commit_count} commit objects"
 if [ "$blob_count" -eq 0 ]; then
   echo "secret-scan: refusing to report success after enumerating zero blobs." >&2
-  exit 1
+  exit 2
 fi
 
 "$GITLEAKS_BIN" detect \

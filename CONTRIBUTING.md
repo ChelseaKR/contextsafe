@@ -38,6 +38,12 @@ uvx pre-commit install
 
 ## The merge gate
 
+Every gate in this repository uses the same three exit codes, and they are
+three because two is how a gate lies: **0** it examined what it claims to and
+found nothing, **1** it examined and found something, **2** it did not examine,
+so it has no answer. A gate that cannot run fails differently from a gate that
+failed. See [ADR 0008](docs/adr/0008-one-exit-code-contract-for-every-gate.md).
+
 A change merges when the full gate is green. Reproduce it locally with:
 
 ```sh
@@ -70,7 +76,7 @@ not have and `make verify` must stay exactly what CI runs:
 
 | Gate | Command | What it checks |
 | --- | --- | --- |
-| Full-history secret scan | `make secret-scan` | gitleaks over every ref, every object in the object database (including unreachable ones and every commit message), and the working tree. Needs gitleaks 8.30.1 on `PATH` (`brew install gitleaks`); CI and the release pipeline run this same target. |
+| Full-history secret scan | `make secret-scan` | gitleaks over every ref, every object in the object database (including unreachable ones and every commit message), and the working tree. Needs gitleaks 8.30.1 on `PATH` (`brew install gitleaks`); CI and the release pipeline run this same target. Exit 1 on a finding; exit 2 when gitleaks is absent, is not the pinned version, cannot read an object it enumerated, or enumerated zero blobs. Its three states are covered by `tests/test_gate_exit_contract.py`, which drives it with a stand-in scanner and therefore runs without gitleaks installed. |
 
 ## Design constraints that reviews enforce
 
