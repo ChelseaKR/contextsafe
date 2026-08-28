@@ -2,6 +2,7 @@
 
 import ipaddress
 import re
+from dataclasses import dataclass
 from datetime import UTC, date, datetime
 from typing import cast
 
@@ -26,6 +27,105 @@ SEMVER_PATTERN = re.compile(
 )
 SHA256_PATTERN = re.compile(r"^[0-9a-f]{64}$")
 SLUG_PATTERN = re.compile(r"^[a-z0-9][a-z0-9-]{0,63}$")
+
+
+@dataclass(frozen=True, slots=True)
+class Grammar:
+    """A published token grammar: one base shape and its named exclusions.
+
+    Written as a base pattern plus exclusions rather than as one regular
+    expression because the same strings are published in
+    ``schemas/contextsafe-evidence-v1.schema.json`` as a ``pattern`` and a list
+    of ``not`` clauses, and a reader has to be able to line the two up. Every
+    string here is ECMA-262 syntax, with no inline flags, so it is valid in a
+    JSON Schema ``pattern`` unchanged;
+    ``tests/test_evidence_models.py`` asserts the schema carries these exact
+    strings, so the code and the published contract cannot drift apart.
+    """
+
+    base: str
+    exclusions: tuple[tuple[str, str], ...]
+    max_length: int
+
+    def compiled_base(self) -> re.Pattern[str]:
+        return re.compile(self.base)
+
+    def rejection(self, value: str) -> str | None:
+        """Return why ``value`` is not in this grammar, or ``None``."""
+
+        if (
+            len(value) > self.max_length
+            or self.compiled_base().fullmatch(value) is None
+        ):
+            return "does not match the published token shape"
+        for expression, reason in self.exclusions:
+            if re.search(expression, value) is not None:
+                return reason
+        return None
+
+
+# A provenance label names a collector or a system. It is not free text: it is
+# letter-initial, every separated segment begins with a letter, no run of four
+# or more digits may appear, and neither a colon nor a slash is in the alphabet.
+# Together those make a bare number, a date, a social security number, a
+# telephone number and a URL scheme unwritable, so the boundary detectors in
+# `identifiers` cannot fire on a value this grammar admits. See ADR 0006.
+PROVENANCE_LABEL_GRAMMAR = Grammar(
+    base=r"^[A-Za-z][A-Za-z0-9._-]*$",
+    exclusions=(
+        (r"[0-9]{4}", "carries a run of four or more digits"),
+        (
+            r"[._-](?![A-Za-z])",
+            "has a separated segment that does not begin with a letter",
+        ),
+        (r"[Ww][Ww][Ww]\.", "carries a host label"),
+    ),
+    max_length=128,
+)
+
+# The same grammar, restricted to the upper-case alphabet `system_id` already
+# published. A host label cannot be written at all without a lower-case letter
+# or a dot, so that exclusion is absent rather than redundant.
+PROVENANCE_SYSTEM_GRAMMAR = Grammar(
+    base=r"^[A-Z][A-Z0-9-]*$",
+    exclusions=(
+        (r"[0-9]{4}", "carries a run of four or more digits"),
+        (r"-(?![A-Z])", "has a separated segment that does not begin with a letter"),
+    ),
+    max_length=64,
+)
+
+# A version is a number, not a word. The base shape is the one
+# `contextsafe.safe_value.VERSION_PATTERN` already requires of the version a
+# support bundle may carry, for the reason recorded there: a pattern that merely
+# forbade spaces accepted `exports-Jordan-Rivera-1987` as a version string.
+PROVENANCE_VERSION_GRAMMAR = Grammar(
+    base=r"^[0-9]+(?:\.[0-9]+){0,3}(?:[-+][A-Za-z0-9.]{1,16})?$",
+    exclusions=(
+        (r"[0-9]{7}", "carries a run of seven or more digits"),
+        (r"[0-9]{3}[.-][0-9]{3}[.-][0-9]{4}", "carries a telephone number shape"),
+        (r"[Ww][Ww][Ww]\.", "carries a host label"),
+    ),
+    max_length=64,
+)
+
+
+def provenance_string(value: object, path: str, grammar: Grammar) -> str:
+    """Require a bounded provenance token in ``grammar``.
+
+    The rejection names the shape rule that was broken and never the value, so
+    a rejected identifier cannot reach a log or an error payload by way of the
+    message that rejected it.
+    """
+
+    if not isinstance(value, str) or not value:
+        raise contract_error(
+            "invalid_string", path, "expected a bounded non-empty string"
+        )
+    reason = grammar.rejection(value)
+    if reason is not None:
+        raise contract_error("invalid_format", path, f"provenance token {reason}")
+    return value
 
 
 def contract_error(code: str, path: str, message: str) -> ContextSafeError:
