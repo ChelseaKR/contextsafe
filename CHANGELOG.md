@@ -8,6 +8,31 @@ release yet, so everything to date lives under Unreleased.
 
 ### Changed
 
+- **`collector_id`, `system_id` and `system_version` have narrower published
+  grammars, and this is a breaking contract change.** They were
+  `^[A-Za-z0-9][A-Za-z0-9:/_.-]{0,127}$` and `^[A-Z][A-Z0-9-]{2,63}$`, which
+  match a social security number, a date of birth and the string
+  `realpatientcanary` without complaint. Each field now publishes a base
+  pattern plus named `not` clauses in
+  `schemas/contextsafe-evidence-v1.schema.json`, and
+  `contextsafe.contract_validation` carries the identical strings, so a test
+  compares them rather than a comment claiming they agree. In practice:
+  `system_version` must be a dotted number, so a calendar version is written
+  `2026.8.27` rather than `2026-08-27`, and the fixture value `fixture-1.0`
+  became `1.0.0`; a `collector_id` expressed as a URI is no longer accepted,
+  since neither a colon nor a slash is in the alphabet any more; and no field
+  may carry a run of four or more digits or a separated segment that does not
+  begin with a letter. There is no tagged release, no stored record, and the
+  only caller of this path has no CLI route, so nothing existing is affected and
+  the schema is narrowed in place rather than versioned. See
+  [ADR 0006](docs/adr/0006-provenance-token-grammar-and-boundary-scan.md).
+- The boundary detectors live in `contextsafe.identifiers`, a leaf module, so
+  the evidence layer can reach one definition of them without importing
+  `preflight`, which imports the evidence layer. `preflight.identifier_hits` is
+  re-exported and behaves identically: it is the documented extension point and
+  where `diagnostics` already imports it from. The 709 tests that passed before
+  the move passed unchanged after it, before any behavior was added.
+
 - **The gate implementations are now inside the trees they scan and inside the
   coverage floor.** `tools/` held four gate programs and one shell script that
   between them decide whether anything merges, and it was the one tree exempt
@@ -103,6 +128,28 @@ release yet, so everything to date lives under Unreleased.
 
 
 ### Fixed
+
+- **A PHI canary in operator-supplied provenance reached `contextsafe.sqlite`,
+  inside a record whose own field said the boundary check passed.** Every byte
+  of a caller's evidence *source* goes through the canary and direct-identifier
+  scan before acceptance. The three provenance fields on the record that scan
+  produces went through nothing of the kind: `parse_evidence_metadata` checked
+  token shape and stopped. Measured against 28ef915, end to end through
+  `store_internal_synthetic_evidence`, the only caller: `stored collector_id:
+  realpatientcanary` alongside `stored boundary_check: passed`, with the canary
+  bytes present in the SQLite index and the value hashed into the evidence id.
+  `parse_evidence_metadata` now scans each token with
+  `identifiers.provenance_hits` after the grammar accepts it, rejecting
+  `phi_canary_detected` or `direct_identifier_detected` at the field's own path
+  and never echoing the value. The obvious version of this fix was attempted in
+  PR #38 and closed: run the fields through `preflight._reject_unsafe_string`
+  and five values the published schema declares valid start failing, including
+  `SYS-MEDICAL-RECORD-SYSTEM`, which is an ordinary name for a system. The
+  grammar is what makes the identifier unwritable; the scan is only for what a
+  grammar cannot see. One detector, `record-locator`, does not apply to a
+  bounded provenance token, is named rather than positional, and its residual is
+  pinned in `tests/test_privacy_canaries.py` next to the three blind spots that
+  suite already records. The free-text scan is unchanged. Closes #35.
 
 - `remove_cleanup` reported a failed directory removal as a retained entry.
   The `rmdir` call was wrapped in a bare `except OSError`, so a permission
