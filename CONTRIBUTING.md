@@ -92,5 +92,7 @@ not have and `make verify` must stay exactly what CI runs:
 - Keep changes small and single-purpose; update `CHANGELOG.md` under
   `## [Unreleased]` for anything user-visible.
 - Stage explicit paths (never `git add -A`).
-- CI must be green (or, while GitHub Actions is unavailable on this account,
-  attach the local `make verify` output to the PR).
+- CI must be green. `ci.yml` and `security.yml` both run on every pull request.
+  `ci.yml` carries `paths-ignore` for `**.md`, `docs/**` and `LICENSE`, so a
+  documentation-only change gets no `verify` run at all; attach the local
+  `make verify` output when that is the only evidence there is.
