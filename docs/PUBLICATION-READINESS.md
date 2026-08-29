@@ -1,10 +1,10 @@
 # Publication readiness
 
 **Audit date:** 2026-08-15 · **Commit audited:** `main` @ `09e0317` (open PRs
-#11 and #12 excluded) · **Current visibility:** PRIVATE · **Recorded
+#11 and #12 excluded) · **Visibility when audited:** PRIVATE · **Recorded
 publication state:** the maintainer decided on 2026-08-15 to publish (Gate 0);
-the visibility change itself is a separate, deliberate act and has not been made
-by this document
+the visibility change itself is a separate, deliberate act and was not made by
+this document. It has since been made — see the 2026-08-29 update below
 
 **Verdict: technically ready to publish, pending an IP clearance the maintainer
 must obtain and a dual-use decision that is hers and her governance group's to
@@ -31,6 +31,37 @@ decided before B-009 authoring begins.
 The prior employer is deliberately not named anywhere in this file. A
 publication-readiness document becomes public with the repository it audits,
 and the sweep below confirms that name appears nowhere in this history today.
+
+**Update, 2026-08-29 — this document is now being read on the public
+repository, and parts of it are no longer true of that repository.** Nothing
+below is retracted or softened; every finding stands as the audit wrote it. What
+changed is the repository underneath, and a reader about to run one of these
+commands should know that before it fails rather than after.
+
+- The repository is public. `gh repo view ChelseaKR/contextsafe --json isPrivate`
+  returns `false`.
+- **None of the commit names cited here resolve in the published repository.**
+  `09e0317`, `bba81c8`, `a557626`, `cbcb9e3` and `d3d3d04` are all
+  `fatal: bad object` in a fresh `git clone`, whose `main` begins at `a8b62c9`.
+  The history this audit read is not the history that was published. The
+  findings those names supported are unaffected — they were findings about
+  content, and the content is still here — but as pointers they are dead, which
+  is the `cross-repo-pointer` defect class one level down. `make
+  publication-sweep` does not catch it: the sweep resolves repository and host
+  pointers, not commit names, and `make claims` cannot either, because CI checks
+  out one commit and a shallow clone can resolve nothing.
+- **§6's docs finding is closed by the published history, not by this
+  document.** `docs/11-GTM-BUSINESS-MODEL.md` appears in none of the refs a
+  fresh clone fetches, so the `git show` printed in that section returns
+  `fatal: bad object` for a public reader rather than 221 lines, and the
+  exposure the section priced does not exist on this repository. The option-B
+  cost was paid. This is not a claim that the content is gone everywhere: a
+  clone taken before the rewrite still holds the blob.
+
+One thing §7 is not: a running total. Every figure in it is a measurement of one
+`make verify` run at the commit that section names, correct for that run and
+stale by construction thereafter. Re-run the command rather than reading the
+number.
 
 ---
 
@@ -442,9 +473,12 @@ also simply inconsistent. Two clean options, both the maintainer's: register the
 domain, or move all eleven to `.invalid`. Not fixed here, because a `$id` is
 published contract identity and `schemas/` is a code-owner-reviewed path.
 
-**Docs — MAINTAINER'S CALL.** `bba81c8` ("docs: move working notes to the
-private archive") deleted `docs/11-GTM-BUSINESS-MODEL.md` and scrubbed dollar
-figures from five other documents. The content was never removed from history:
+**Docs — MAINTAINER'S CALL. Closed since: see the 2026-08-29 update at the top.
+The commit names and the `git show` below do not resolve on the published
+repository, and the file is in none of its refs.** `bba81c8` ("docs: move
+working notes to the private archive") deleted `docs/11-GTM-BUSINESS-MODEL.md`
+and scrubbed dollar figures from five other documents. The content was never
+removed from history:
 
 ```
 git show a557626:docs/11-GTM-BUSINESS-MODEL.md     # 221 lines, still returns

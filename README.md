@@ -4,9 +4,10 @@
 
 Status: product and delivery plan for v1.0 plus internal iteration-1 synthetic
 evaluation, iteration-2 unsigned governance-contract tooling, iteration-3
-privacy/evidence-core risk reduction, and iteration-4 receipt payload/envelope
-separation. No clinically governed, cryptographically authorized, or externally
-validated product exists yet.
+privacy/evidence-core risk reduction, iteration-4 receipt payload/envelope
+separation, and iteration-5 localized receipt rendering and operator surfaces.
+No clinically governed, cryptographically authorized, or externally validated
+product exists yet.
 
 The planned ContextSafe service would run a fixed, versioned pack of synthetic patients through a health system's non-production workflow, evaluate whether identity and clinical-context data survive each boundary, and produce a signed evidence receipt. Its intended capability is to detect data loss, coercion, unsafe defaults, missing reference ranges, and patient-facing misidentification before a release reaches care. The current code proves only bounded offline fixture evaluation, unsigned contract compilation, a read-only code-envelope boundary check, and an internal-test evidence-store primitive; it is not clinically approved and does not establish those product capabilities.
 
@@ -32,7 +33,7 @@ is published HL7 Gender Harmony material.
 With [`uv`](https://docs.astral.sh/uv/) installed:
 
 ```sh
-make verify                       # frozen sync, lint, format, strict typing, coverage, audit, hygiene, publication sweep, i18n
+make verify                       # sync lint format typecheck test audit hygiene publication-sweep i18n a11y claims
 uv run contextsafe evaluate \
   --case fixtures/reference/case.json \
   --observations fixtures/reference/observations.json \
@@ -275,11 +276,16 @@ codes are stable and documented: `0` success (including `--help`), `2`
 fail-closed contract rejection with one JSON error object on stderr, and `64`
 command-line usage error.
 
-`make verify` uses the frozen lockfile and gates lint, format, strict typing,
-90% overall branch coverage, 95% safety-module branch coverage, dependency audit,
-repository hygiene, and the publication sweep (no personal filesystem path, no
-internal hostname, no pointer a public reader cannot follow, and no source the
-sweep listed and then could not read).
+`make verify` is the whole merge gate and the exact target `ci.yml` runs. It
+installs from the locked lockfile with `uv sync --locked`, never `--frozen`,
+which installs a lock that has drifted from `pyproject.toml` and still exits 0,
+so it cannot gate drift. Its stages are the ones named beside `make verify` in
+the quickstart above, and each has a row in
+[the contributing guide's gate table](CONTRIBUTING.md#the-merge-gate); the
+floors are 90% overall branch coverage and 95% safety-module branch coverage.
+`make claims` is the newest of them: it re-derives the figures and lists this
+README states, including that stage list, so a stage added to `verify` and left
+undocumented fails the build instead of quietly misleading a reader.
 
 The gate implementations in `tools/` are inside the trees those gates scan and
 inside the coverage floor. They were not until 2026-08-27, which is the first
@@ -353,6 +359,9 @@ A successful v1 allows one design partner to:
 - [ADR 0001: v1 boundary](docs/adr/0001-v1-boundary.md)
 - [ADR 0002: unsigned compilation before authorization](docs/adr/0002-unsigned-compilation-before-authorization.md)
 - [ADR 0003: recoverable evidence commit](docs/adr/0003-recoverable-evidence-commit.md)
+- [ADR 0004: the SAST gate and a scan that cannot skip itself](docs/adr/0004-sast-gate-pragma-and-scan-invocation.md)
+- [ADR 0005: the gates are inside the trees they scan, and exemptions carry a reason](docs/adr/0005-hygiene-marker-exemptions.md)
+- [ADR 0006: provenance tokens get a grammar and a boundary scan](docs/adr/0006-provenance-token-grammar-and-boundary-scan.md)
 
 ## Working principles
 
@@ -376,8 +385,11 @@ not replace those standards.
 
 ## Standards Conformance
 
-Status against those standards, with applicability judged per standard
-(current code is an offline synthetic fixture validator/evaluator CLI):
+Status against those standards, with applicability judged per standard. The
+current code is an offline CLI that validates and evaluates synthetic fixtures,
+renders a localized HTML receipt from the result, and reports on its own
+installation. The Performance, Accessibility and Internationalization rows all
+turn on what that rendered page is and is not:
 
 | Standard | State |
 | --- | --- |
@@ -386,9 +398,9 @@ Status against those standards, with applicability judged per standard
 | Security & Supply-Chain | Applies — Semgrep SAST, gitleaks secret scan at three scopes (pre-commit diff, full-history CI gate over every ref, every object, and the working tree via `make secret-scan`, and that same scan again at a release tag), pip-audit dependency audit (`.github/workflows/security.yml` + `make audit`), pinned `uv.lock`, SHA-pinned actions kept current by Dependabot (`.github/dependabot.yml`, weekly, 7-day cooldown), `SECURITY.md` |
 | CI/CD | Applies — `ci.yml` runs the identical `make verify` gate on every push and pull request that touches code; docs-only changes are skipped by design (`paths-ignore`), and the security workflow has no such skip |
 | Observability | Applies — deterministic, hash-covered JSON receipts and evidence records are the audit/observability surface of this offline CLI |
-| Performance | N/A — offline library/CLI with no hosted route and no shipped HTML, so there is no served surface to budget |
-| Accessibility | N/A — offline CLI/library with no human-facing HTML |
-| Internationalization | N/A — synthetic non-production validation CLI; English-only operator output by design (see `docs/I18N.md`) |
+| Performance | N/A — offline library/CLI with no hosted route and no served surface to budget. `contextsafe render` writes a self-contained local HTML file rather than serving one, so there is no latency, payload, or availability budget to set, and none is claimed |
+| Accessibility | Applies — a human-facing surface exists: `contextsafe render` produces the HTML receipt. `make a11y` runs `tools/a11y_gate.py` inside `make verify` over every shipped locale, checking structural validity, WCAG 2.2 contrast computed from the stylesheet, no colour-only status encoding, and print; `make a11y-full` adds axe-core in a headless DOM as its own CI job. The gate checks each page against the receipt it should have rendered before auditing it, reports what each check examined, fails rather than passing when it examined no page, and never counts a rule axe could not determine as a pass. **AA conformance is not claimed:** the manual evaluation that would support it (B-044, NVDA, VoiceOver, keyboard, zoom and high contrast in both languages) has not happened, and pa11y is deliberately not wired in. [Accessibility §11](docs/08-ACCESSIBILITY-I18N.md) states both boundaries |
+| Internationalization | Applies — the earlier English-only declaration was superseded when the rendered receipt gained a locale. `make i18n` runs `tools/i18n_gate.py` inside `make verify`: catalog parity, placeholder parity, message quality, review consistency, and the rule that a machine-translated string may never reach a surface claiming human review; it fails rather than passing when it examined no catalog. Machine artifacts stay in one fixed language by design, because a payload whose wording varied with a locale would hash differently. **`es-US` is a machine translation no qualified human translator or community reviewer has read** (B-042, not done), and every page says so in both languages. See [`docs/I18N.md`](docs/I18N.md) |
 | AI Evaluation | N/A — deterministic fixture evaluator; no LLM/model component |
 | Quality & Metrics | Applies — coverage floors enforced in `pyproject.toml` and `make test`, over `src/contextsafe` and the gate implementations in `tools/`; hygiene gate bans TODO/FIXME/HACK in `src`, `tests` and `tools`, with line-level exemptions that must carry a reason and are printed on every run |
 | Documentation | Applies — the planning corpus in `docs/`, ADR log in `docs/adr/`, published contracts in `schemas/`, `CONTRIBUTING.md`, `CHANGELOG.md` |
@@ -399,4 +411,4 @@ Status against those standards, with applicability judged per standard
 
 Licensed under [Apache-2.0](LICENSE). Cite via [CITATION.cff](CITATION.cff).
 
-Last reviewed: 2026-08-15. Re-review before implementation and at every material clinical, standards, or regulatory change.
+Re-review this table before implementation and at every material clinical, standards, or regulatory change. It deliberately carries no review date. The one it carried went stale while this file kept changing, and a date nothing re-derives decays silently; the CI checkout is shallow, so `git log` cannot re-derive it either. `make claims` gates what is checkable here instead.

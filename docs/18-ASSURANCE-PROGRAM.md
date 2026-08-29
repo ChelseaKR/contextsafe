@@ -161,7 +161,9 @@ directly on R-07 ("real PHI enters workspace", score 15, open).
 
 After phase 1, every gate knows its denominator but each states it in its own
 words, on stdout, where nothing compares them. A reader who wants to answer
-"what does `make verify` actually cover?" still has to read five programs.
+"what does `make verify` actually cover?" still has to read every program in
+`tools/`. (A count stood here and went stale the moment `tools/` grew another
+gate, which is the small version of the defect `make claims` now catches.)
 
 Phase 3 gives each gate a declaration of what it examines and what it exempts,
 and adds a check that fails when a gate's declared coverage and its measured

@@ -44,12 +44,16 @@ A change merges when the full gate is green. Reproduce it locally with:
 make verify
 ```
 
-`make verify` runs sync + lint + format-check + typecheck + test/coverage + audit +
-hygiene + publication sweep — the exact same target `ci.yml` invokes, on the same pinned
-(`uv sync --locked`) toolchain, so green locally means green in CI.
+`make verify` is the exact same target `ci.yml` invokes, on the same pinned
+(`uv sync --locked`) toolchain, so green locally means green in CI. Its stages are the
+rows of this table and nothing else — the sentence that used to list them separately
+was removed rather than corrected, because two hand-maintained lists of the same set
+drift apart, and both of them had. `make claims` re-derives this table's command column
+from the `verify` target in the `Makefile` and fails when they disagree.
 
 | Gate | Command | What it checks |
 | --- | --- | --- |
+| Locked sync | `make sync` | `uv sync --locked`, which exits 1 on lockfile drift where `--frozen` would install the stale lock and exit 0 |
 | Lint | `make lint` | `ruff check`: correctness, security (bandit rules), import hygiene, complexity ≤10 |
 | Format | `make format` | `ruff format --check` |
 | Types | `make typecheck` | `mypy --strict` over `src` |
@@ -57,6 +61,9 @@ hygiene + publication sweep — the exact same target `ci.yml` invokes, on the s
 | Dependency audit | `make audit` | `pip-audit` against the locked environment |
 | Hygiene | `make hygiene` | no TODO/FIXME/HACK in tracked files under `src`/`tests`/`tools`; no stray tool config within two path segments of the root. Exit 1 on a finding, exit 2 when it could not examine anything, and the clean line says how many files it read and how many exemptions it honored. |
 | Publication sweep | `make publication-sweep` | nothing unpublishable in tracked files: no personal filesystem path, no internal hostname, no pointer to a repository a reader cannot open, no relative link escaping the repository, and no source it listed and then could not read. Add `publication-sweep: allow` to a line only with a reason in review. |
+| Internationalization | `make i18n` | catalog parity, placeholder parity, message quality, and review consistency across the shipped locale catalogs; a machine-translated string may never reach a surface claiming human review. Fails rather than passing when it examined no catalog. |
+| Accessibility | `make a11y` | renders the receipt page in every shipped locale and checks structural validity, WCAG 2.2 contrast computed from the stylesheet, no colour-only status encoding, and print. Fails rather than passing when it examined no page. `make a11y-full` adds axe-core and is a separate CI job because it needs the node harness. |
+| Claims | `make claims` | figures and lists the documents state, re-derived from the repository: this table against the `Makefile`, the ADR index against `docs/adr/`, the coverage floors against `make test`, the contract count against `schemas/`, and the standards table against the gates `verify` actually runs. Prints what it cannot see on every run. |
 
 A marker the hygiene gate must not report — the rule naming the words it bans is
 the case that exists — is exempted with `hygiene: allow` on the same line,
