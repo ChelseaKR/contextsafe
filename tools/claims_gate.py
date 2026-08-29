@@ -167,11 +167,14 @@ class Uncovered:
 
 UNCOVERED: tuple[Uncovered, ...] = (
     Uncovered(
-        "whether a commit name printed in a document resolves in this repository",
-        "the CI checkout is shallow, so no commit but the tip is present and the "
-        "check could not tell a dead pointer from a missing history. Every name in "
-        "docs/PUBLICATION-READINESS.md was dead on 2026-08-29 and required-note "
-        "pins the correction instead",
+        "whether a commit name printed in a document still serves its content",
+        "two different questions, and this gate can answer neither. The CI checkout "
+        "is shallow, so no commit but the tip is present locally. And whether GitHub "
+        "still serves an unreachable commit is a fact about the host, not the tree: "
+        "on 2026-08-29 every name in docs/PUBLICATION-READINESS.md was unreachable "
+        "from any branch and every one of them still resolved over the API and the "
+        "web, unauthenticated. Answering it needs a network call this gate does not "
+        "make; required-note pins the dated finding instead",
     ),
     Uncovered(
         "whether a review or a declaration is current",
@@ -527,8 +530,9 @@ REQUIRED_NOTES: tuple[tuple[str, str, str], ...] = (
     (
         "docs/PUBLICATION-READINESS.md",
         "Update, 2026-08-29",
-        "this document prints commit names that do not resolve in the published "
-        "repository. The dated note saying so has to stay with them",
+        "this document prints commit names that are unreachable from any branch and "
+        "that GitHub still serves by id, which keeps section 6's exposure open. The "
+        "dated note saying so has to stay with them",
     ),
 )
 
