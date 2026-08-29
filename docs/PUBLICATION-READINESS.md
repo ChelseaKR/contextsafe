@@ -40,23 +40,48 @@ commands should know that before it fails rather than after.
 
 - The repository is public. `gh repo view ChelseaKR/contextsafe --json isPrivate`
   returns `false`.
-- **None of the commit names cited here resolve in the published repository.**
-  `09e0317`, `bba81c8`, `a557626`, `cbcb9e3` and `d3d3d04` are all
-  `fatal: bad object` in a fresh `git clone`, whose `main` begins at `a8b62c9`.
-  The history this audit read is not the history that was published. The
-  findings those names supported are unaffected — they were findings about
-  content, and the content is still here — but as pointers they are dead, which
-  is the `cross-repo-pointer` defect class one level down. `make
-  publication-sweep` does not catch it: the sweep resolves repository and host
-  pointers, not commit names, and `make claims` cannot either, because CI checks
-  out one commit and a shallow clone can resolve nothing.
-- **§6's docs finding is closed by the published history, not by this
-  document.** `docs/11-GTM-BUSINESS-MODEL.md` appears in none of the refs a
-  fresh clone fetches, so the `git show` printed in that section returns
-  `fatal: bad object` for a public reader rather than 221 lines, and the
-  exposure the section priced does not exist on this repository. The option-B
-  cost was paid. This is not a claim that the content is gone everywhere: a
-  clone taken before the rewrite still holds the blob.
+- **The commit names cited here are unreachable from any branch, and GitHub
+  still serves them.** `09e0317`, `bba81c8`, `a557626`, `cbcb9e3` and
+  `d3d3d04` are `fatal: bad object` in a fresh `git clone`, whose `main` begins
+  at `a8b62c9`, because a clone fetches only what its refs reach. GitHub keeps
+  unreachable objects and serves them by explicit id, so every one of these
+  resolves over the API and the web. The history this audit read is not the
+  history a clone gets; it is still the history the host will hand to anyone who
+  asks for it by name.
+- **§6's docs finding is NOT closed. The document is still served, publicly and
+  without authentication.** Checked 2026-08-29 against the live repository:
+
+  ```
+  gh api "repos/ChelseaKR/contextsafe/contents/docs/11-GTM-BUSINESS-MODEL.md?ref=a557626"
+    -> name=11-GTM-BUSINESS-MODEL.md size=10187
+
+  curl -so /dev/null -w '%{http_code}' \
+    https://github.com/ChelseaKR/contextsafe/blob/a557626/docs/11-GTM-BUSINESS-MODEL.md
+    -> 200
+
+  curl -so /dev/null -w '%{http_code}' \
+    https://raw.githubusercontent.com/ChelseaKR/contextsafe/a557626/docs/11-GTM-BUSINESS-MODEL.md
+    -> 200
+  ```
+
+  The `git show` printed in §6 fails for a reader who only cloned, which is why
+  this was briefly recorded here as closed. That was wrong, and the direction of
+  the error is the dangerous one: it told a reader an exposure was over while it
+  was live. **The option-B cost has not been paid**, §6 stands exactly as
+  written, and row 9 of the summary table ("still fully recoverable from
+  history") is the accurate line.
+
+  Two things follow. Removing the blob takes more than a history rewrite: GitHub
+  keeps unreachable objects until it garbage-collects, which a repository owner
+  cannot trigger and which forks and cached views can outlive, so closing this
+  means asking GitHub Support to purge, or accepting the content as public.
+  And this document is itself part of the exposure surface: it prints the commit
+  ids by which the blob is addressed, so publishing the audit is what makes the
+  pointer easy. That is a maintainer's call, recorded here rather than quietly
+  fixed.
+
+  A clone taken before the rewrite also still holds the blob. That was always
+  true and is not the point; the point is that the published repository does.
 
 One thing §7 is not: a running total. Every figure in it is a measurement of one
 `make verify` run at the commit that section names, correct for that run and
