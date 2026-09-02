@@ -10,7 +10,6 @@ not, and the gate has to tell them apart.
 from __future__ import annotations
 
 import importlib.util
-import subprocess
 import sys
 from pathlib import Path
 from types import ModuleType
@@ -83,6 +82,35 @@ def _run(root: Path) -> tuple[list[object], int, int]:
     return gate.run_gate(  # type: ignore[no-any-return]
         root, targets=TARGETS, screening=SCREENING, package=PACKAGE, suite="tests"
     )
+
+
+def _tree_snapshot(root: Path) -> dict[str, bytes]:
+    """Every tracked-shaped file under ``root``, by relative path and content."""
+
+    return {
+        str(path.relative_to(root)): path.read_bytes()
+        for path in sorted(root.rglob("*"))
+        if path.is_file() and "__pycache__" not in path.parts
+    }
+
+
+def _watch_during_run(monkeypatch: pytest.MonkeyPatch, module: Path) -> list[bytes]:
+    """Record ``module``'s content at the moment each test run is launched.
+
+    A before-and-after comparison cannot distinguish a gate that never touched
+    the working tree from one that mutated it and restored it in `finally`. The
+    question is what was on disk while the tests were running.
+    """
+
+    seen: list[bytes] = []
+    real = gate._run
+
+    def spy(argv: object, cwd: object, env: object) -> object:
+        seen.append(module.read_bytes())
+        return real(argv, cwd, env)
+
+    monkeypatch.setattr(gate, "_run", spy)
+    return seen
 
 
 # --- generating mutants -----------------------------------------------------
@@ -246,20 +274,112 @@ def test_a_root_with_no_declared_tests_is_exit_two(tmp_path: Path) -> None:
     assert gate.main(["--root", str(tmp_path)]) == 2
 
 
-def test_the_gate_never_writes_to_the_working_tree(tmp_path: Path) -> None:
-    """A mutated source file left behind would be the worst kind of side effect."""
+def test_a_declared_path_that_is_not_in_the_tree_is_a_refusal(tmp_path: Path) -> None:
+    """`SCREENING_TESTS` is a declaration, and nothing compared it to the tree.
+
+    Rename one of the four modules it names and every screening run exits 4 --
+    pytest's usage error -- which the kill decision counted as a kill. Combined,
+    that printed `clean` over a run in which no test was ever collected.
+    """
 
     root = _fixture(tmp_path, STRONG_TEST)
-    before = (root / "src" / "pkg" / "bounds.py").read_text(encoding="utf-8")
+    with pytest.raises(gate.GateUnavailable, match="not in the tree"):
+        gate.run_gate(
+            root,
+            targets=TARGETS,
+            screening=("tests/test_renamed_away.py",),
+            package=PACKAGE,
+            suite="tests",
+        )
+
+
+@pytest.mark.parametrize("code", [2, 3, 4, 5])
+def test_a_pytest_exit_that_is_not_a_verdict_is_never_a_kill(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, code: int
+) -> None:
+    """Interrupted, internal error, usage error and nothing-collected.
+
+    pytest returns each of these as readily as it returns 1 for a failed
+    assertion, and the kill decision was `!= 0`, so each of them counted as a
+    mutant killed over output that is captured and discarded.
+    """
+
+    root = _fixture(tmp_path, STRONG_TEST)
+    real = gate._run
+    baseline_done = {"yes": False}
+
+    def flaky(argv: object, cwd: object, env: object) -> object:
+        assert isinstance(argv, list)
+        if "pytest" not in argv or not baseline_done["yes"]:
+            # The unmutated baseline and the coverage report still run for real.
+            baseline_done["yes"] = baseline_done["yes"] or "pytest" in argv
+            return real(argv, cwd, env)
+        return gate.Outcome(code, "stand-in pytest failure")
+
+    monkeypatch.setattr(gate, "_run", flaky)
+    with pytest.raises(gate.GateUnavailable, match=f"pytest exited {code}"):
+        _run(root)
+
+
+def test_the_gate_never_writes_to_the_working_tree(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A mutated source file left behind would be the worst kind of side effect.
+
+    This test asserted nothing until 2026-08-31, and ADR 0009 and the changelog
+    both cited it. `gate.main` reads the module-level declarations, and they were
+    not patched, so the run refused at exit 2 against the real
+    `src/contextsafe` targets before it staged anything -- and then the file it
+    checked was found unchanged by a run that never touched it. Its second
+    assertion shelled out to `git status` in the *real* repository, which the run
+    also never touched and which fails for anyone with uncommitted work in
+    `src`.
+
+    The declarations are patched now, so a whole run really does happen over the
+    fixture, and the tree compared is the fixture's own.
+    """
+
+    root = _fixture(tmp_path, STRONG_TEST)
+    monkeypatch.setattr(gate, "DECLARED_TARGETS", TARGETS)
+    monkeypatch.setattr(gate, "SCREENING_TESTS", SCREENING)
+    monkeypatch.setattr(gate, "PACKAGE_DIR", PACKAGE)
+
+    module = root / "src" / "pkg" / "bounds.py"
+    seen = _watch_during_run(monkeypatch, module)
+    before = _tree_snapshot(root)
+
+    assert gate.main(["--root", str(root)]) == 0
+
+    # Every test run happened while the fixture's own source was unmutated, so
+    # the mutants were somewhere else. Comparing only before and after would
+    # pass for a gate that mutated in place and put the file back afterwards.
+    assert seen, "no test run was observed, so this proves nothing"
+    assert set(seen) == {module.read_bytes()}
+    assert _tree_snapshot(root) == before
+
+
+def test_the_working_tree_check_would_notice_a_gate_that_mutated_in_place(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The proof above has to be able to fail, or it is decoration.
+
+    Staging is replaced by one that hands back the fixture's own package
+    directory, which is what a gate mutating in place would do. The restore in
+    `finally` puts the file back, so a before-and-after comparison would not
+    notice; watching the file while the tests run does.
+    """
+
+    root = _fixture(tmp_path, STRONG_TEST)
+    monkeypatch.setattr(gate, "DECLARED_TARGETS", TARGETS)
+    monkeypatch.setattr(gate, "SCREENING_TESTS", SCREENING)
+    monkeypatch.setattr(gate, "PACKAGE_DIR", PACKAGE)
+    monkeypatch.setattr(gate, "_stage", lambda root, workspace, package: root / "src")
+
+    module = root / "src" / "pkg" / "bounds.py"
+    seen = _watch_during_run(monkeypatch, module)
+    before = module.read_bytes()
+
     gate.main(["--root", str(root)])
-    assert (root / "src" / "pkg" / "bounds.py").read_text(encoding="utf-8") == before
-    assert (
-        subprocess.run(
-            ["git", "status", "--porcelain", "--", "src"],  # noqa: S607
-            cwd=REPO_ROOT,
-            capture_output=True,
-            text=True,
-            check=True,
-        ).stdout.strip()
-        == ""
-    )
+
+    assert module.read_bytes() == before, "the restore in `finally` still ran"
+    assert any(observed != before for observed in seen)

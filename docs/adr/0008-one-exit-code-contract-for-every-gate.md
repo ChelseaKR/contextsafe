@@ -60,10 +60,18 @@ gate here written in shell, and the one whose external dependency is not in
   `--exit-code 1`.
 
 **The contract is asserted, not described.** `tests/test_gate_exit_contract.py`
-drives all five Python gate programs into a state where they examined nothing
-and requires exit 2 from each. `test_every_gate_program_is_covered_by_this_contract`
-compares the case list against `tools/*.py`, so a gate added later that is not
-in the table fails the suite rather than quietly sitting outside the contract.
+drives every gate program in `tools/` into a state where it examined nothing and
+requires exit 2 from each. `test_every_gate_program_is_covered_by_this_contract`
+derives the list of gates from the tree, so a gate added later that is not in the
+table fails the suite rather than quietly sitting outside the contract.
+
+That derivation had three holes of its own, closed on 2026-08-31. It globbed
+`tools/*.py` and skipped any name starting with `_`, so the one gate written in
+shell sat outside the contract exactly as it did before this ADR, a gate under
+`tools/sub/` would never have been walked, and a file could opt itself out by
+being renamed. A gate is recognised by shape now -- a Python module with a
+`main(argv)` entry point, or an executable shell script -- and the shell gate is
+one of the driven cases.
 
 **The shell script is tested through a stand-in gitleaks.** The real binary is
 not in `uv.lock` and a clean clone does not carry it, which is why the gate sits

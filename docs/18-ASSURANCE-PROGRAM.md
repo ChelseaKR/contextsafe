@@ -211,9 +211,14 @@ result was three live conflations, not because either entry condition arrived.
 
 One part of this phase as planned was **not** built the way it was written. The
 plan said CI would prove it by removing the tool and asserting the job fails.
-That needs a GitHub Actions run to observe, and CI is unavailable on this
-account. A stand-in gitleaks inside `make verify` gives the same evidence in a
-place CI already runs, so the proof exists and the workflow does not.
+That was written on the belief that GitHub Actions was unavailable on this
+account, which was not true: `ci.yml` and `security.yml` both run on every pull
+request, and 93 of the last 100 workflow runs succeeded. The reason the
+CI-side proof is still not built is a different and smaller one -- a job that
+removes a tool to watch a gate fail is a job whose green means the opposite of
+every other job's green, and it needs its own design. The stand-in gitleaks
+inside `make verify` gives the same evidence in a place CI already runs, so the
+proof exists and the workflow does not.
 
 ### Phase 5 — Evidence that the suite can detect a regression
 

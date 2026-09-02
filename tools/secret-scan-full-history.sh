@@ -13,8 +13,9 @@
 # Three phases, deliberately overlapping:
 #
 #   1. every reachable commit on every ref  (`--log-opts="--all --full-history"`)
-#   2. every object in the object database  — every blob AND every commit
-#      message, including objects that no ref reaches: an orphaned blob from an
+#   2. every object in the object database  — every blob, every commit message,
+#      every tree listing AND every annotated tag message, including objects
+#      that no ref reaches: an orphaned blob from an
 #      amended commit, or a commit left behind by a rebase, is still served by
 #      `git clone` in some configurations and is trivially recoverable from a
 #      published repository until it is garbage-collected. Phase 1 cannot see
@@ -60,8 +61,9 @@
 #
 # Exit 0 when clean, 1 when gitleaks finds something, and 2 when this script
 # could not perform the scan it claims to: gitleaks absent, gitleaks at an
-# unpinned version, an object it enumerated and could not read, or zero blobs
-# enumerated. That is the same three-state contract every other gate here uses
+# unpinned version, an object database it could not enumerate, an object it
+# enumerated and could not read, an object of a type it does not materialize,
+# or zero blobs enumerated. That is the same three-state contract every other gate here uses
 # (ADR 0008), so "the scanner was not installed" can never be read as "the
 # scanner found nothing". It used to exit 127 for an absent gitleaks and 1 for
 # every other failure to scan, which put a damaged object database at the same
@@ -129,36 +131,78 @@ echo "secret-scan: [1/3] all reachable commits on all refs"
 # messages.
 echo "secret-scan: [2/3] every object in the object database (including unreachable)"
 objects_dir="$(mktemp -d)"
-trap 'rm -rf "$objects_dir"' EXIT
+enumeration="$(mktemp)"
+trap 'rm -rf "$objects_dir"; rm -f "$enumeration"' EXIT
+
+# The enumeration is written to a file and its exit status checked, rather than
+# piped straight into `while read` through process substitution. Neither `set
+# -e` nor `pipefail` covers a process substitution, so a `git cat-file` that
+# died halfway through used to end the loop quietly and this phase reported
+# clean over the objects it never got to.
+if ! git cat-file --batch-all-objects --batch-check='%(objectname) %(objecttype)' \
+    >"$enumeration" 2>/dev/null; then
+  echo "secret-scan: could not enumerate the object database." >&2
+  echo "  Refusing to report a scan over an object list that is incomplete." >&2
+  exit 2
+fi
 
 # An object that cannot be read is an object this scan did not cover. It used
 # to be `|| true`, which counted it as materialized anyway and let the phase
 # report clean over content nobody looked at. A failure here means the object
 # database is damaged or unreadable, and that is a reason to stop, not to skip.
+#
+# The `case` had branches for `blob` and `commit` and no default, which is the
+# same hole one level down. `git cat-file --batch-check` reports the type of an
+# object it cannot read as `missing`, so the dominant corruption mode fell
+# through: never counted, never materialized, never an error. `tree` and `tag`
+# fell through too, so an annotated tag's message was never scanned despite the
+# line above claiming every object. All four types are handled and anything
+# else stops the scan.
+materialize() {
+  # $1 object id, $2 object type, $3 filename prefix
+  if ! git cat-file "$2" "$1" >"$objects_dir/$3-$1" 2>/dev/null; then
+    echo "secret-scan: could not read $2 object $1 from the object database." >&2
+    echo "  Refusing to report a scan that skipped an object it enumerated." >&2
+    exit 2
+  fi
+}
+
 blob_count=0
 commit_count=0
+tree_count=0
+tag_count=0
 while read -r oid otype; do
   case "$otype" in
     blob)
-      if ! git cat-file blob "$oid" >"$objects_dir/blob-$oid" 2>/dev/null; then
-        echo "secret-scan: could not read blob ${oid} from the object database." >&2
-        echo "  Refusing to report a scan that skipped an object it enumerated." >&2
-        exit 2
-      fi
+      materialize "$oid" blob blob
       blob_count=$((blob_count + 1))
       ;;
     commit)
-      if ! git cat-file commit "$oid" >"$objects_dir/commit-$oid" 2>/dev/null; then
-        echo "secret-scan: could not read commit object ${oid}." >&2
-        echo "  Refusing to report a scan that skipped an object it enumerated." >&2
-        exit 2
-      fi
+      materialize "$oid" commit commit
       commit_count=$((commit_count + 1))
       ;;
+    tree)
+      # Path names, which are content in an unreachable tree no other phase
+      # reads.
+      materialize "$oid" -p tree
+      tree_count=$((tree_count + 1))
+      ;;
+    tag)
+      # An annotated tag carries a message, and no other phase reads one.
+      materialize "$oid" tag tag
+      tag_count=$((tag_count + 1))
+      ;;
+    *)
+      echo "secret-scan: object ${oid} enumerated with type '${otype}'." >&2
+      echo "  'missing' means the object database could not read an object it" >&2
+      echo "  listed; any other type is one this script does not materialize." >&2
+      echo "  Either way this phase did not cover it, so it has no clean result." >&2
+      exit 2
+      ;;
   esac
-done < <(git cat-file --batch-all-objects --batch-check='%(objectname) %(objecttype)')
+done <"$enumeration"
 
-echo "secret-scan: materialized ${blob_count} blobs and ${commit_count} commit objects"
+echo "secret-scan: materialized ${blob_count} blobs, ${commit_count} commit objects, ${tree_count} trees and ${tag_count} tags"
 if [ "$blob_count" -eq 0 ]; then
   echo "secret-scan: refusing to report success after enumerating zero blobs." >&2
   exit 2

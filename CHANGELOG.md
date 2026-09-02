@@ -6,6 +6,85 @@ release yet, so everything to date lives under Unreleased.
 
 ## [Unreleased]
 
+### Fixed
+
+- **Six gates that could still report clean over something they did not
+  examine.** Found by reading the gates this branch adds and hardens against the
+  rule they were written to enforce, and every one of them is the program's own
+  defect class committed by the program itself.
+
+  `tools/secret-scan-full-history.sh` switched on object type with branches for
+  `blob` and `commit` and no default. `git cat-file --batch-check` reports an
+  object it cannot read as type `missing`, so the dominant object-database
+  corruption mode fell through: never counted, never materialised, never an
+  error, and the phase reported clean over it. `tree` and `tag` fell through the
+  same way, so an annotated tag's message was never scanned despite the line
+  above claiming every object in the database. All four types are materialised
+  now, anything else is exit 2, and the enumeration is written to a file whose
+  exit status is checked -- it was fed through process substitution, which
+  neither `set -e` nor `pipefail` covers, so a `git cat-file` that died halfway
+  through simply ended the loop.
+
+  `tools/mutation_gate.py` decided a mutant died on any non-zero pytest exit.
+  pytest returns 2, 3, 4 and 5 for an interrupted run, an internal error, a
+  usage error and no tests collected as readily as it returns 1 for a failed
+  assertion, and the output is captured and discarded. It was reachable without
+  corrupting anything: `SCREENING_TESTS` is four hard-coded paths that nothing
+  compared against the tree, so renaming one test module made every screening
+  run exit 4, every mutant "killed", and the gate print `clean` over zero
+  evidence. Exit 1 is the only kill now, 2 to 5 are a refusal that names the
+  code, and a declared path that is not in the tree is a refusal before the
+  loop.
+
+  `tools/a11y_gate.py` had four rules that name a failure to run sitting outside
+  `UNAVAILABLE_RULES` and answering 1: `--engines ''`, an engine that does not
+  exist, a page declared and not audited, and a rule axe returned as undetermined
+  that no check here decides. `--locale zz` was an unhandled traceback, which the
+  shell also reads as 1 -- the same input class this branch fixed to exit 2 in
+  the i18n gate, answered differently by two gates in one repository. And
+  `run_axe` treated the harness's `ok` as proof it had looked, so a harness
+  returning no pages produced no finding and recorded axe as executed; every
+  subject handed over must come back now.
+
+  `tools/scope_gate.py` caught `(OSError, SyntaxError)` around the import that
+  reads `MARKER_ROOTS`, so a `ModuleNotFoundError`, a `NameError` or a
+  `UnicodeDecodeError` escaped as a traceback and exit 1 -- "examined and found
+  something" from a gate that never read the claim. A claimed root of `""` or
+  `"."` names no path segment, so it was true of every file and no file could
+  ever fall outside it; the gate refuses a comparison with no files on exactly
+  that reasoning and now refuses this too. And its headline defence, the check
+  that a Makefile recipe passes no argument overriding the configured scope,
+  compared four string literals to whole tokens on the *first* line mentioning
+  the tool: `mypy --strict src/`, `mypy --strict "src"`, `mypy --strict $(SRC)`,
+  `pytest --cov src`, an argument on a continuation line and a comment line above
+  the real one all went through clean. It is a rule about argument shape now,
+  over every line that invokes the tool, with continuations joined and recipe
+  comments dropped, and an argument the gate cannot resolve is exit 2 rather
+  than a guess.
+
+- **Five tests that asserted less than they appeared to.** Deleting phases 1 and
+  3 from the secret scan -- so it no longer scanned reachable history or the
+  working tree -- left every one of its tests green; the stand-in scanner records
+  its argv now and one test pins three invocations and what each is pointed at.
+  The unavailable-rule test restated the frozenset it was checking, so it could
+  not have detected the four missing ids above; the rules are read from the
+  gate's own syntax tree and each refusal is driven rather than restated. Three
+  scope-gate refusal tests used a fixture with no Makefile and no
+  `pyproject.toml` either, so each passed on whichever refusal came first --
+  replacing `if not files:` with `if False:` left all of them green. The
+  exception-printing test built its expected strings from the tuple the code
+  prints and passed vacuously over an empty one. And the gate-coverage test
+  globbed `tools/*.py` with a leading-underscore exclusion, so the one shell gate
+  sat outside the contract exactly as it had before.
+
+- **`make claims` read a correctly documented gate as an undocumented stage.**
+  Its list of gates outside `make verify` was a literal set holding one name.
+  `make mutants` moved out of `verify` and the literal did not follow. The
+  exclusion is read from the sentence `CONTRIBUTING.md` already writes, the
+  sentence's own count is checked against the table under it, and a row that
+  names a target the Makefile does not have, or one that `verify` does run, is a
+  finding.
+
 ### Added
 
 - **`make mutants` asks whether the suite would notice a change, not whether it
@@ -31,7 +110,9 @@ release yet, so everything to date lives under Unreleased.
   `contract_validation.py` and `identifiers.py`, every one killed. Not part of `make verify`, for runtime alone. It writes
   nothing into the working tree: the package is copied to a temporary directory,
   mutated there, and put ahead of the editable install with `PYTHONPATH`, and a
-  test asserts the tree is unchanged after a run. See
+  test watches the file while the mutant runs and requires it to be unmutated
+  the whole time -- a before-and-after comparison cannot tell a gate that never
+  touched the tree from one that mutated it and put it back. See
   [ADR 0009](docs/adr/0009-mutation-evidence-over-declared-safety-modules.md).
 
 ### Changed
@@ -72,10 +153,9 @@ release yet, so everything to date lives under Unreleased.
   `detect`, which gives all three states on a machine with no gitleaks
   installed, and asserts the three are three distinct codes. Those tests run
   inside `make verify`.
-- One test now asserts the contract of all five Python gate programs at once,
-  and compares its case list against `tools/*.py`, so a gate added later that
-  sits outside the contract fails the suite rather than sitting outside it
-  quietly.
+- One test now asserts the contract of every gate program at once, and derives
+  the list it compares against from the tree, so a gate added later that sits
+  outside the contract fails the suite rather than sitting outside it quietly.
 
 ### Added
 

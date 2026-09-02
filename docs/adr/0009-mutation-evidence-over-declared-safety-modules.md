@@ -49,7 +49,17 @@ pay the full run, so the gate gets faster as they are fixed.
 **Nothing is written into the working tree.** The package is copied to a
 temporary directory, mutated there, and put ahead of the editable install with
 `PYTHONPATH`. A crash or an interrupt cannot leave a mutated source file behind,
-and a test asserts the tree is unchanged after a run. The baseline run uses the
+and a test asserts the tree is unchanged after a run: it records the module's
+bytes at the moment each test run is launched and requires every one of those
+observations to be the unmutated source, because the restore in `finally` means
+a before-and-after comparison would pass for a gate that mutated in place. Its
+companion replaces staging with one that hands back the working tree and
+requires that watch to go red. Neither existed until 2026-08-31 -- the test this
+sentence used to cite ran `main` without patching `DECLARED_TARGETS`,
+`SCREENING_TESTS` and `PACKAGE_DIR`, so it refused at exit 2 before staging
+anything and then found a file unchanged by a run that never touched it, and its
+second assertion shelled out to `git status` in the real repository, which fails
+for anyone with uncommitted work under `src`. The baseline run uses the
 same `PYTHONPATH` mechanism, so the two runs cannot resolve to different files
 and report a mutation that never took effect. `__pycache__` is excluded from the
 copy, because a stale `.pyc` beside a mutated source would be imported instead

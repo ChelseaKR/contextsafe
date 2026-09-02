@@ -71,10 +71,11 @@ from __future__ import annotations
 
 import argparse
 import importlib.util
+import shlex
 import subprocess
 import sys
 import tomllib
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
 
@@ -196,6 +197,36 @@ def _string_list(data: dict[str, object], dotted: str) -> tuple[str, ...]:
     return tuple(str(item) for item in node)
 
 
+def _join_and_strip(raw: Sequence[str]) -> list[str]:
+    """Return real command lines: continuations joined, recipe comments dropped.
+
+    Both halves were holes. A recipe line ending in a backslash continues on the
+    next line, and the check below read only the first line that mentioned the
+    tool, so `mypy \\` / `--strict src` had its argument on a line nothing read.
+    And a `#` comment inside a recipe is not a command; this repository's own
+    `sync` target already has one, so a comment mentioning the tool satisfied
+    the check and the real invocation below it was never examined.
+    """
+
+    joined: list[str] = []
+    pending = ""
+    for line in raw:
+        body = pending + line.rstrip()
+        pending = ""
+        if body.endswith("\\"):
+            pending = body[:-1].rstrip() + " "
+            continue
+        joined.append(body)
+    if pending:
+        joined.append(pending)
+    return [line.strip() for line in joined if line.strip() and not _is_comment(line)]
+
+
+def _is_comment(line: str) -> bool:
+    stripped = line.strip()
+    return stripped.startswith("#") or stripped.startswith("@#")
+
+
 def _makefile_recipe(root: Path, target: str) -> tuple[str, ...]:
     """Return the command lines of one Makefile target, or refuse to run."""
 
@@ -207,12 +238,13 @@ def _makefile_recipe(root: Path, target: str) -> tuple[str, ...]:
     for index, line in enumerate(lines):
         if not line.startswith(f"{target}:"):
             continue
-        recipe = []
+        raw: list[str] = []
         for candidate in lines[index + 1 :]:
             if candidate.startswith("\t"):
-                recipe.append(candidate.strip())
+                raw.append(candidate[1:])
             elif candidate.strip():
                 break
+        recipe = _join_and_strip(raw)
         if not recipe:
             raise GateUnavailable(
                 f"the `{target}` target in {MAKEFILE} has no command lines"
@@ -237,8 +269,15 @@ def _load_hygiene_marker_roots(root: Path) -> tuple[str, ...]:
     sys.modules[spec.name] = module
     try:
         spec.loader.exec_module(module)
-    except (OSError, SyntaxError) as exc:
-        raise GateUnavailable(f"{path} could not be loaded: {exc}") from exc
+    except Exception as exc:
+        # Deliberately broad. This caught `(OSError, SyntaxError)`, so a
+        # `ModuleNotFoundError`, a `NameError`, a `ValueError` from a bad
+        # literal, or the `UnicodeDecodeError` the sibling `hygiene_gate.py`
+        # guards against escaped as a traceback and exit 1 -- "examined and
+        # found something" from a gate that could not read the claim at all.
+        # Executing another module's top level can raise anything it likes, and
+        # every one of those is the same answer: no claim was established.
+        raise GateUnavailable(f"{path} could not be loaded: {exc!r}") from exc
     finally:
         sys.modules.pop(spec.name, None)
     roots = getattr(module, "MARKER_ROOTS", None)
@@ -247,28 +286,124 @@ def _load_hygiene_marker_roots(root: Path) -> tuple[str, ...]:
     return tuple(str(item) for item in roots)
 
 
-def _assert_command_does_not_override(
-    recipe: tuple[str, ...], target: str, rejected: tuple[str, ...], marker: str
-) -> None:
-    """Refuse to run if a recipe passes an argument that beats the config."""
+def _invokes(tokens: Sequence[str], marker: str) -> int | None:
+    """Return the index of the token that runs ``marker``, or None."""
 
-    for line in recipe:
-        if marker not in line:
+    for index, token in enumerate(tokens):
+        if token == marker or token.rsplit("/", 1)[-1] == marker:
+            return index
+    return None
+
+
+def _scan_arguments(
+    args: Sequence[str],
+    refuse: Callable[[str], None],
+    *,
+    scope_options: tuple[str, ...],
+    positional_overrides: bool,
+) -> None:
+    """Refuse on any argument that could move the analysis's scope."""
+
+    for position, token in enumerate(args):
+        if any(fragment in token for fragment in ("$(", "${", "`")):
+            refuse(f"passes `{token}`, which this gate cannot expand")
+        _scan_scope_option(args, position, refuse, scope_options)
+        if not positional_overrides or token.startswith("-"):
             continue
-        for token in line.split():
-            if token in rejected or any(
-                token.startswith(prefix) for prefix in rejected if prefix.endswith("=")
-            ):
-                raise GateUnavailable(
-                    f"the `{target}` target passes `{token}`, which overrides the "
-                    "scope configured in pyproject.toml, so what this gate reads "
-                    "is not what that command examines"
-                )
-        return
-    raise GateUnavailable(
-        f"no line in the `{target}` target runs `{marker}`, so the gate cannot "
-        "tell what that command examines"
-    )
+        previous = args[position - 1] if position else None
+        if previous is None or not previous.startswith("-"):
+            refuse(
+                f"passes the path `{token}`, which overrides the scope "
+                "configured in pyproject.toml"
+            )
+        refuse(
+            f"passes `{previous} {token}`, and this gate cannot tell whether "
+            f"`{token}` is that option's value or a path that overrides the "
+            "configured scope"
+        )
+
+
+def _scan_scope_option(
+    args: Sequence[str],
+    position: int,
+    refuse: Callable[[str], None],
+    scope_options: tuple[str, ...],
+) -> None:
+    """Refuse on a scope-carrying option, in either the `=` or the space form."""
+
+    token = args[position]
+    for option in scope_options:
+        carries_next = (
+            token == option
+            and position + 1 < len(args)
+            and not args[position + 1].startswith("-")
+        )
+        if carries_next:
+            refuse(
+                f"passes `{option} {args[position + 1]}`, which overrides the "
+                "scope configured in pyproject.toml"
+            )
+        elif token.startswith(f"{option}="):
+            refuse(
+                f"passes `{token}`, which overrides the scope configured in "
+                "pyproject.toml"
+            )
+
+
+def _assert_command_does_not_override(
+    recipe: tuple[str, ...],
+    target: str,
+    marker: str,
+    *,
+    scope_options: tuple[str, ...] = (),
+    positional_overrides: bool = False,
+) -> None:
+    """Refuse to run if a recipe passes an argument that beats the config.
+
+    The rule used to be a list of four string literals compared to whole tokens
+    on the *first* line mentioning the tool. Nine of ten realistic spellings went
+    straight through: `mypy --strict src/`, `mypy --strict "src"`,
+    `mypy --strict $(SRC)`, `pytest --cov src` in the space form, an argument on
+    a continuation line, and a comment line above the real one. The headline
+    defence of this gate was decorative.
+
+    It is a rule about argument *shape* now, not about spellings:
+
+    * every line that invokes the tool is examined, not the first;
+    * a token that interpolates (`$(...)`, `${...}`, a backtick) is a refusal,
+      because the gate genuinely cannot tell what it expands to;
+    * an option in ``scope_options`` is a refusal whether it carries its value
+      with `=` or as the next word;
+    * where ``positional_overrides`` is set -- mypy, where any path on the
+      command line beats ``[tool.mypy] files`` -- a non-flag argument is a
+      refusal, and one that could be either a positional or some flag's value is
+      also a refusal, because "I cannot tell" is exit 2 here.
+    """
+
+    def refuse(detail: str) -> None:
+        raise GateUnavailable(
+            f"the `{target}` target {detail}, so what this gate reads is not "
+            "what that command examines"
+        )
+
+    invocations = 0
+    for line in recipe:
+        tokens = shlex.split(line, comments=True)
+        index = _invokes(tokens, marker)
+        if index is None:
+            continue
+        invocations += 1
+        _scan_arguments(
+            tokens[index + 1 :],
+            refuse,
+            scope_options=scope_options,
+            positional_overrides=positional_overrides,
+        )
+    if invocations == 0:
+        raise GateUnavailable(
+            f"no line in the `{target}` target runs `{marker}`, so the gate cannot "
+            "tell what that command examines"
+        )
 
 
 def collect_analyses(root: Path) -> tuple[Analysis, ...]:
@@ -277,11 +412,16 @@ def collect_analyses(root: Path) -> tuple[Analysis, ...]:
     config = _read_pyproject(root)
 
     typecheck = _makefile_recipe(root, "typecheck")
+    # Any path on mypy's command line beats `[tool.mypy] files`, whatever it is
+    # spelled like, so the rule is "no positional argument" rather than a list
+    # of the paths somebody thought of.
     _assert_command_does_not_override(
-        typecheck, "typecheck", ("src", "tests", "tools", "."), "mypy"
+        typecheck, "typecheck", "mypy", positional_overrides=True
     )
     test = _makefile_recipe(root, "test")
-    _assert_command_does_not_override(test, "test", ("--cov=",), "pytest")
+    # pytest's positionals select tests, which does not move the coverage
+    # source; `--cov` carrying a value does, in either spelling.
+    _assert_command_does_not_override(test, "test", "pytest", scope_options=("--cov",))
 
     return (
         Analysis(
@@ -302,10 +442,42 @@ def collect_analyses(root: Path) -> tuple[Analysis, ...]:
     )
 
 
+def _root_parts(root: str) -> tuple[str, ...]:
+    """Return a claimed root's path segments, refusing one that has none.
+
+    ``""``, ``"."`` and ``"./"`` all reduce to zero segments, and a zero-segment
+    prefix is true of every path, so ``MARKER_ROOTS = (".",)`` made every file
+    claimed and this gate printed clean over a comparison that could not fail.
+    It already refuses a comparison with no files on the same reasoning; a root
+    that vacuously claims all of them is the same hole from the other side.
+    A claim this gate cannot make fail is not a claim it can report on.
+    """
+
+    parts = PurePosixPath(root.strip().rstrip("/")).parts
+    if not parts or parts == (".",):
+        raise GateUnavailable(
+            f"a claimed root of {root!r} names no path segment, so it is true of "
+            "every file and no file could ever fall outside it; name the trees "
+            "instead of the whole checkout"
+        )
+    return parts
+
+
 def _under(path: str, root: str) -> bool:
-    parts = PurePosixPath(path).parts
-    root_parts = PurePosixPath(root.rstrip("/")).parts
-    return parts[: len(root_parts)] == root_parts
+    root_parts = _root_parts(root)
+    return PurePosixPath(path).parts[: len(root_parts)] == root_parts
+
+
+def _assert_every_claim_can_fail(
+    analyses: Sequence[Analysis], exceptions: Sequence[DeclaredException]
+) -> None:
+    """Refuse before comparing anything if a root or a prefix claims everything."""
+
+    for analysis in analyses:
+        for claimed in analysis.roots:
+            _root_parts(claimed)
+    for item in exceptions:
+        _root_parts(item.prefix)
 
 
 def check(
@@ -316,6 +488,7 @@ def check(
     """Compare every claim against the tree, returning findings and excused counts."""
 
     findings: list[Finding] = []
+    _assert_every_claim_can_fail(analyses, exceptions)
     excused: dict[tuple[str, str], int] = {
         (item.analysis, item.prefix): 0 for item in exceptions
     }

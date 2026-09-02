@@ -33,7 +33,7 @@ is published HL7 Gender Harmony material.
 With [`uv`](https://docs.astral.sh/uv/) installed:
 
 ```sh
-make verify                       # sync lint format typecheck test audit hygiene publication-sweep i18n a11y claims
+make verify                       # sync lint format typecheck test audit hygiene scope publication-sweep i18n a11y claims
 uv run contextsafe evaluate \
   --case fixtures/reference/case.json \
   --observations fixtures/reference/observations.json \
@@ -363,6 +363,9 @@ A successful v1 allows one design partner to:
 - [ADR 0004: the SAST gate and a scan that cannot skip itself](docs/adr/0004-sast-gate-pragma-and-scan-invocation.md)
 - [ADR 0005: the gates are inside the trees they scan, and exemptions carry a reason](docs/adr/0005-hygiene-marker-exemptions.md)
 - [ADR 0006: provenance tokens get a grammar and a boundary scan](docs/adr/0006-provenance-token-grammar-and-boundary-scan.md)
+- [ADR 0007: every analysis declares the tree it examines](docs/adr/0007-declared-analysis-scope.md)
+- [ADR 0008: one exit-code contract for every gate](docs/adr/0008-one-exit-code-contract-for-every-gate.md)
+- [ADR 0009: mutation evidence over the declared safety modules](docs/adr/0009-mutation-evidence-over-declared-safety-modules.md)
 
 ## Working principles
 

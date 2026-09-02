@@ -318,9 +318,15 @@ def test_requesting_no_engine_at_all_is_a_finding(
 def test_the_cli_refuses_to_pass_when_no_engine_was_requested(
     capsys: pytest.CaptureFixture[str], tmp_path: Path
 ) -> None:
-    """The exit code has to disagree too, not just the report body."""
+    """The exit code has to disagree too, not just the report body.
 
-    assert gate.main(["--engines", "", "--workdir", str(tmp_path)]) == 1
+    Exit 2, not 1: "no engine was requested" is the gate saying it did not
+    examine, which is the same sentence as an absent node harness. It answered
+    1 here until 2026-08-31 -- "examined and found something" over a run in
+    which nothing examined anything. See ADR 0008.
+    """
+
+    assert gate.main(["--engines", "", "--workdir", str(tmp_path)]) == 2
     assert "no-engines" in capsys.readouterr().out
 
 

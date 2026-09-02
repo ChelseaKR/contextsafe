@@ -232,6 +232,16 @@ def verify_stages(root: Path) -> tuple[str, ...]:
     return stages
 
 
+def makefile_targets(root: Path) -> frozenset[str]:
+    """Every target the Makefile defines, so a documented `make X` can be checked."""
+
+    makefile = read(root, "Makefile")
+    targets = frozenset(re.findall(r"^([a-z][a-z0-9-]*):", makefile, re.MULTILINE))
+    if not targets:
+        raise GateUnavailable("the Makefile defines no target to compare against")
+    return targets
+
+
 def coverage_floors(root: Path) -> tuple[int, int]:
     """The overall and safety-module branch-coverage floors `make test` enforces."""
 
@@ -318,6 +328,27 @@ def _difference(
     return findings
 
 
+_TABLE_ROW = re.compile(r"^\|[^|]*\|\s*`make ([a-z0-9-]+)`\s*\|", re.MULTILINE)
+
+_OUTSIDE_VERIFY = re.compile(
+    r"^(?P<count>[A-Za-z]+) gates? sit outside `make verify`", re.MULTILINE
+)
+"""The structural divider between the gate table and the gates outside `verify`.
+
+The exceptions used to be a literal set in this file. A second gate moved out of
+`verify` and the set did not, which is this gate's own subject: a list restated
+in one place and decided in another. The document already draws the line in a
+sentence, so the sentence is what gets read, and its absence is a finding rather
+than a silent merge of the two tables.
+"""
+
+
+def _table_targets(section: str) -> set[str]:
+    """Every `make <target>` in the command column of one section's tables."""
+
+    return set(_TABLE_ROW.findall(section))
+
+
 def check_verify_stages(root: Path) -> list[Finding]:
     """The README quickstart and the CONTRIBUTING table against the Makefile."""
 
@@ -341,8 +372,7 @@ def check_verify_stages(root: Path) -> list[Finding]:
         findings += _difference("verify-stages", "README.md", stated, stages)
 
     contributing = read(root, "CONTRIBUTING.md")
-    rows = set(re.findall(r"^\|[^|]*\|\s*`make ([a-z0-9-]+)`\s*\|", contributing, re.M))
-    if not rows:
+    if not _TABLE_ROW.search(contributing):
         findings.append(
             Finding(
                 "verify-stages",
@@ -350,10 +380,54 @@ def check_verify_stages(root: Path) -> list[Finding]:
                 "the gate table has no `make <target>` command column to compare",
             )
         )
-    else:
-        outside = {"secret-scan"}
-        findings += _difference(
-            "verify-stages", "CONTRIBUTING.md", rows - outside, stages
+        return findings
+
+    divider = _OUTSIDE_VERIFY.search(contributing)
+    if divider is None:
+        findings.append(
+            Finding(
+                "verify-stages",
+                "CONTRIBUTING.md",
+                "the sentence that divides the gate table from the gates outside "
+                "`make verify` is gone, so this check cannot tell which rows claim "
+                "to be stages; it used to carry a hard-coded list of the exceptions "
+                "instead, which is the drift shape this gate exists to catch",
+            )
+        )
+        return findings
+
+    inside = _table_targets(contributing[: divider.start()])
+    outside = _table_targets(contributing[divider.start() :])
+    findings += _difference("verify-stages", "CONTRIBUTING.md", inside, stages)
+
+    targets = makefile_targets(root)
+    for target in sorted(outside):
+        if target not in targets:
+            findings.append(
+                Finding(
+                    "verify-stages",
+                    "CONTRIBUTING.md",
+                    f"documents `make {target}`, which the Makefile has no target for",
+                )
+            )
+        elif target in stages:
+            findings.append(
+                Finding(
+                    "verify-stages",
+                    "CONTRIBUTING.md",
+                    f"lists `make {target}` as sitting outside `make verify`, which "
+                    "runs it",
+                )
+            )
+    stated_count = divider.group("count").lower()
+    if NUMBER_WORDS.get(len(outside)) != stated_count:
+        findings.append(
+            Finding(
+                "verify-stages",
+                "CONTRIBUTING.md",
+                f"says {stated_count} gate(s) sit outside `make verify` and then "
+                f"tables {len(outside)}",
+            )
         )
     return findings
 

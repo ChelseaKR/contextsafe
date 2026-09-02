@@ -190,10 +190,18 @@ def test_an_exception_only_excuses_the_analysis_it_names() -> None:
 def test_every_declared_exception_is_printed_on_a_clean_run(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    """Coverage declared away has to be as visible as coverage achieved."""
+    """Coverage declared away has to be as visible as coverage achieved.
 
+    The loop below builds its expected strings from the same tuple the gate
+    prints, so with an empty tuple it asserted nothing at all. The count is
+    checked against the output independently for that reason.
+    """
+
+    assert gate.DECLARED_EXCEPTIONS, "nothing is declared away, so this proves nothing"
     gate.main(["--root", str(_repo(tmp_path))])
     out = capsys.readouterr().out
+    printed = [line for line in out.splitlines() if line.startswith("scope: declared ")]
+    assert len(printed) == len(gate.DECLARED_EXCEPTIONS)
     for declared in gate.DECLARED_EXCEPTIONS:
         assert f"declared {declared.analysis} excludes {declared.prefix}" in out
         assert declared.reason in out
@@ -215,13 +223,38 @@ def test_a_prefix_match_is_on_path_segments_not_characters() -> None:
 # --- the gate did not run: exit 2, never a pass ----------------------------
 
 
-def test_a_repository_with_no_tracked_python_is_a_refusal(tmp_path: Path) -> None:
+def _claims_but_nothing_tracked(root: Path) -> Path:
+    """A repository whose claims all read, with no tracked Python to compare.
+
+    The three refusal tests below used a repository with no Makefile and no
+    `pyproject.toml` either, so each of them passed on whichever refusal came
+    first rather than on the one it names. Replacing `if not files:` with
+    `if False:` left all of them green -- the gate's most-argued property was
+    unpinned. The claim files are on disk and unstaged here, so `git ls-files`
+    reports nothing while every claim still reads.
+    """
+
+    root.mkdir(parents=True, exist_ok=True)
+    _git(root, "init", "-q")
+    (root / "Makefile").write_text(MAKEFILE, encoding="utf-8")
+    (root / "pyproject.toml").write_text(PYPROJECT, encoding="utf-8")
+    (root / "tools").mkdir(exist_ok=True)
+    (root / "tools" / "hygiene_gate.py").write_text(HYGIENE_STUB, encoding="utf-8")
+    (root / "README.md").write_text("no tracked python here\n", encoding="utf-8")
+    _git(root, "add", "--", "README.md")
+    return root
+
+
+def test_a_repository_with_no_tracked_python_is_a_refusal(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
     """Every claim holds vacuously over an empty tree, which is not a pass."""
 
-    _git(tmp_path, "init", "-q")
-    (tmp_path / "README.md").write_text("no python here\n", encoding="utf-8")
-    _git(tmp_path, "add", "--", "README.md")
-    assert gate.main(["--root", str(tmp_path)]) == 2
+    root = _claims_but_nothing_tracked(tmp_path / "unstaged")
+    # Every other refusal path is out of the way: the claims all read.
+    assert gate.collect_analyses(root)
+    assert gate.main(["--root", str(root)]) == 2
+    assert "lists no tracked Python file" in capsys.readouterr().err
 
 
 def test_git_missing_from_path_is_a_refusal(
@@ -265,23 +298,122 @@ def test_a_missing_makefile_target_is_a_refusal(tmp_path: Path) -> None:
     assert gate.main(["--root", str(root)]) == 2
 
 
+GOOD_TEST_TARGET = "\n\ntest:\n\tuv run pytest --cov --cov-branch\n"
+GOOD_TYPECHECK_TARGET = "typecheck:\n\tuv run mypy --strict\n\n"
+
+
 @pytest.mark.parametrize(
-    "recipe",
+    ("case", "recipe"),
     [
-        "typecheck:\n\tuv run mypy --strict src\n\ntest:\n\tuv run pytest --cov\n",
-        "typecheck:\n\tuv run mypy --strict\n\ntest:\n\tuv run pytest --cov=contextsafe\n",
+        # The two spellings the check was written against.
+        ("a bare path", "typecheck:\n\tuv run mypy --strict src" + GOOD_TEST_TARGET),
+        (
+            "--cov with its value attached",
+            GOOD_TYPECHECK_TARGET + "test:\n\tuv run pytest --cov=contextsafe\n",
+        ),
+        # Every one of these passed the check clean until 2026-08-31. The rule
+        # was four string literals compared to whole tokens on the first line
+        # mentioning the tool; each of these is a different spelling of the same
+        # override, and one is a different line.
+        (
+            "a trailing slash",
+            "typecheck:\n\tuv run mypy --strict src/" + GOOD_TEST_TARGET,
+        ),
+        (
+            "a quoted path",
+            'typecheck:\n\tuv run mypy --strict "src"' + GOOD_TEST_TARGET,
+        ),
+        (
+            "a make variable",
+            "typecheck:\n\tuv run mypy --strict $(SRC)" + GOOD_TEST_TARGET,
+        ),
+        (
+            "an argument on a continuation line",
+            "typecheck:\n\tuv run mypy --strict \\\n\t\tsrc" + GOOD_TEST_TARGET,
+        ),
+        (
+            "a comment line above the real one",
+            "typecheck:\n\t# runs mypy over the configured files\n"
+            "\tuv run mypy --strict src" + GOOD_TEST_TARGET,
+        ),
+        (
+            "--cov with its value as the next word",
+            GOOD_TYPECHECK_TARGET + "test:\n\tuv run pytest --cov contextsafe\n",
+        ),
     ],
 )
 def test_a_command_that_overrides_the_configured_scope_is_a_refusal(
-    tmp_path: Path, recipe: str, capsys: pytest.CaptureFixture[str]
+    tmp_path: Path, case: str, recipe: str, capsys: pytest.CaptureFixture[str]
 ) -> None:
     """A path on the command line beats the config, so the claim moves."""
 
     root = _repo(tmp_path)
     (root / "Makefile").write_text(recipe, encoding="utf-8")
     _git(root, "add", "--", "Makefile")
+    assert gate.main(["--root", str(root)]) == 2, case
+    err = capsys.readouterr().err
+    # Either the argument plainly overrides the configured scope, or the gate
+    # cannot tell what it is. Both are exit 2: "I cannot establish the claim" is
+    # never a pass here, and a gate that guessed would be guessing about scope.
+    assert "is not what that command examines" in err, case
+    assert "not a clean result" in err, case
+
+
+def test_a_comment_naming_the_tool_does_not_satisfy_the_check(tmp_path: Path) -> None:
+    """A recipe comment is not a command, and this repository's `sync` has one."""
+
+    root = _repo(tmp_path)
+    (root / "Makefile").write_text(
+        "typecheck:\n\t# this line mentions mypy and runs nothing\n\techo skipped\n"
+        + GOOD_TEST_TARGET,
+        encoding="utf-8",
+    )
+    _git(root, "add", "--", "Makefile")
     assert gate.main(["--root", str(root)]) == 2
-    assert "overrides the scope configured" in capsys.readouterr().err
+
+
+@pytest.mark.parametrize("root_value", ['(".",)', '("",)', '("./",)'])
+def test_a_root_that_claims_the_whole_tree_is_a_refusal(
+    tmp_path: Path, root_value: str
+) -> None:
+    """`MARKER_ROOTS = (".",)` made every file claimed and nothing could fail.
+
+    The gate already refuses a comparison with no files on the grounds that it
+    cannot fail. A root that is true of every path is the same tautology from
+    the other side, and it reported clean.
+    """
+
+    root = _repo(tmp_path)
+    (root / "tools" / "hygiene_gate.py").write_text(
+        f"MARKER_ROOTS: tuple[str, ...] = {root_value}\n", encoding="utf-8"
+    )
+    _git(root, "add", "--", "tools/hygiene_gate.py")
+    assert gate.main(["--root", str(root)]) == 2
+
+
+@pytest.mark.parametrize(
+    "body",
+    [
+        "import a_module_that_is_not_installed\n",
+        "raise ValueError('nope')\n",
+        "MARKER_ROOTS = undefined_name\n",
+    ],
+)
+def test_a_hygiene_gate_that_raises_anything_is_a_refusal(
+    tmp_path: Path, body: str, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Executing another module's top level can raise anything at all.
+
+    The guard caught `(OSError, SyntaxError)`, so each of these escaped as a
+    traceback and exit 1 -- "examined and found something" from a gate that
+    never read the claim.
+    """
+
+    root = _repo(tmp_path)
+    (root / "tools" / "hygiene_gate.py").write_text(body, encoding="utf-8")
+    _git(root, "add", "--", "tools/hygiene_gate.py")
+    assert gate.main(["--root", str(root)]) == 2
+    assert "could not be loaded" in capsys.readouterr().err
 
 
 def test_a_target_that_never_runs_the_tool_is_a_refusal(tmp_path: Path) -> None:
@@ -327,9 +459,6 @@ def test_the_refusal_is_a_distinct_exit_code_from_a_finding(tmp_path: Path) -> N
     _git(found, "add", "--", "pyproject.toml")
     assert gate.main(["--root", str(found)]) == 1
 
-    empty = tmp_path / "empty"
-    empty.mkdir()
-    _git(empty, "init", "-q")
-    (empty / "README.md").write_text("nothing\n", encoding="utf-8")
-    _git(empty, "add", "--", "README.md")
-    assert gate.main(["--root", str(empty)]) == 2
+    assert (
+        gate.main(["--root", str(_claims_but_nothing_tracked(tmp_path / "empty"))]) == 2
+    )

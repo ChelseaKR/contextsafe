@@ -255,15 +255,71 @@ def _remove_negation(tree: ast.AST, index: int) -> ast.AST:
     return mutated
 
 
-def _run(argv: Sequence[str], cwd: Path, env: dict[str, str]) -> int:
+PYTEST_PASSED = 0
+PYTEST_FAILED = 1
+"""The only two pytest exit codes that answer this gate's question.
+
+pytest returns non-zero for an interrupted run (2), an internal error (3), a
+usage error (4) and no tests collected (5) exactly as readily as for a failed
+assertion (1). The kill decision here was `!= 0`, so every one of those counted
+as a mutant killed, over output that is captured and discarded.
+
+It is reachable without corrupting anything: ``SCREENING_TESTS`` is a list of
+paths and nothing checked they exist, so renaming one test module made every
+screening run exit 4 and every mutant "killed". The gate would print `clean` and
+exit 0 over zero evidence -- the same defect as the 2026-08-27 one, whose fix
+addressed the trigger and left the mechanism. Anything but 0 or 1 is now a
+refusal.
+"""
+
+
+@dataclass(frozen=True)
+class Outcome:
+    """One test run's exit code, and what it printed if it was not 0 or 1."""
+
+    code: int
+    output: str
+
+    @property
+    def passed(self) -> bool:
+        return self.code == PYTEST_PASSED
+
+    @property
+    def failed(self) -> bool:
+        return self.code == PYTEST_FAILED
+
+    @property
+    def answered(self) -> bool:
+        """True when pytest ran the tests and reported on them."""
+
+        return self.code in (PYTEST_PASSED, PYTEST_FAILED)
+
+
+def _run(argv: Sequence[str], cwd: Path, env: dict[str, str]) -> Outcome:
     completed = subprocess.run(  # noqa: S603 - fixed argv, no shell
         argv,
         cwd=cwd,
         capture_output=True,
         env=env,
         check=False,
+        text=True,
     )
-    return completed.returncode
+    return Outcome(
+        completed.returncode,
+        ((completed.stdout or "") + (completed.stderr or "")).strip()[-800:],
+    )
+
+
+def _require_answer(outcome: Outcome, what: str) -> Outcome:
+    """Refuse on any pytest exit code that is not a verdict about the tests."""
+
+    if outcome.answered:
+        return outcome
+    raise GateUnavailable(
+        f"pytest exited {outcome.code} for {what}, which is not a verdict about "
+        "the tests -- 2 interrupted, 3 internal error, 4 usage error, 5 nothing "
+        f"collected -- so no mutant it ran proves anything: {outcome.output}"
+    )
 
 
 def _pytest_argv(root: Path, selection: Sequence[str]) -> list[str]:
@@ -335,7 +391,8 @@ def baseline_coverage(
             "--no-cov",
             str(root / suite),
         ]
-        if _run(argv, root, env) != 0:
+        baseline = _require_answer(_run(argv, root, env), "the unmutated baseline")
+        if not baseline.passed:
             raise GateUnavailable(
                 "the suite does not pass against unmutated source, so nothing "
                 "this gate reports about a mutant would mean anything"
@@ -352,7 +409,7 @@ def baseline_coverage(
             "-o",
             str(data),
         ]
-        if _run(report_argv, root, env) != 0 or not data.is_file():
+        if _run(report_argv, root, env).code != 0 or not data.is_file():
             raise GateUnavailable("coverage produced no report to read")
         report = json.loads(data.read_text(encoding="utf-8"))
 
@@ -382,6 +439,34 @@ def _stage(root: Path, workspace: Path, package: str = PACKAGE_DIR) -> Path:
     return workspace
 
 
+def _assert_declarations_exist(
+    root: Path,
+    targets: Sequence[str],
+    screening: Sequence[str],
+    suite: str,
+) -> None:
+    """Refuse before the loop if a declared path is not in the tree.
+
+    ``SCREENING_TESTS`` is four hard-coded paths and nothing compared them
+    against the repository, so renaming one test module was enough to make every
+    screening run a usage error. Combined with the `!= 0` kill decision that used
+    to be below, that reported every mutant killed and printed `clean`. The exit
+    codes are handled now; this is the other half, because a declaration that no
+    longer matches the tree is a finding in `make scope` and has to be one here.
+    """
+
+    missing = [
+        path for path in (*targets, *screening, suite) if not (root / path).exists()
+    ]
+    if missing:
+        raise GateUnavailable(
+            "declared path(s) that are not in the tree: "
+            + ", ".join(sorted(missing))
+            + "; the declaration describes a repository that is not this one, so "
+            "no run over it is evidence"
+        )
+
+
 def run_gate(
     root: Path,
     targets: Sequence[str] | None = None,
@@ -395,6 +480,7 @@ def run_gate(
     screening = SCREENING_TESTS if screening is None else screening
     package = PACKAGE_DIR if package is None else package
     suite = SUITE if suite is None else suite
+    _assert_declarations_exist(root, targets, screening, suite)
     covered = baseline_coverage(root, targets, suite, package)
     plans: list[tuple[Mutant, str]] = []
     for target in targets:
@@ -418,12 +504,20 @@ def run_gate(
             staged = workspace / package_name / Path(mutant.module).name
             staged.write_text(mutated_source, encoding="utf-8")
             try:
-                if _run(_pytest_argv(root, screening), root, env) != 0:
+                screened = _require_answer(
+                    _run(_pytest_argv(root, screening), root, env),
+                    f"the screening set against {mutant.identity}",
+                )
+                if screened.failed:
                     continue
                 # The screening set did not notice. Ask the whole suite before
                 # reporting a survivor, so the claim is about the suite rather
                 # than about the subset this gate happens to run first.
-                if _run(_pytest_argv(root, (suite,)), root, env) == 0:
+                verdict = _require_answer(
+                    _run(_pytest_argv(root, (suite,)), root, env),
+                    f"the suite against {mutant.identity}",
+                )
+                if verdict.passed:
                     survivors.append(mutant)
             finally:
                 staged.write_text(originals[mutant.module], encoding="utf-8")

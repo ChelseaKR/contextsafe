@@ -6,6 +6,28 @@ is, and what should happen to it.
 
 Nothing here was merged, pushed, closed, or commented on. It is a reading.
 
+## Resolution, 2026-08-31
+
+Recorded here because a triage document that stays frozen while the queue moves
+becomes another sentence nobody re-derives.
+
+Steps 1, 2 and 5 of "Safe order of operations" happened: #25, #26, #39 and #40
+merged, and #46, #47 and #48 were closed as superseded. Step 3 -- the six
+blocking items and the tests below them -- was done on
+`assurance/phase-6-blocked-and-recorded` itself. Step 4 was done by merging
+`main` into that branch rather than rebasing it, because its commits are records
+under a preservation duty; the conflicts were the two tabled above plus the
+`Makefile` and `CHANGELOG.md` placement of the `claims` gate, which landed on
+`main` after this document was written. Step 6, `make mutants` on the merged
+tree, reports 35 mutants over 143 covered lines, every one killed.
+
+Every finding above is either fixed on that branch or, where it was a wrong
+sentence, corrected there. The `CHANGELOG.md` entry for 2026-08-31 lists them
+one by one, and each fix has a test that fails without it. Nothing in this
+document has been edited: it is the reading that was made on 2026-08-28, and
+this section is what happened next.
+
+
 ## Summary table
 
 | PR | Base | What it is | Real merge state | Recommendation |
