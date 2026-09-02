@@ -1,6 +1,102 @@
 # ContextSafe
 
-**A proposed clinically and community-governed release-gate plan for transgender and nonbinary patient safety across registration, EHR, HL7/FHIR, and laboratory systems.**
+**An offline, deterministic command-line tool that evaluates whether transgender
+and nonbinary patients' identity and clinical-context data survives each system
+boundary — registration, EHR, HL7/FHIR, laboratory — and emits a hash-covered
+receipt that states its own limits. The clinically and community-governed
+service that would run it against a real health system is a plan, not a
+product.**
+
+The tool is here now. Nine subcommands, no network access, committed synthetic
+fixtures. With [`uv`](https://docs.astral.sh/uv/) installed, this returns a full
+receipt:
+
+```sh
+uv run contextsafe evaluate \
+  --case fixtures/reference/case.json \
+  --observations fixtures/reference/observations.json \
+  --rules fixtures/reference/rules.json
+```
+
+It evaluates five checkpoints — gender identity at the EHR, recorded sex or
+gender at registration, sex parameter for clinical use at the interface, name to
+use and pronouns at the EHR — comparing an expected SHA-256 against what was
+observed. Below is that command's real output, pretty-printed, with four of the
+five result objects elided where marked:
+
+```jsonc
+{
+  "envelope": {
+    "claimed_generated_at": null,
+    "signature_status": "not_signed",
+    "trusted_time": false
+  },
+  "payload": {
+    "case_id": "CTP-I01",
+    "hashes": {
+      "input_sha256": "d9db15f2b90278df25c15cddbc6464c0c410451e690b96b6e94ce29a823c0920",
+      "result_sha256": "f7abf85fddb937681d095ab353f264fa79bfce7ea8224769c0e87e2641170096",
+      "rule_set_sha256": "aa81475440694f69bf6a819e9119678bcae6e8ff25adf9b8f4f69a7efc8d5b12"
+    },
+    "limitations": [
+      "Synthetic reference fixture only; not an approved clinical oracle.",
+      "A passing result does not establish safety, compliance, or certification.",
+      "Patient data is prohibited; bounded checks cannot prove an input is synthetic.",
+      "This iteration does not ingest FHIR or sign artifacts."
+    ],
+    "results": [
+      {
+        "case_id": "CTP-I01",
+        "checkpoint": "ehr",
+        "concept": "gender_identity",
+        "evidence_sha256s": [
+          "1917d730c88ed0f6fd76487c7aeaf58635effb03dfd688d74d423fbcbd510b5a"
+        ],
+        "expected_sha256": "4b586a13d46580ed0a2126fcd4aedf4bfa89d5956d6baad6aaf9e59455c88df8",
+        "observed_sha256s": [
+          "4b586a13d46580ed0a2126fcd4aedf4bfa89d5956d6baad6aaf9e59455c88df8"
+        ],
+        "reason": "affirmative_evidence_match",
+        "rule_id": "A-I01",
+        "rule_version": "0.1.0",
+        "status": "pass"
+      }
+      // four more result objects elided: recorded_sex_or_gender at registration,
+      // sex_parameter_for_clinical_use at interface, name_to_use and pronouns at ehr
+    ],
+    "runner_version": "0.1.0",
+    "schema_version": "contextsafe.receipt/0.1.0",
+    "scope": {
+      "clinical_oracle_approved": false,
+      "patient_data_allowed": false,
+      "synthetic_fixture_only": true
+    },
+    "summary": {
+      "blocked": 0,
+      "fail": 0,
+      "indeterminate": 0,
+      "not_applicable": 0,
+      "pass": 5
+    }
+  },
+  "payload_sha256": "a1d26eb86c760d2f148c16bf6244c2c202f6afdf42db5bba8aa56246baec2e13",
+  "schema_version": "contextsafe.receipt-document/0.1.0"
+}
+```
+
+The `scope` and `limitations` blocks are part of the result, not small print
+around it. Every receipt says in its own payload that it is `not_signed`, that
+no approved clinical oracle stands behind it, that patient data is not allowed,
+and that the fixture is synthetic — and the payload carries hashes, statuses and
+counts rather than the identity values themselves. Those fields are pinned by
+the published
+[receipt contract](schemas/contextsafe-receipt-v0.1.schema.json): the disclosure
+set is mandated wording in a fixed order, the unsigned envelope constants are
+closed, and a future signing layer may not relabel these documents. A tool on
+this subject that could not state its own boundaries would not be safe to run,
+so the boundaries are machine-checked rather than promised.
+
+## Status
 
 Status: product and delivery plan for v1.0 plus internal iteration-1 synthetic
 evaluation, iteration-2 unsigned governance-contract tooling, iteration-3
