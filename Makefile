@@ -1,8 +1,8 @@
-.PHONY: a11y a11y-full a11y-install audit format format-fix hygiene i18n lint mutants publication-sweep scope secret-scan sync test typecheck verify
+.PHONY: a11y a11y-full a11y-install audit claims format format-fix hygiene i18n lint mutants publication-sweep scope secret-scan sync test typecheck verify
 
 SAFETY_MODULES := src/contextsafe/identifiers.py,src/contextsafe/models.py,src/contextsafe/validation.py,src/contextsafe/evaluator.py,src/contextsafe/receipt.py,src/contextsafe/contract_validation.py,src/contextsafe/jsonio.py,src/contextsafe/pack.py,src/contextsafe/plan.py,src/contextsafe/evidence.py,src/contextsafe/preflight.py,src/contextsafe/evidence_store.py,src/contextsafe/safe_value.py,src/contextsafe/diagnostics.py,src/contextsafe/eventlog.py
 
-verify: sync lint format typecheck test audit hygiene scope publication-sweep i18n a11y
+verify: sync lint format typecheck test audit hygiene scope publication-sweep i18n a11y claims
 
 sync:
 	# --locked fails when uv.lock has drifted from pyproject.toml.
@@ -95,3 +95,12 @@ hygiene:
 # claim and compares it against the tracked Python that exists.
 scope:
 	uv run python tools/scope_gate.py
+
+# The figures and lists the documents state, re-derived from the repository: this
+# target list against README.md and CONTRIBUTING.md, the ADR index, the coverage
+# floors, the contract count, and the rule that a standard `verify` gates may not
+# be declared not applicable. Last in `verify` because it reads what the earlier
+# stages are, and stdlib only, so it costs `verify` nothing. Every check fails
+# both ways: a wrong value, and a document that stopped stating the value at all.
+claims:
+	uv run python tools/claims_gate.py

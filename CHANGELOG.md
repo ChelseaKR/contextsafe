@@ -116,6 +116,74 @@ release yet, so everything to date lives under Unreleased.
   `src` argument for the same reason, so the hook and the gate check the same
   trees.
 
+### Added
+
+- **`make claims` — a gate over the prose, because every other gate here checks
+  the code and nothing checked the sentences about it.** `tools/claims_gate.py`
+  re-derives nine claims from the repository and fails when a document and the
+  repository disagree: the `verify` stage list against the `Makefile`, the ADR
+  index against `docs/adr/`, the coverage floors against `make test`, the
+  contract count and table against `schemas/`, the accessibility gate's default
+  locales against the catalogs that ship, the README's status line against the
+  iterations the README describes, a retired flag name that may not come back
+  while the `Makefile` disagrees with it, a dated correction that has to travel
+  with the text it corrects, and the rule that a standards row may not declare
+  "N/A" for something `verify` gates. Every check fails in both directions: a
+  wrong value is a finding, and so is a document that stopped stating the value,
+  because a regex that quietly matches nothing is how a gate becomes decoration.
+  Stdlib only, no network, no git history, so it costs `verify` nothing and runs
+  in a shallow CI checkout. It prints what it cannot see on every run, the way
+  the hygiene gate prints every exemption it honored.
+
+### Fixed
+
+- **The standards table declared Performance, Accessibility and
+  Internationalization "N/A" on the grounds that no HTML ships, in a README that
+  documents the HTML renderer eighty lines earlier.** `make verify` has run both
+  `i18n` and `a11y` since 2026-08-19, and `docs/I18N.md` had already recorded the
+  English-only declaration as superseded. Accessibility and Internationalization
+  now say "Applies" and say precisely what the gates cover and what they do not:
+  AA conformance is still not claimed, because B-044 needs a person and has not
+  happened, and `es-US` is still an unreviewed machine translation. Performance
+  stays N/A, on the reason that is actually true — no hosted route and no served
+  surface — rather than on "no shipped HTML". `make claims` now refuses the
+  contradiction rather than the wording.
+- **Three different, all incomplete lists of what `make verify` runs.** The
+  README quickstart omitted `a11y`, the README prose omitted `i18n` and `a11y`,
+  and `CONTRIBUTING.md` omitted both and had no row for `sync`. There is now one
+  enumeration per document and both are derived: the quickstart names the target
+  list literally, `CONTRIBUTING.md`'s gate table has one row per stage, and the
+  README prose that was the third list points at the table instead of repeating
+  it.
+- **The README described `make verify` as a "frozen sync" over "the frozen
+  lockfile".** True until 2026-08-15, when `sync` moved to `uv sync --locked`;
+  the `Makefile` and `CONTRIBUTING.md` have both explained since then that
+  `--frozen` installs a drifted lock and still exits 0, so it cannot gate drift.
+  The README was the one place still using the word its neighbours warn against.
+- **The ADR index listed four of the seven ADRs on disk.** 0004, 0005 and 0006
+  were never added.
+- **"Last reviewed: 2026-08-15" sat under a table on a file edited repeatedly
+  after that date.** Removed rather than corrected: nothing re-derives a review
+  date, the CI checkout is shallow so `git log` cannot either, and a corrected
+  literal restarts the same clock. The instruction to re-review remains.
+- **The README's status line stopped at iteration 4** while the README described
+  iteration 5 and the B-046 operator surface.
+- **`docs/PUBLICATION-READINESS.md` was being read on the public repository
+  while stating "Current visibility: PRIVATE" and inviting a reader to recover a
+  pricing document with a command that does not work.** None of the commit names
+  that document cites resolve in the published history, and
+  `docs/11-GTM-BUSINESS-MODEL.md` is in none of its refs. The audit's findings
+  are untouched and nothing is retracted; a dated note now records what a fresh
+  clone shows, and `make claims` keeps that note with the text it corrects.
+- `tools/a11y_gate.py`'s default locale list is now the named `DEFAULT_LOCALES`
+  rather than a literal inside `main`, and `make claims` fails when it stops
+  matching the catalogs in `src/contextsafe/locales/`. `tools/i18n_gate.py`
+  discovers its locales; this one does not, so before this a third catalog would
+  have been translated, gated for parity, rendered to a reader, and never
+  audited.
+
+### Changed
+
 - **`collector_id`, `system_id` and `system_version` have narrower published
   grammars, and this is a breaking contract change.** They were
   `^[A-Za-z0-9][A-Za-z0-9:/_.-]{0,127}$` and `^[A-Z][A-Z0-9-]{2,63}$`, which

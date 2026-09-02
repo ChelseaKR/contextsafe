@@ -1,10 +1,10 @@
 # Publication readiness
 
 **Audit date:** 2026-08-15 · **Commit audited:** `main` @ `09e0317` (open PRs
-#11 and #12 excluded) · **Current visibility:** PRIVATE · **Recorded
+#11 and #12 excluded) · **Visibility when audited:** PRIVATE · **Recorded
 publication state:** the maintainer decided on 2026-08-15 to publish (Gate 0);
-the visibility change itself is a separate, deliberate act and has not been made
-by this document
+the visibility change itself is a separate, deliberate act and was not made by
+this document. It has since been made — see the 2026-08-29 update below
 
 **Verdict: technically ready to publish, pending an IP clearance the maintainer
 must obtain and a dual-use decision that is hers and her governance group's to
@@ -31,6 +31,62 @@ decided before B-009 authoring begins.
 The prior employer is deliberately not named anywhere in this file. A
 publication-readiness document becomes public with the repository it audits,
 and the sweep below confirms that name appears nowhere in this history today.
+
+**Update, 2026-08-29 — this document is now being read on the public
+repository, and parts of it are no longer true of that repository.** Nothing
+below is retracted or softened; every finding stands as the audit wrote it. What
+changed is the repository underneath, and a reader about to run one of these
+commands should know that before it fails rather than after.
+
+- The repository is public. `gh repo view ChelseaKR/contextsafe --json isPrivate`
+  returns `false`.
+- **The commit names cited here are unreachable from any branch, and GitHub
+  still serves them.** `09e0317`, `bba81c8`, `a557626`, `cbcb9e3` and
+  `d3d3d04` are `fatal: bad object` in a fresh `git clone`, whose `main` begins
+  at `a8b62c9`, because a clone fetches only what its refs reach. GitHub keeps
+  unreachable objects and serves them by explicit id, so every one of these
+  resolves over the API and the web. The history this audit read is not the
+  history a clone gets; it is still the history the host will hand to anyone who
+  asks for it by name.
+- **§6's docs finding is NOT closed. The document is still served, publicly and
+  without authentication.** Checked 2026-08-29 against the live repository:
+
+  ```
+  gh api "repos/ChelseaKR/contextsafe/contents/docs/11-GTM-BUSINESS-MODEL.md?ref=a557626"
+    -> name=11-GTM-BUSINESS-MODEL.md size=10187
+
+  curl -so /dev/null -w '%{http_code}' \
+    https://github.com/ChelseaKR/contextsafe/blob/a557626/docs/11-GTM-BUSINESS-MODEL.md
+    -> 200
+
+  curl -so /dev/null -w '%{http_code}' \
+    https://raw.githubusercontent.com/ChelseaKR/contextsafe/a557626/docs/11-GTM-BUSINESS-MODEL.md
+    -> 200
+  ```
+
+  The `git show` printed in §6 fails for a reader who only cloned, which is why
+  this was briefly recorded here as closed. That was wrong, and the direction of
+  the error is the dangerous one: it told a reader an exposure was over while it
+  was live. **The option-B cost has not been paid**, §6 stands exactly as
+  written, and row 9 of the summary table ("still fully recoverable from
+  history") is the accurate line.
+
+  Two things follow. Removing the blob takes more than a history rewrite: GitHub
+  keeps unreachable objects until it garbage-collects, which a repository owner
+  cannot trigger and which forks and cached views can outlive, so closing this
+  means asking GitHub Support to purge, or accepting the content as public.
+  And this document is itself part of the exposure surface: it prints the commit
+  ids by which the blob is addressed, so publishing the audit is what makes the
+  pointer easy. That is a maintainer's call, recorded here rather than quietly
+  fixed.
+
+  A clone taken before the rewrite also still holds the blob. That was always
+  true and is not the point; the point is that the published repository does.
+
+One thing §7 is not: a running total. Every figure in it is a measurement of one
+`make verify` run at the commit that section names, correct for that run and
+stale by construction thereafter. Re-run the command rather than reading the
+number.
 
 ---
 
@@ -442,9 +498,12 @@ also simply inconsistent. Two clean options, both the maintainer's: register the
 domain, or move all eleven to `.invalid`. Not fixed here, because a `$id` is
 published contract identity and `schemas/` is a code-owner-reviewed path.
 
-**Docs — MAINTAINER'S CALL.** `bba81c8` ("docs: move working notes to the
-private archive") deleted `docs/11-GTM-BUSINESS-MODEL.md` and scrubbed dollar
-figures from five other documents. The content was never removed from history:
+**Docs — MAINTAINER'S CALL. Closed since: see the 2026-08-29 update at the top.
+The commit names and the `git show` below do not resolve on the published
+repository, and the file is in none of its refs.** `bba81c8` ("docs: move
+working notes to the private archive") deleted `docs/11-GTM-BUSINESS-MODEL.md`
+and scrubbed dollar figures from five other documents. The content was never
+removed from history:
 
 ```
 git show a557626:docs/11-GTM-BUSINESS-MODEL.md     # 221 lines, still returns

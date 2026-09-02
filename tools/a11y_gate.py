@@ -98,6 +98,13 @@ from contextsafe.i18n import load_catalog  # noqa: E402
 from contextsafe.receipt import build_receipt_document  # noqa: E402
 from contextsafe.validation import parse_bundle  # noqa: E402
 
+# The locales audited when `--locale` is not given. Unlike `tools/i18n_gate.py`,
+# which discovers catalogs from the directory, this list is written down: adding
+# a catalog must be a decision to audit it, not a side effect. `make claims`
+# fails when it stops matching the catalogs that ship, so a locale cannot reach
+# a reader without an accessibility run behind it.
+DEFAULT_LOCALES: tuple[str, ...] = ("en-US", "es-US")
+
 REFERENCE = REPO_ROOT / "fixtures" / "reference"
 HARNESS = REPO_ROOT / "tools" / "a11y" / "run.mjs"
 HARNESS_MODULES = REPO_ROOT / "tools" / "a11y" / "node_modules"
@@ -882,7 +889,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     )
     args = parser.parse_args(argv)
     engines = tuple(part for part in args.engines.split(",") if part)
-    locales = tuple(args.locale) if args.locale else ("en-US", "es-US")
+    locales = tuple(args.locale) if args.locale else DEFAULT_LOCALES
     args.workdir.mkdir(parents=True, exist_ok=True)
     report = audit(build_subjects(locales), engines=engines, workdir=args.workdir)
     if args.json:
