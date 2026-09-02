@@ -127,6 +127,53 @@ def test_the_serializer_refuses_anything_that_is_not_a_safe_value() -> None:
         assert excinfo.value.code == "unsafe_bundle_value"
 
 
+def test_the_serializer_refuses_a_key_that_carries_free_text() -> None:
+    """A dict key is free text in the same document as the value.
+
+    Every guarantee in `safe_value`'s docstring held for values and none of it
+    held for names: `to_json` sorted the keys and wrote them out untouched, so
+    the same hostile strings this module exists to keep out serialized cleanly
+    as field names, at any depth. `test_the_hostile_fixture_defeats_a_filter`
+    above is the proof that the belt-and-braces detector scan would not have
+    caught them either.
+    """
+
+    for hostile in HOSTILE_STRINGS:
+        for section in (
+            {hostile: safe_value.count(1)},
+            {"runtime": {hostile: safe_value.flag(True)}},
+            {"runtime": [{hostile: safe_value.flag(True)}]},
+        ):
+            with pytest.raises(ContextSafeError) as excinfo:
+                safe_value.to_json(section)  # type: ignore[arg-type]
+            assert excinfo.value.code == "unsafe_bundle_value"
+            assert "field name" in str(excinfo.value)
+
+
+def test_the_published_field_names_are_the_ones_the_bundle_uses() -> None:
+    """The rule has to admit the real bundle, or it is not the rule."""
+
+    accepted = {
+        "capabilities",
+        "contracts",
+        "evidence_index",
+        "index_outcome",
+        "object_count",
+        "path_shape",
+        "python",
+        "record_count",
+        "reported_errors",
+        "runner_version",
+        "runtime",
+        "workspace",
+    }
+    for name in accepted:
+        assert safe_value.field_name(name) == name
+    for rejected in ("", "Runtime", "1st", "a b", "a-b", "a" * 65, 7, None):
+        with pytest.raises(ContextSafeError):
+            safe_value.field_name(rejected)
+
+
 def test_safe_value_constructors_reject_wrong_types() -> None:
     """Each constructor is total: a safe value, or a rejection."""
 
