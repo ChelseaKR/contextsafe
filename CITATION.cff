@@ -21,6 +21,13 @@ keywords:
   - synthetic-data
   - release-gating
   - deterministic-evaluation
-# No `version` / `date-released`: nothing has been tagged or released yet, and CFF
-# treats both as optional. They return when the first release is actually cut — see
-# CHANGELOG.md and docs/PUBLICATION-READINESS.md.
+# `version` and `date-released` name the first release, staged here rather than
+# after the fact: `.github/workflows/release.yml` fires on the tag and re-verifies
+# the tagged commit, so everything the release asserts has to be true in the commit
+# the tag points at. The release exists once `v0.1.0` is pushed; if that happens on
+# a different day, this date and the `## [0.1.0]` heading in CHANGELOG.md move
+# together. The pipeline builds an sdist and a wheel and deliberately has no
+# publish or sign step — there is no distribution channel, and a citable version is
+# not a claim of clinical approval. See docs/PUBLICATION-READINESS.md.
+version: "0.1.0"
+date-released: 2026-09-01

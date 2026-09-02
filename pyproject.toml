@@ -7,8 +7,21 @@ name = "contextsafe"
 version = "0.1.0"
 description = "Offline synthetic fixture validator and deterministic evaluator"
 readme = "README.md"
+license = "Apache-2.0"
 requires-python = ">=3.12"
 dependencies = []
+
+# The built artifact's only route back to its own context. `readme` puts the whole
+# README into the distribution metadata, and every relative link in it — the
+# publication policy, the threat model, the ADRs that bound what this tool claims —
+# resolves against the repository and nowhere else. A reader holding only the wheel
+# needs somewhere to resolve them from.
+[project.urls]
+Homepage = "https://github.com/ChelseaKR/contextsafe"
+Repository = "https://github.com/ChelseaKR/contextsafe"
+Changelog = "https://github.com/ChelseaKR/contextsafe/blob/main/CHANGELOG.md"
+"Publication policy" = "https://github.com/ChelseaKR/contextsafe/blob/main/docs/17-PUBLICATION-POLICY.md"
+"Security policy" = "https://github.com/ChelseaKR/contextsafe/blob/main/SECURITY.md"
 
 [project.scripts]
 contextsafe = "contextsafe.cli:main"

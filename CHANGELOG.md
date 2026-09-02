@@ -1,10 +1,13 @@
 # Changelog
 
 All notable changes to ContextSafe are documented here. The format is based on
-[Keep a Changelog](https://keepachangelog.com/en/1.1.0/); the project has no tagged
-release yet, so everything to date lives under Unreleased.
+[Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Everything to date is
+collected under 0.1.0, the first release: `.github/workflows/release.yml` fires on
+a `vX.Y.Z` tag and refuses to build unless this file already carries a matching
+`## [X.Y.Z]` heading, so the section is written and dated before the tag exists
+rather than after it.
 
-## [Unreleased]
+## [0.1.0] - 2026-09-01
 
 ### Fixed
 
@@ -103,6 +106,26 @@ release yet, so everything to date lives under Unreleased.
   finding.
 
 ### Added
+
+- **The metadata a first tag needs, written before the tag rather than after
+  it.** `.github/workflows/release.yml` fires on `vX.Y.Z`, re-runs `make verify`
+  at the tagged commit, and refuses to build unless this file already carries a
+  matching `## [X.Y.Z]` heading — so everything the release asserts has to be
+  true in the commit the tag points at. This section is that heading.
+  `CITATION.cff` carries the `version` and `date-released` it had deliberately
+  withheld while nothing was released. `pyproject.toml` declares the
+  `Apache-2.0` license expression and a `[project.urls]` table: `readme =
+  "README.md"` copies the entire README into the distribution metadata, where
+  every relative link in it — publication policy, threat model, the ADRs that
+  bound what this tool claims — resolves against the repository and nowhere
+  else, and a reader holding only the built artifact had no route back to it.
+  What did not change is worth stating, because a version number is the kind of
+  thing that gets read as more than it is: the wheel ships `src/contextsafe` and
+  its locale catalogs, `fixtures/` and `schemas/` remain repository files rather
+  than package data, so the quickstart runs from a clone and not from an
+  installed wheel; the pipeline still builds an sdist and a wheel and has no
+  publish or sign step; and a version number buys no distribution channel, no
+  clinical approval, and no governed pack that the untagged tree did not have.
 
 - **`make mutants` asks whether the suite would notice a change, not whether it
   ran the line.** The 95% branch floor over the safety modules is an execution
