@@ -7,7 +7,7 @@ a `vX.Y.Z` tag and refuses to build unless this file already carries a matching
 `## [X.Y.Z]` heading, so the section is written and dated before the tag exists
 rather than after it.
 
-## [0.1.0] - 2026-09-01
+## [0.1.0] - 2026-09-02
 
 ### Fixed
 
