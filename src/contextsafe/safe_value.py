@@ -34,6 +34,15 @@ name in it has nowhere to put it:
 The serializer in :func:`to_json` walks the structure and raises on anything
 that is not a ``SafeValue``, so "somebody added a plain string to the bundle
 next year" is a test failure rather than a disclosure.
+
+That covered the values and, until :data:`FIELD_NAME_PATTERN` existed, nothing
+at all covered the *names*. A dict key is free text in the same JSON document,
+and ``to_json`` sorted the keys and wrote them out untouched, so
+``{"MRN 1 2 3 4 5 6 7 for Jordan Rivera": count(1)}`` serialized cleanly at any
+depth. Nothing in the tree ever built a key from data, so it was a latent hole
+rather than a disclosure that happened -- but it was this module's own claim
+about itself being true of one half of the structure and stated about the whole
+of it. A key must now be a published field name.
 """
 
 from __future__ import annotations
@@ -174,11 +183,51 @@ def path_shape(value: PurePath | str, *, pointer: str = "$") -> SafeValue:
 Section = Mapping[str, "SafeValue | Section | Sequence[SafeValue | Section]"]
 
 
-def to_json(section: Section, *, pointer: str = "$") -> dict[str, JsonValue]:
-    """Serialize a section, raising on anything that is not a ``SafeValue``."""
+FIELD_NAME_PATTERN = re.compile(r"^[a-z][a-z0-9_]{0,63}$")
+"""A field name a bundle may carry.
 
+The keys were not checked at all until this pattern existed, so every guarantee
+in this module's docstring held for values and none of it held for names.
+``to_json({"MRN 1 2 3 4 5 6 7 for Jordan Rivera": count(1)})`` serialized that
+string verbatim, at any depth, and the belt-and-braces detector scan in
+:mod:`contextsafe.diagnostics` does not fire on a name -- which is the reason
+this module exists rather than a filter.
+
+Nothing in the tree needed a dynamic key, so the hole was latent rather than a
+live disclosure. It is closed by shape instead of by review: lower-case ASCII
+snake_case, starting with a letter, at most 64 characters. A space, a hyphen, a
+digit-led token, an upper-case letter and a Cyrillic homoglyph are each outside
+it, so a name, a path component and a record number have nowhere to go.
+"""
+
+
+def field_name(key: object, *, pointer: str = "$") -> str:
+    """Return a key that is a published field name, or raise."""
+
+    if not isinstance(key, str):
+        raise _reject(pointer, "a bundle field name must be a string")
+    if FIELD_NAME_PATTERN.fullmatch(key) is None:
+        raise _reject(
+            pointer,
+            "a bundle field name must be lower-case snake_case starting with a "
+            "letter; a name that carries free text is a disclosure whatever its "
+            "value is",
+        )
+    return key
+
+
+def to_json(section: Section, *, pointer: str = "$") -> dict[str, JsonValue]:
+    """Serialize a section, raising on any value or key that is not published.
+
+    Both halves matter. A value must be a ``SafeValue``; a key must be a
+    published field name. Checking only the first was this module committing
+    the failure its own docstring describes -- a check that examined one half
+    of the structure and reported on the whole of it.
+    """
+
+    names = [field_name(key, pointer=pointer) for key in section]
     result: dict[str, JsonValue] = {}
-    for key in sorted(section):
+    for key in sorted(names):
         result[key] = _node_to_json(section[key], f"{pointer}.{key}")
     return result
 

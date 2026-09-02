@@ -8,6 +8,23 @@ release yet, so everything to date lives under Unreleased.
 
 ### Fixed
 
+- **A support bundle's field *names* were never checked, in the one module whose
+  whole argument is that nothing in a bundle is checked -- it is constructed.**
+  `contextsafe.safe_value.to_json` refuses any value that is not a `SafeValue`,
+  and there is deliberately no constructor that accepts free text, so "a caller
+  holding a string with a patient name in it has nowhere to put it". It had
+  somewhere: the key. `to_json` sorted the keys and wrote them out untouched, at
+  any depth, so `{"MRN 1 2 3 4 5 6 7 for Jordan Rivera": count(1)}` serialized
+  cleanly. The belt-and-braces detector scan in `contextsafe.diagnostics` would
+  not have caught it either, and `test_the_hostile_fixture_defeats_a_filter` is
+  the standing proof of that: the fixture exists because no filter sees a name
+  spelled with a Cyrillic homoglyph or a record number spaced past a digit
+  pattern. Nothing in this repository builds a bundle key from data, so no
+  bundle ever carried one -- this was a claim about the module that was true of
+  the values and stated about the structure. A key is now a published field
+  name: lower-case ASCII snake_case, letter-led, at most 64 characters, which a
+  name, a path component and a spaced-out record number are all outside.
+
 - **Six gates that could still report clean over something they did not
   examine.** Found by reading the gates this branch adds and hardens against the
   rule they were written to enforce, and every one of them is the program's own
