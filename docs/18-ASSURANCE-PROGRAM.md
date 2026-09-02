@@ -1,6 +1,6 @@
 # Assurance program: a multiyear plan for the gates themselves
 
-Status: proposed, phases 1 and 2 built
+Status: phases 1 to 5 built; phase 6 blocked, see below
 Owner: technical owner
 Planning unit: ordinal phases with entry conditions, not dates
 
@@ -157,7 +157,8 @@ directly on R-07 ("real PHI enters workspace", score 15, open).
 
 ### Phase 3 — Coverage is declared, and drift from it fails
 
-**Status: planned, not built.**
+**Status: built.** See
+[ADR 0007](adr/0007-declared-analysis-scope.md) and `make scope`.
 
 After phase 1, every gate knows its denominator but each states it in its own
 words, on stdout, where nothing compares them. A reader who wants to answer
@@ -186,7 +187,8 @@ system that is still moving.
 
 ### Phase 4 — One contract for the gates that cannot always run
 
-**Status: planned, not built.**
+**Status: built,** with the CI-side proof replaced by a local one. See
+[ADR 0008](adr/0008-one-exit-code-contract-for-every-gate.md).
 
 Three gates sit outside `make verify` because each needs something a clean clone
 does not have: `make secret-scan` needs gitleaks 8.30.1, `make a11y-full` needs
@@ -204,11 +206,25 @@ rather than a fourth variant.
 Entry condition: B-045 (packaged artifacts with SBOM and signatures) or B-040
 (independent security review), whichever comes first, because both add a gate
 with an external dependency and phase 4 is cheap to do once and expensive to
-retrofit per gate.
+retrofit per gate. Brought forward because the measurement was cheap and the
+result was three live conflations, not because either entry condition arrived.
+
+One part of this phase as planned was **not** built the way it was written. The
+plan said CI would prove it by removing the tool and asserting the job fails.
+That was written on the belief that GitHub Actions was unavailable on this
+account, which was not true: `ci.yml` and `security.yml` both run on every pull
+request, and 93 of the last 100 workflow runs succeeded. The reason the
+CI-side proof is still not built is a different and smaller one -- a job that
+removes a tool to watch a gate fail is a job whose green means the opposite of
+every other job's green, and it needs its own design. The stand-in gitleaks
+inside `make verify` gives the same evidence in a place CI already runs, so the
+proof exists and the workflow does not.
 
 ### Phase 5 — Evidence that the suite can detect a regression
 
-**Status: planned, not built.**
+**Status: built,** over a declared subset of two modules. See
+[ADR 0009](adr/0009-mutation-evidence-over-declared-safety-modules.md) and
+`make mutants`.
 
 Everything above proves a gate can fail. None of it proves the *test suite* can
 fail — that the assertions covering the safety modules would actually catch a
@@ -233,7 +249,38 @@ one that will ship, and B-039's canary suite settled.
 
 ### Phase 6 — The apparatus reviewed by someone who did not write it
 
-**Status: planned, not built.**
+**Status: blocked. Not built, and not buildable here.**
+
+What blocks it, precisely:
+
+- **A named independent reviewer.** The whole content of this phase is a person
+  who did not write the gates reading them. Nothing produced inside this
+  repository can stand in for that, and a document that looked like a review
+  would be this program's own defect class committed by the program itself: a
+  green mark over something nobody examined.
+- **Funding.** B-040 buys an independent threat-model and security design
+  review. R-09 ("no budget owner; interest remains unfunded DEI") is open at
+  score 16, and the roadmap's capacity checkpoint has the `E` pool at 94.3%
+  loaded at DG-04. This is not a technical condition.
+- **A release dossier that does not exist.** B-054 assembles it from pilot
+  evidence produced in B-049 to B-053. There is no pilot, so there is nothing
+  for gate-coverage evidence to be filed into yet.
+- **A decision that is the owner's.** Widening B-040's acceptance criteria to
+  cover the assurance apparatus changes what a paid reviewer is contracted for.
+  That is a scope and spend decision, so this document proposes it and does not
+  make it.
+
+What would unblock it: DG-01's funding path resolved, B-040 scheduled with a
+named reviewer, and B-054 opened. At that point the work is small, because
+phases 1 to 5 produced the material a reviewer would ask for: five ADRs stating
+what each gate examines and what it declares away, three gates that print their
+denominator on every run, and one that prints every exemption.
+
+Deliberately **not** done in the meantime: no review checklist, no reviewer
+brief, no placeholder dossier section, and no change to B-040's acceptance
+criteria. Each of those would be building for a reviewer who does not exist,
+and the first one that got skimmed and marked complete would be worse than the
+gap it filled.
 
 Every phase above is the author of the gates auditing the gates. B-040 already
 buys an independent threat-model and security design review; the release dossier
@@ -264,6 +311,17 @@ cannot, and saying so is part of the plan rather than an omission from it.
 | 4 | the contract and its local proof, yes | a CI run per absent tool, which needs GitHub Actions on this account |
 | 5 | yes, bounded to a declared module set | judgement on where the bound sits |
 | 6 | **no** | a named independent reviewer, funded per B-040, and a release dossier that does not exist yet |
+
+Built, as of 2026-08-27:
+
+| Phase | State | Where it landed |
+|---|---|---|
+| 1 | built | ADR 0005; `make hygiene` covers `tools`, the sweep names unread sources, the coverage floor measures the gates |
+| 2 | built | ADR 0006; provenance grammars and the boundary scan on `parse_evidence_metadata`, closing issue #35 |
+| 3 | built | ADR 0007; `make scope` |
+| 4 | built, with one substitution | ADR 0008; the three-state contract, proved locally rather than by a CI job nobody has watched run |
+| 5 | built over two of fifteen safety modules | ADR 0009; `make mutants` |
+| 6 | **blocked on people and money** | nothing, deliberately |
 
 Phase 6 is blocked on people and money, not on code. Nothing in this repository
 can stand in for a review by someone who did not write the gates, and a

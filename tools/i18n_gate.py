@@ -54,7 +54,7 @@ import argparse
 import json
 import re
 import sys
-from collections.abc import Iterable, Iterator, Sequence
+from collections.abc import Iterable, Iterator, Mapping, Sequence
 from dataclasses import dataclass
 from html.parser import HTMLParser
 from pathlib import Path
@@ -64,6 +64,7 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 if str(REPO_ROOT / "src") not in sys.path:  # pragma: no cover - import shim
     sys.path.insert(0, str(REPO_ROOT / "src"))
 
+from contextsafe.canonical import JsonValue  # noqa: E402
 from contextsafe.errors import ContextSafeError  # noqa: E402
 from contextsafe.evaluator import evaluate  # noqa: E402
 from contextsafe.html_receipt import render_receipt_page  # noqa: E402
@@ -144,16 +145,18 @@ def _placeholders(text: str) -> frozenset[str]:
     )
 
 
-def reference_document() -> dict[str, object]:
+def reference_document() -> dict[str, JsonValue]:
     """Build the bundled reference receipt document, in process."""
 
     def read(name: str) -> object:
         return json.loads((REFERENCE / name).read_text(encoding="utf-8"))
 
+    # `parse_bundle` takes three `object` parameters and validates them itself,
+    # so the three `type: ignore[arg-type]` comments that used to sit here
+    # suppressed nothing. A suppression that suppresses nothing is a claim about
+    # a problem that is not there, which is why `--strict` reports it.
     bundle = parse_bundle(
-        read("case.json"),  # type: ignore[arg-type]
-        read("observations.json"),  # type: ignore[arg-type]
-        read("rules.json"),  # type: ignore[arg-type]
+        read("case.json"), read("observations.json"), read("rules.json")
     )
     return build_receipt_document(bundle, evaluate(bundle))
 
@@ -276,7 +279,7 @@ def check_claiming_surface(catalog: Catalog) -> Iterator[Finding]:
 
 
 def _render(
-    locale: str, document: dict[str, object], catalog: Catalog | None = None
+    locale: str, document: Mapping[str, object], catalog: Catalog | None = None
 ) -> tuple[str | None, Finding | None]:
     """Render a page, turning a fail-closed rejection into a finding.
 
@@ -293,7 +296,7 @@ def _render(
 
 
 def check_disclosure(
-    catalog: Catalog, document: dict[str, object]
+    catalog: Catalog, document: Mapping[str, object]
 ) -> Iterator[Finding]:
     """The page must disclose an unreviewed translation, and only then."""
 
@@ -320,7 +323,7 @@ def check_disclosure(
         )
 
 
-def check_hardcoded_strings(document: dict[str, object]) -> Iterator[Finding]:
+def check_hardcoded_strings(document: Mapping[str, object]) -> Iterator[Finding]:
     """Find visible text on the page that no catalog message accounts for."""
 
     catalog = load_catalog(PSEUDO_LOCALE)
@@ -360,12 +363,7 @@ def run_gate(catalogs: Iterable[Catalog]) -> list[Finding]:
         findings.extend(check_claiming_surface(catalog))
         findings.extend(check_disclosure(catalog, document))
     if seen == 0:
-        findings.append(
-            Finding(
-                "no-catalogs", "-", "no catalog was examined, so nothing was proved"
-            )
-        )
-        return findings
+        raise GateUnavailable("no catalog was examined, so nothing was proved")
     findings.extend(check_hardcoded_strings(document))
     return findings
 
@@ -380,8 +378,18 @@ def shipped_catalogs() -> tuple[Catalog, ...]:
     return tuple(load_catalog(locale) for locale in locales)
 
 
+class GateUnavailable(Exception):
+    """The gate examined nothing, which is never a clean result.
+
+    Exit 2, not exit 1. This gate used to report "no catalog was examined" as a
+    finding, which put it at the same exit code as a real parity failure and
+    lost the distinction the rest of the gates in this repository keep. See
+    ADR 0008.
+    """
+
+
 def main(argv: Sequence[str] | None = None) -> int:
-    """Run the gate and return 0 clean, 1 with findings, 2 on usage error."""
+    """Run the gate: 0 clean, 1 with findings, 2 when it examined nothing."""
 
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
@@ -393,12 +401,20 @@ def main(argv: Sequence[str] | None = None) -> int:
         args = parser.parse_args(argv)
     except SystemExit as exc:  # pragma: no cover - argparse exits directly
         return 2 if exc.code else 0
-    catalogs = (
-        tuple(load_catalog(locale) for locale in args.locale)
-        if args.locale
-        else shipped_catalogs()
-    )
-    findings = run_gate(catalogs)
+    try:
+        catalogs = (
+            tuple(load_catalog(locale) for locale in args.locale)
+            if args.locale
+            else shipped_catalogs()
+        )
+        findings = run_gate(catalogs)
+    except (GateUnavailable, ContextSafeError, OSError, json.JSONDecodeError) as exc:
+        print(f"i18n-gate: {exc}.", file=sys.stderr)
+        print(
+            "i18n-gate: this is a failure to run the gate, not a clean result.",
+            file=sys.stderr,
+        )
+        return 2
     if findings:
         print(f"i18n-gate: {len(findings)} finding(s)")
         for finding in findings:

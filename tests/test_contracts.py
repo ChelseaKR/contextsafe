@@ -1,13 +1,23 @@
 """Contract and fail-closed boundary tests for synthetic schemas."""
 
 import json
+import re
 from pathlib import Path
 from typing import Any
 
 import pytest
 from jsonschema import Draft202012Validator
 
+from contextsafe.contract_validation import (
+    PROVENANCE_LABEL_GRAMMAR,
+    Grammar,
+    bounded_string,
+    host_value,
+    provenance_string,
+    relative_path_value,
+)
 from contextsafe.errors import ContextSafeError
+from contextsafe.identifiers import Detector
 from contextsafe.models import (
     GenderIdentity,
     NameToUse,
@@ -343,3 +353,109 @@ def test_bundle_rejects_rule_expectation_detached_from_case_manifest(
 
     with pytest.raises(ContextSafeError, match="rule_expectation_mismatch"):
         parse_bundle(case_json, observations_json, rules_json)
+
+
+# --- the bounds these primitives publish, asserted at the edge ---------------
+#
+# Every case below kills one mutant `make mutants` found surviving: a length
+# comparison widened from `>` to `>=`, a surrogate-block bound moved by one, the
+# 256-byte relative-path bound, the 253-byte host bound, the non-string branch
+# of `provenance_string`, and the frozen/slots declarations on the two records
+# the boundary layer is built from. Each was a line the suite executed and did
+# not check.
+
+
+def test_a_string_of_exactly_the_bound_is_accepted() -> None:
+    assert bounded_string("x" * 8, "$", max_length=8) == "x" * 8
+
+
+def test_a_string_one_character_over_the_bound_is_rejected() -> None:
+    with pytest.raises(ContextSafeError) as caught:
+        bounded_string("x" * 9, "$", max_length=8)
+    assert caught.value.code == "invalid_string"
+
+
+@pytest.mark.parametrize("codepoint", [0xD800, 0xDBFF, 0xDC00, 0xDFFF])
+def test_a_lone_surrogate_anywhere_in_the_block_is_rejected(codepoint: int) -> None:
+    """Both ends of the block, so neither bound can move by one unnoticed."""
+
+    with pytest.raises(ContextSafeError) as caught:
+        bounded_string(f"a{chr(codepoint)}b", "$")
+    assert caught.value.code == "invalid_unicode"
+
+
+@pytest.mark.parametrize("codepoint", [0xD7FF, 0xE000])
+def test_a_scalar_just_outside_the_surrogate_block_is_accepted(
+    codepoint: int,
+) -> None:
+    assert bounded_string(f"a{chr(codepoint)}b", "$")
+
+
+def test_a_relative_path_of_exactly_the_bound_is_accepted() -> None:
+    assert relative_path_value("a" * 256, "$") == "a" * 256
+
+
+def test_a_relative_path_one_character_over_the_bound_is_rejected() -> None:
+    with pytest.raises(ContextSafeError) as caught:
+        relative_path_value("a" * 257, "$")
+    assert caught.value.code == "invalid_string"
+
+
+def _host_of(length: int) -> str:
+    labels = []
+    remaining = length
+    while remaining > 0:
+        size = min(63, remaining)
+        labels.append("a" * size)
+        remaining -= size + 1
+    return ".".join(labels)
+
+
+def test_a_host_of_exactly_the_bound_is_accepted() -> None:
+    host = _host_of(253)
+    assert len(host) == 253
+    assert host_value(host, "$") == host
+
+
+def test_a_host_one_character_over_the_bound_is_rejected() -> None:
+    host = _host_of(254)
+    assert len(host) == 254
+    with pytest.raises(ContextSafeError) as caught:
+        host_value(host, "$")
+    assert caught.value.code == "invalid_string"
+
+
+@pytest.mark.parametrize("value", ["", 0, None, 12345, b"bytes"])
+def test_a_provenance_token_that_is_not_a_non_empty_string_is_rejected(
+    value: object,
+) -> None:
+    """The empty string and the non-string take the same branch, and must."""
+
+    with pytest.raises(ContextSafeError) as caught:
+        provenance_string(value, "$.collector_id", PROVENANCE_LABEL_GRAMMAR)
+    assert caught.value.code == "invalid_string"
+
+
+@pytest.mark.parametrize(
+    ("record", "field"),
+    [
+        (Grammar(base="^a$", exclusions=(), max_length=1), "max_length"),
+        (Detector("email", re.compile("a")), "name"),
+    ],
+    ids=["Grammar", "Detector"],
+)
+def test_the_boundary_records_cannot_be_mutated_or_grown(
+    record: object, field: str
+) -> None:
+    """Frozen and slotted, so an accept-or-reject rule cannot be edited in place.
+
+    ``frozen=True`` is the half that stops an existing field being reassigned;
+    ``slots=True`` is the half that stops a new attribute being attached at all.
+    A rule set the code it governs can rewrite is not a rule set, and both
+    halves were unasserted until `make mutants` said so.
+    """
+
+    with pytest.raises((AttributeError, TypeError)):
+        setattr(record, field, "rewritten")
+    assert getattr(record, field) != "rewritten"
+    assert not hasattr(record, "__dict__")

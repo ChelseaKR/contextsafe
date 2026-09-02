@@ -1,8 +1,8 @@
-.PHONY: a11y a11y-full a11y-install audit claims format format-fix hygiene i18n lint publication-sweep secret-scan sync test typecheck verify
+.PHONY: a11y a11y-full a11y-install audit claims format format-fix hygiene i18n lint mutants publication-sweep scope secret-scan sync test typecheck verify
 
 SAFETY_MODULES := src/contextsafe/identifiers.py,src/contextsafe/models.py,src/contextsafe/validation.py,src/contextsafe/evaluator.py,src/contextsafe/receipt.py,src/contextsafe/contract_validation.py,src/contextsafe/jsonio.py,src/contextsafe/pack.py,src/contextsafe/plan.py,src/contextsafe/evidence.py,src/contextsafe/preflight.py,src/contextsafe/evidence_store.py,src/contextsafe/safe_value.py,src/contextsafe/diagnostics.py,src/contextsafe/eventlog.py
 
-verify: sync lint format typecheck test audit hygiene publication-sweep i18n a11y claims
+verify: sync lint format typecheck test audit hygiene scope publication-sweep i18n a11y claims
 
 sync:
 	# --locked fails when uv.lock has drifted from pyproject.toml.
@@ -19,11 +19,13 @@ format-fix:
 	uv run ruff check --fix .
 	uv run ruff format .
 
+# No path argument: `[tool.mypy] files` in pyproject.toml is the claim, and
+# `make scope` checks it against the tree. A path here would silently win.
 typecheck:
-	uv run mypy --strict src
+	uv run mypy --strict
 
 test:
-	uv run pytest --cov=contextsafe --cov=tools --cov-branch --cov-report=term-missing --cov-fail-under=90
+	uv run pytest --cov --cov-branch --cov-report=term-missing --cov-fail-under=90
 	uv run coverage report --include='$(SAFETY_MODULES)' --fail-under=95
 
 audit:
@@ -35,6 +37,15 @@ audit:
 # target directly, so CI and a maintainer run the identical scan.
 secret-scan:
 	./tools/secret-scan-full-history.sh
+
+# Evidence that the suite would notice a change, not just execute the line.
+# Deliberately not part of `verify`: every mutant is a separate test run, so
+# this takes minutes against the second the rest of `verify` costs. It needs no
+# tool a clean clone lacks, and it writes nothing into the working tree: the
+# package is copied to a temporary directory, mutated there, and put in front of
+# the editable install with PYTHONPATH.
+mutants:
+	uv run python tools/mutation_gate.py
 
 # Keeps the publication-readiness sweep true as commits land, instead of true
 # as of the day somebody ran it by hand. Stdlib only, so it costs `verify`
@@ -76,6 +87,14 @@ a11y-install:
 # it exits 1 on a finding and 2 when it could not examine anything.
 hygiene:
 	uv run python tools/hygiene_gate.py
+
+# Every other gate can say "I looked and found nothing" and "I could not look".
+# None of them can say "nobody ever pointed me at that tree", which is what
+# `tools/` was for the marker scan and the coverage floor until 2026-08-27. This
+# reads each analysis's claimed scope from the configuration that makes the
+# claim and compares it against the tracked Python that exists.
+scope:
+	uv run python tools/scope_gate.py
 
 # The figures and lists the documents state, re-derived from the repository: this
 # target list against README.md and CONTRIBUTING.md, the ADR index, the coverage

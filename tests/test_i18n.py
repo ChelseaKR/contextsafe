@@ -285,10 +285,22 @@ def test_the_gate_is_clean_on_the_shipped_catalogs() -> None:
 
 
 def test_the_gate_refuses_to_pass_on_nothing() -> None:
-    """A gate that reports success having examined nothing is worthless."""
+    """A gate that reports success having examined nothing is worthless.
 
-    findings = gate.run_gate(())
-    assert [finding.rule for finding in findings] == ["no-catalogs"]
+    This was a ``no-catalogs`` finding, which put "nothing was examined" at the
+    same exit code as a real parity failure. It is a refusal now: exit 2, the
+    contract every other gate here keeps. See ADR 0008.
+    """
+
+    with pytest.raises(gate.GateUnavailable):
+        gate.run_gate(())
+
+
+def test_examining_nothing_is_exit_two_and_says_so(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    assert gate.main(["--locale", "xx-YY"]) == 2
+    assert "not a clean result" in capsys.readouterr().err
 
 
 def test_the_gate_catches_a_missing_key(tmp_path: Path) -> None:

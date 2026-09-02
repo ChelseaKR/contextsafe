@@ -92,6 +92,7 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 if str(REPO_ROOT / "src") not in sys.path:  # pragma: no cover - import shim
     sys.path.insert(0, str(REPO_ROOT / "src"))
 
+from contextsafe.errors import ContextSafeError  # noqa: E402
 from contextsafe.evaluator import evaluate  # noqa: E402
 from contextsafe.html_receipt import PAGE_KIND, render_receipt_page  # noqa: E402
 from contextsafe.i18n import load_catalog  # noqa: E402
@@ -608,10 +609,12 @@ def build_subjects(locales: Sequence[str]) -> tuple[Subject, ...]:
     def read(name: str) -> object:
         return json.loads((REFERENCE / name).read_text(encoding="utf-8"))
 
+    # `parse_bundle` takes three `object` parameters and validates them itself,
+    # so the three `type: ignore[arg-type]` comments that used to sit here
+    # suppressed nothing. A suppression that suppresses nothing is a claim about
+    # a problem that is not there, which is why `--strict` reports it.
     bundle = parse_bundle(
-        read("case.json"),  # type: ignore[arg-type]
-        read("observations.json"),  # type: ignore[arg-type]
-        read("rules.json"),  # type: ignore[arg-type]
+        read("case.json"), read("observations.json"), read("rules.json")
     )
     document = build_receipt_document(bundle, evaluate(bundle))
     payload = document["payload"]
@@ -678,6 +681,21 @@ def run_axe(
             )
         )
         return findings, undetermined, False
+    # `ok` is the harness saying it started, not evidence it examined anything.
+    # A harness that answered `{"ok": true}` with no pages produced no finding
+    # and no refusal, so the gate reported a clean axe run over zero pages.
+    # Every subject handed over must come back.
+    returned = {Path(str(page["page"])).name for page in payload.get("pages", [])}
+    for subject in subjects:
+        if subject.name not in returned:
+            findings.append(
+                Finding(
+                    "engine-examined-nothing",
+                    subject.name,
+                    "the harness reported success and returned no result for this "
+                    "page, so nothing was examined and nothing is proved",
+                )
+            )
     for page in payload.get("pages", []):
         name = Path(str(page["page"])).name
         if int(page.get("executedRules", 0)) == 0:
@@ -838,8 +856,61 @@ def _run_builtin(subjects: Iterable[Subject]) -> list[CheckResult]:
     return list(totals.values())
 
 
+# Findings that mean "this gate did not examine what it claims to", as opposed
+# to "this page has an accessibility defect". They exit 2 rather than 1, so a
+# missing node harness is never mistaken for a contrast failure and a passing
+# CI job can never be a job whose engine was absent. See ADR 0008.
+#
+# Four ids were missing here until 2026-08-31, and every one of them was a way
+# for the gate to say "I could not look" at exit 1: `--engines ''` (no engine
+# requested), `--engines bogus` (an engine that does not exist), a page declared
+# and not audited, and a rule axe returned as undetermined that no check here
+# decides. All four are the same sentence as an absent node harness.
+UNAVAILABLE_RULES: frozenset[str] = frozenset(
+    {
+        "check-examined-nothing",
+        "coverage",
+        "engine-examined-nothing",
+        "engine-not-executed",
+        "engine-unavailable",
+        "engine-unknown",
+        "no-engines",
+        "no-pages",
+        "undetermined-uncovered",
+    }
+)
+
+# Findings that mean "this page has a defect", which is exit 1. Declared rather
+# than left as "everything else", so that a rule added later belongs to one list
+# or the other by decision: `tests/test_gate_exit_contract.py` reads every rule
+# id this module constructs and fails when one is in neither.
+DEFECT_RULES: frozenset[str] = frozenset(
+    {
+        "axe",
+        "color-only",
+        "contrast",
+        "html-validity",
+        "print",
+        "wrong-subject",
+    }
+)
+
+
+def exit_code(findings: Sequence[Finding]) -> int:
+    """Return the gate's exit code for a finding set.
+
+    A run that could not examine everything it was asked to is exit 2 even when
+    it also has real findings, because those findings are over an incomplete
+    engine set and the reader cannot tell what is missing from them.
+    """
+
+    if any(finding.rule in UNAVAILABLE_RULES for finding in findings):
+        return 2
+    return 1 if findings else 0
+
+
 def main(argv: Sequence[str] | None = None) -> int:
-    """Run the gate and return 0 clean, 1 with findings, 2 on usage error."""
+    """Run the gate: 0 clean, 1 with findings, 2 when it examined nothing."""
 
     parser = argparse.ArgumentParser(description="Accessibility gate (B-043).")
     parser.add_argument(
@@ -861,8 +932,23 @@ def main(argv: Sequence[str] | None = None) -> int:
     args = parser.parse_args(argv)
     engines = tuple(part for part in args.engines.split(",") if part)
     locales = tuple(args.locale) if args.locale else DEFAULT_LOCALES
-    args.workdir.mkdir(parents=True, exist_ok=True)
-    report = audit(build_subjects(locales), engines=engines, workdir=args.workdir)
+    try:
+        args.workdir.mkdir(parents=True, exist_ok=True)
+        subjects = build_subjects(locales)
+    except (ContextSafeError, OSError) as exc:
+        # A locale with no published catalog used to reach the reader as an
+        # unhandled traceback at exit 1 -- "examined and found something" for a
+        # gate that rendered no page at all. `tools/i18n_gate.py` answers the
+        # same input class with exit 2, and two gates in one repository must not
+        # answer it differently. See ADR 0008.
+        print(f"a11y-gate: {exc}", file=sys.stderr)
+        print(
+            "a11y-gate: no page could be built, so this is a failure to run the "
+            "gate, not a clean result.",
+            file=sys.stderr,
+        )
+        return 2
+    report = audit(subjects, engines=engines, workdir=args.workdir)
     if args.json:
         args.json.write_text(
             json.dumps(report.to_dict(), indent=2, sort_keys=True) + "\n",
@@ -879,11 +965,18 @@ def main(argv: Sequence[str] | None = None) -> int:
             "  undetermined by axe (never counted as a pass): "
             + ", ".join(sorted(set(report.undetermined)))
         )
+    code = exit_code(report.findings)
     if report.findings:
         print(f"a11y-gate: {len(report.findings)} finding(s)")
         for finding in report.findings:
             print(finding)
-        return 1
+        if code == 2:
+            print(
+                "a11y-gate: at least one finding is a failure to run a check, "
+                "not an accessibility defect, so this is not a clean result.",
+                file=sys.stderr,
+            )
+        return code
     print("a11y-gate: clean")
     return 0
 

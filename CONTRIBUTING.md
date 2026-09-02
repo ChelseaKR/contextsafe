@@ -38,6 +38,12 @@ uvx pre-commit install
 
 ## The merge gate
 
+Every gate in this repository uses the same three exit codes, and they are
+three because two is how a gate lies: **0** it examined what it claims to and
+found nothing, **1** it examined and found something, **2** it did not examine,
+so it has no answer. A gate that cannot run fails differently from a gate that
+failed. See [ADR 0008](docs/adr/0008-one-exit-code-contract-for-every-gate.md).
+
 A change merges when the full gate is green. Reproduce it locally with:
 
 ```sh
@@ -60,6 +66,7 @@ from the `verify` target in the `Makefile` and fails when they disagree.
 | Tests + coverage | `make test` | pytest; branch coverage ≥90% overall, ≥95% on safety-critical modules |
 | Dependency audit | `make audit` | `pip-audit` against the locked environment |
 | Hygiene | `make hygiene` | no TODO/FIXME/HACK in tracked files under `src`/`tests`/`tools`; no stray tool config within two path segments of the root. Exit 1 on a finding, exit 2 when it could not examine anything, and the clean line says how many files it read and how many exemptions it honored. |
+| Scope | `make scope` | every tracked Python file is inside the trees each analysis claims, read from `[tool.mypy] files`, `[tool.coverage.run] source`, and the marker scan's own `MARKER_ROOTS`. A file nobody claims, a claim with nothing under it, and a declared exception that excuses nothing are each a finding; exit 2 when a claim cannot be read. |
 | Publication sweep | `make publication-sweep` | nothing unpublishable in tracked files: no personal filesystem path, no internal hostname, no pointer to a repository a reader cannot open, no relative link escaping the repository, and no source it listed and then could not read. Add `publication-sweep: allow` to a line only with a reason in review. |
 | Internationalization | `make i18n` | catalog parity, placeholder parity, message quality, and review consistency across the shipped locale catalogs; a machine-translated string may never reach a surface claiming human review. Fails rather than passing when it examined no catalog. |
 | Accessibility | `make a11y` | renders the receipt page in every shipped locale and checks structural validity, WCAG 2.2 contrast computed from the stylesheet, no colour-only status encoding, and print. Fails rather than passing when it examined no page. `make a11y-full` adds axe-core and is a separate CI job because it needs the node harness. |
@@ -71,12 +78,14 @@ the case that exists — is exempted with `hygiene: allow` on the same line,
 honored exemption is printed on every run so the mechanism stays countable. See
 [ADR 0005](docs/adr/0005-hygiene-marker-exemptions.md).
 
-One gate sits outside `make verify`, because it needs a tool a clean clone does
-not have and `make verify` must stay exactly what CI runs:
+Two gates sit outside `make verify`. One needs a tool a clean clone does not
+have, and `make verify` must stay exactly what CI runs; the other costs
+minutes rather than a second:
 
 | Gate | Command | What it checks |
 | --- | --- | --- |
-| Full-history secret scan | `make secret-scan` | gitleaks over every ref, every object in the object database (including unreachable ones and every commit message), and the working tree. Needs gitleaks 8.30.1 on `PATH` (`brew install gitleaks`); CI and the release pipeline run this same target. |
+| Mutation evidence | `make mutants` | changes one operator or constant in a declared safety module and requires the suite to fail. Branch coverage says a line ran; this says a change to it would be noticed. Stdlib only, writes nothing into the working tree, and takes about two minutes, which is why it is not in `verify`. Exit 1 on a survivor, exit 2 when it produced no evidence. See [ADR 0009](docs/adr/0009-mutation-evidence-over-declared-safety-modules.md). |
+| Full-history secret scan | `make secret-scan` | gitleaks over every ref, every object in the object database (including unreachable ones and every commit message), and the working tree. Needs gitleaks 8.30.1 on `PATH` (`brew install gitleaks`); CI and the release pipeline run this same target. Exit 1 on a finding; exit 2 when gitleaks is absent, is not the pinned version, cannot read an object it enumerated, or enumerated zero blobs. Its three states are covered by `tests/test_gate_exit_contract.py`, which drives it with a stand-in scanner and therefore runs without gitleaks installed. |
 
 ## Design constraints that reviews enforce
 

@@ -33,7 +33,7 @@ is published HL7 Gender Harmony material.
 With [`uv`](https://docs.astral.sh/uv/) installed:
 
 ```sh
-make verify                       # sync lint format typecheck test audit hygiene publication-sweep i18n a11y claims
+make verify                       # sync lint format typecheck test audit hygiene scope publication-sweep i18n a11y claims
 uv run contextsafe evaluate \
   --case fixtures/reference/case.json \
   --observations fixtures/reference/observations.json \
@@ -287,8 +287,9 @@ floors are 90% overall branch coverage and 95% safety-module branch coverage.
 README states, including that stage list, so a stage added to `verify` and left
 undocumented fails the build instead of quietly misleading a reader.
 
-The gate implementations in `tools/` are inside the trees those gates scan and
-inside the coverage floor. They were not until 2026-08-27, which is the first
+The gate implementations in `tools/` are inside the trees those gates scan,
+inside strict typing, and inside the coverage floor, and `make scope` fails if a
+tree of Python ever exists that no analysis was pointed at. They were not until 2026-08-27, which is the first
 phase of [the assurance program](docs/18-ASSURANCE-PROGRAM.md): a check that
 reports clean over content it did not examine is the defect class that document
 exists to track.
@@ -362,6 +363,9 @@ A successful v1 allows one design partner to:
 - [ADR 0004: the SAST gate and a scan that cannot skip itself](docs/adr/0004-sast-gate-pragma-and-scan-invocation.md)
 - [ADR 0005: the gates are inside the trees they scan, and exemptions carry a reason](docs/adr/0005-hygiene-marker-exemptions.md)
 - [ADR 0006: provenance tokens get a grammar and a boundary scan](docs/adr/0006-provenance-token-grammar-and-boundary-scan.md)
+- [ADR 0007: every analysis declares the tree it examines](docs/adr/0007-declared-analysis-scope.md)
+- [ADR 0008: one exit-code contract for every gate](docs/adr/0008-one-exit-code-contract-for-every-gate.md)
+- [ADR 0009: mutation evidence over the declared safety modules](docs/adr/0009-mutation-evidence-over-declared-safety-modules.md)
 
 ## Working principles
 

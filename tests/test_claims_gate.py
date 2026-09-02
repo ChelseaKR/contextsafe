@@ -117,8 +117,8 @@ def test_a_documented_stage_verify_does_not_run_is_a_finding(repo: Path) -> None
     _edit(
         repo,
         "README.md",
-        "hygiene publication-sweep",
-        "hygiene mystery publication-sweep",
+        "hygiene scope publication-sweep",
+        "hygiene scope mystery publication-sweep",
     )
     findings = gate.run_gate(repo)
     assert [f.where for f in findings] == ["README.md"]
@@ -147,13 +147,54 @@ def test_a_contributing_table_with_no_commands_is_a_finding(repo: Path) -> None:
     assert any("no `make <target>` command column" in f.detail for f in findings)
 
 
-def test_the_out_of_verify_secret_scan_row_is_not_a_finding(repo: Path) -> None:
-    """`make secret-scan` is documented in the same file and deliberately excluded."""
+def test_the_gates_outside_verify_are_documented_and_not_findings(repo: Path) -> None:
+    """Both out-of-`verify` gates are tabled in the same file and excluded.
 
-    assert "`make secret-scan`" in (repo / "CONTRIBUTING.md").read_text(
-        encoding="utf-8"
-    )
+    They used to be excluded by a literal set inside the gate. `make mutants`
+    then moved out of `verify` and the literal did not follow, so the gate read
+    a correctly documented row as an undocumented stage. The exclusion is now
+    read from the sentence the document already writes.
+    """
+
+    contributing = (repo / "CONTRIBUTING.md").read_text(encoding="utf-8")
+    assert "`make secret-scan`" in contributing
+    assert "`make mutants`" in contributing
     assert gate.run_gate(repo) == []
+
+
+def test_losing_the_divider_between_the_tables_is_a_finding(repo: Path) -> None:
+    """Without it every row reads as a `verify` stage, so it is not optional."""
+
+    _edit(repo, "CONTRIBUTING.md", "Two gates sit outside", "These gates are outside")
+    findings = [f for f in gate.run_gate(repo) if f.check == "verify-stages"]
+    assert any("divides the gate table" in f.detail for f in findings)
+
+
+def test_a_gate_verify_runs_tabled_as_outside_it_is_a_finding(repo: Path) -> None:
+    _edit(repo, "CONTRIBUTING.md", "| `make secret-scan` |", "| `make hygiene` |")
+    findings = gate.run_gate(repo)
+    assert [f.check for f in findings] == ["verify-stages"]
+    assert "`make hygiene` as sitting outside" in findings[0].detail
+
+
+def test_a_documented_gate_the_makefile_has_no_target_for_is_a_finding(
+    repo: Path,
+) -> None:
+    _edit(repo, "CONTRIBUTING.md", "| `make secret-scan` |", "| `make ghost` |")
+    findings = gate.run_gate(repo)
+    assert [f.check for f in findings] == ["verify-stages"]
+    assert "`make ghost`, which the Makefile has no target for" in findings[0].detail
+
+
+def test_a_count_that_does_not_match_the_second_table_is_a_finding(repo: Path) -> None:
+    """The sentence states a number, so the number is a claim like any other."""
+
+    _edit(repo, "CONTRIBUTING.md", "Two gates sit outside", "Three gates sit outside")
+    findings = gate.run_gate(repo)
+    assert [f.check for f in findings] == ["verify-stages"]
+    assert "says three gate(s) sit outside `make verify` and then tables 2" in (
+        findings[0].detail
+    )
 
 
 # --- adr-index --------------------------------------------------------------
