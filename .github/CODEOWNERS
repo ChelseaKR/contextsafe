@@ -9,7 +9,7 @@
 
 # Contracts, canonicalization, evaluation, and receipts are safety-critical.
 /schemas/ @ChelseaKR
-/fixtures/reference/ @ChelseaKR
+/src/contextsafe/fixtures/reference/ @ChelseaKR
 /src/contextsafe/models.py @ChelseaKR
 /src/contextsafe/validation.py @ChelseaKR
 /src/contextsafe/canonical.py @ChelseaKR

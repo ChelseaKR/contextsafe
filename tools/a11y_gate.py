@@ -97,6 +97,7 @@ from contextsafe.evaluator import evaluate  # noqa: E402
 from contextsafe.html_receipt import PAGE_KIND, render_receipt_page  # noqa: E402
 from contextsafe.i18n import load_catalog  # noqa: E402
 from contextsafe.receipt import build_receipt_document  # noqa: E402
+from contextsafe.reference_fixtures import REFERENCE_ROOT  # noqa: E402
 from contextsafe.validation import parse_bundle  # noqa: E402
 
 # The locales audited when `--locale` is not given. Unlike `tools/i18n_gate.py`,
@@ -106,7 +107,7 @@ from contextsafe.validation import parse_bundle  # noqa: E402
 # a reader without an accessibility run behind it.
 DEFAULT_LOCALES: tuple[str, ...] = ("en-US", "es-US")
 
-REFERENCE = REPO_ROOT / "fixtures" / "reference"
+REFERENCE = REFERENCE_ROOT
 HARNESS = REPO_ROOT / "tools" / "a11y" / "run.mjs"
 HARNESS_MODULES = REPO_ROOT / "tools" / "a11y" / "node_modules"
 

@@ -8,9 +8,9 @@ import pytest
 from contextsafe.cli import EXIT_USAGE_ERROR, main
 from contextsafe.evidence import CANONICAL_JSON_MEDIA_TYPE, CANONICAL_JSON_SOURCE_TYPE
 from contextsafe.plan import ExecutionPlan
+from contextsafe.reference_fixtures import REFERENCE_ROOT
 
-ROOT = Path(__file__).resolve().parents[1]
-REFERENCE = ROOT / "fixtures" / "reference"
+REFERENCE = REFERENCE_ROOT
 
 
 def _args(command: str) -> list[str]:

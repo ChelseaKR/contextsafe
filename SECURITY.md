@@ -47,7 +47,8 @@ available.
 
 **Never include real patient data, real PHI, or real production system details in a
 report.** Every fixture in this repository is synthetic by construction; reproduce
-issues with the synthetic fixtures under `fixtures/` and `tests/`, or describe the
+issues with the synthetic fixtures under `src/contextsafe/fixtures/reference/` and
+`tests/`, or describe the
 *shape* of the flaw ("the evidence preflight accepts a payload containing X")
 without real values.
 

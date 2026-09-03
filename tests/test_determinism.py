@@ -40,9 +40,10 @@ from contextsafe import jsonio
 from contextsafe.cli import main
 from contextsafe.errors import ContextSafeError
 from contextsafe.models import Checkpoint
+from contextsafe.reference_fixtures import REFERENCE_ROOT
 
 ROOT = Path(__file__).resolve().parents[1]
-REFERENCE = ROOT / "fixtures" / "reference"
+REFERENCE = REFERENCE_ROOT
 
 RECEIPT_DOCUMENT_SHA256 = (
     "f34e58fa642ec0ac5a2368834324d55f1aacbf5f0b51c1ac0cff5c72ea3dce80"

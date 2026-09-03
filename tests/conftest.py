@@ -2,7 +2,6 @@
 
 import json
 from datetime import date
-from pathlib import Path
 from typing import Any
 
 import pytest
@@ -23,9 +22,9 @@ from contextsafe.plan import (
     PlanOwners,
     SyntheticNamespace,
 )
+from contextsafe.reference_fixtures import REFERENCE_ROOT
 
-ROOT = Path(__file__).resolve().parents[1]
-REFERENCE = ROOT / "fixtures" / "reference"
+REFERENCE = REFERENCE_ROOT
 
 
 def _read_json(name: str) -> dict[str, Any]:

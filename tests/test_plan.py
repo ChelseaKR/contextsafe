@@ -29,9 +29,10 @@ from contextsafe.plan import (
     parse_plan,
     validate_plan,
 )
+from contextsafe.reference_fixtures import REFERENCE_ROOT
 
 ROOT = Path(__file__).resolve().parents[1]
-REFERENCE = ROOT / "fixtures" / "reference"
+REFERENCE = REFERENCE_ROOT
 AS_OF = date(2026, 7, 13)
 
 

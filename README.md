@@ -7,11 +7,12 @@ receipt that states its own limits. The clinically and community-governed
 service that would run it against a real health system is a plan, not a
 product.**
 
-The tool is here now. Nine subcommands, no network access, committed synthetic
-fixtures. With [`uv`](https://docs.astral.sh/uv/) installed, this returns a full
-receipt:
+The tool is here now. Ten subcommands, no network access, committed synthetic
+fixtures that ship inside the package. With
+[`uv`](https://docs.astral.sh/uv/) installed, this returns a full receipt:
 
 ```sh
+uv run contextsafe fixtures export   # the packaged synthetic inputs, into ./fixtures/reference
 uv run contextsafe evaluate \
   --case fixtures/reference/case.json \
   --observations fixtures/reference/observations.json \
@@ -130,6 +131,7 @@ With [`uv`](https://docs.astral.sh/uv/) installed:
 
 ```sh
 make verify                       # sync lint format typecheck test audit hygiene scope publication-sweep i18n a11y claims
+uv run contextsafe fixtures export   # the packaged synthetic inputs, into ./fixtures/reference
 uv run contextsafe evaluate \
   --case fixtures/reference/case.json \
   --observations fixtures/reference/observations.json \
@@ -140,9 +142,15 @@ uv run contextsafe render \
   --output receipt.html           # script-free HTML page; --lang for a locale
 ```
 
-Everything runs offline against the committed synthetic reference fixtures;
-the full command walkthrough, including pack, plan, and evidence-preflight
-validation, is under [Internal implementation slice](#internal-implementation-slice).
+Everything runs offline against the synthetic reference fixtures, which are
+package data under
+[`src/contextsafe/fixtures/reference/`](src/contextsafe/fixtures/reference/):
+`fixtures export` copies them to `./fixtures/reference`, so the block above runs
+unchanged from a clone and from an installed wheel, and
+`tests/test_wheel_quickstart.py` runs it from a freshly built wheel outside the
+repository on every `make verify`. The full command walkthrough, including pack,
+plan, and evidence-preflight validation, is under
+[Internal implementation slice](#internal-implementation-slice).
 
 ## Internal implementation slice
 
@@ -156,7 +164,7 @@ Iteration 1 implements a deliberately narrow Python 3.12 path:
 - a pure exact-match evaluator where missing or ambiguous evidence is indeterminate;
 - a deterministic, value-minimized JSON receipt with input, rule-set, and result hashes;
 - offline `validate` and `evaluate` commands plus a small synthetic
-  [reference fixture](fixtures/reference/case.json).
+  [reference fixture](src/contextsafe/fixtures/reference/case.json).
 
 Iteration 2 adds a machine-enforceable but deliberately unsigned control plane:
 
@@ -286,7 +294,7 @@ synthetic-namespace grammar rather than the scan is what bounds them.
 
 Declared approvals are not authenticated signatures and do not establish that a
 real clinical or community review occurred. The committed
-[reference pack](fixtures/reference/pack-draft.json) is intentionally `draft`, has
+[reference pack](src/contextsafe/fixtures/reference/pack-draft.json) is intentionally `draft`, has
 no approvals, and must fail compilation. Tests construct visibly test-only approval
 declarations in memory solely to exercise the state machine.
 
@@ -304,6 +312,7 @@ With `uv` installed:
 
 ```bash
 make verify
+uv run contextsafe fixtures export   # packaged synthetic inputs, into ./fixtures/reference
 uv run contextsafe validate \
   --case fixtures/reference/case.json \
   --observations fixtures/reference/observations.json \
