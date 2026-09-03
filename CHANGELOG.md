@@ -8,6 +8,27 @@ release yet, so everything to date lives under Unreleased.
 
 ### Fixed
 
+- **The documented quickstart could not run from an installed wheel.** The five
+  synthetic reference inputs lived under `fixtures/reference/` at the repository
+  root, which is not package data: `uv build` shipped `src/contextsafe` and its
+  locale catalogs and nothing else, so `contextsafe --help` worked from a
+  `pip install` and the README's own `evaluate --case fixtures/reference/case.json`
+  failed closed with `input_io_error` from anywhere but a clone. No test could see
+  it, because every test runs from the checkout, where an editable install finds
+  a file in the tree whether or not the wheel carries it -- the defect class
+  `docs/18-ASSURANCE-PROGRAM.md` exists to name. The fixtures are now package
+  data under `src/contextsafe/fixtures/reference/` (a rename; the bytes are
+  unchanged), and a tenth subcommand, `fixtures export`, copies them to
+  `./fixtures/reference` -- byte-exact, leaving a byte-identical file alone,
+  refusing one that differs, and refusing the whole export if the install is
+  missing one -- so the documented commands run verbatim from a clone or from a
+  wheel. The unobserved path is now observed: `tests/test_wheel_quickstart.py`
+  builds the wheel, installs it into a fresh virtual environment, and runs the
+  README's Quickstart block, parsed from the README itself, from a directory that
+  is not the repository, then checks the wheel's receipt against one produced in
+  process from the checkout. It fails rather than skips when it cannot do that,
+  so a missing build tool is a red mark and not a green one.
+
 - **A support bundle's field *names* were never checked, in the one module whose
   whole argument is that nothing in a bundle is checked -- it is constructed.**
   `contextsafe.safe_value.to_json` refuses any value that is not a `SafeValue`,

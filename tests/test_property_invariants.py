@@ -50,10 +50,11 @@ from contextsafe.models import (
     ValueStatus,
 )
 from contextsafe.receipt import build_receipt, build_receipt_document, render_receipt
+from contextsafe.reference_fixtures import REFERENCE_ROOT
 from contextsafe.validation import parse_bundle
 
 ROOT = Path(__file__).resolve().parents[1]
-REFERENCE = ROOT / "fixtures" / "reference"
+REFERENCE = REFERENCE_ROOT
 RECEIPT_SCHEMA = json.loads(
     (ROOT / "schemas" / "contextsafe-receipt-v0.1.schema.json").read_text(
         encoding="utf-8"

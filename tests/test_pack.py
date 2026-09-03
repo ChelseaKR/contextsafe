@@ -24,10 +24,11 @@ from contextsafe.pack import (
     parse_pack,
     validate_compiled_pack,
 )
+from contextsafe.reference_fixtures import REFERENCE_ROOT
 from contextsafe.validation import parse_case, parse_rule_set
 
 ROOT = Path(__file__).resolve().parents[1]
-REFERENCE = ROOT / "fixtures" / "reference"
+REFERENCE = REFERENCE_ROOT
 AS_OF = date(2026, 7, 13)
 
 _TEST_REVIEWERS = {

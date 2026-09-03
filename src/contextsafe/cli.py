@@ -26,6 +26,10 @@ from contextsafe.pack import compile_pack
 from contextsafe.plan import parse_plan, validate_plan
 from contextsafe.preflight import preflight_source
 from contextsafe.receipt import build_receipt_document, input_payload, render_receipt
+from contextsafe.reference_fixtures import (
+    DEFAULT_EXPORT_DIRECTORY,
+    export_reference_fixtures,
+)
 from contextsafe.validation import parse_bundle
 
 EXIT_SUCCESS = 0
@@ -186,6 +190,33 @@ def _parser() -> argparse.ArgumentParser:
     evidence_preflight.add_argument("--source-type", required=True)
     evidence_preflight.add_argument("--media-type", required=True)
     evidence_preflight.add_argument("--output", type=Path)
+    fixtures_parser = subparsers.add_parser(
+        "fixtures",
+        help="Work with the synthetic reference fixtures the package carries.",
+    )
+    fixtures_subparsers = fixtures_parser.add_subparsers(
+        dest="fixtures_command", required=True
+    )
+    fixtures_export = fixtures_subparsers.add_parser(
+        "export",
+        parents=[modes],
+        help=(
+            "copy the packaged synthetic reference fixtures into a directory, "
+            "so the documented commands run from an installed wheel exactly "
+            "as they run from a clone"
+        ),
+    )
+    fixtures_export.add_argument(
+        "--directory",
+        type=Path,
+        default=DEFAULT_EXPORT_DIRECTORY,
+        help=(
+            "where to write them; defaults to fixtures/reference under the "
+            "current directory. A file already there that is byte-identical is "
+            "left alone and reported as unchanged; one that differs is a "
+            "contract error, and then nothing is written"
+        ),
+    )
     diagnostics_parser = subparsers.add_parser(
         "diagnostics",
         parents=[modes],
@@ -264,6 +295,12 @@ def _operator_command(args: argparse.Namespace) -> str | None:
     if args.command == "support-bundle":
         bundle = build_support_bundle(args.workspace, error_codes=args.error_code)
         return f"{canonical_json(bundle)}\n"
+    if args.command == "fixtures":
+        if args.fixtures_command != "export":
+            raise ContextSafeError(
+                "unsupported_command", "$", "fixtures command is unsupported"
+            )
+        return f"{canonical_json(export_reference_fixtures(args.directory))}\n"
     return None
 
 

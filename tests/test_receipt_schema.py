@@ -35,10 +35,11 @@ from contextsafe.models import (
     OutcomeStatus,
 )
 from contextsafe.receipt import build_receipt_document
+from contextsafe.reference_fixtures import REFERENCE_ROOT
 from contextsafe.validation import parse_bundle
 
 ROOT = Path(__file__).resolve().parents[1]
-REFERENCE = ROOT / "fixtures" / "reference"
+REFERENCE = REFERENCE_ROOT
 SCHEMA_PATH = ROOT / "schemas" / "contextsafe-receipt-v0.1.schema.json"
 
 CLAIMED = datetime(2026, 8, 4, 9, 30, 0, tzinfo=UTC)

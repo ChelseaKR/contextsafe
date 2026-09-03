@@ -79,9 +79,10 @@ from contextsafe.i18n import (  # noqa: E402
     source_catalog,
 )
 from contextsafe.receipt import build_receipt_document  # noqa: E402
+from contextsafe.reference_fixtures import REFERENCE_ROOT  # noqa: E402
 from contextsafe.validation import parse_bundle  # noqa: E402
 
-REFERENCE = REPO_ROOT / "fixtures" / "reference"
+REFERENCE = REFERENCE_ROOT
 
 _IGNORED_TEXT = frozenset({"✔", "✖", "▣", "—", "?"})
 

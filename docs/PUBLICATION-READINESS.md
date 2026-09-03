@@ -432,8 +432,11 @@ history for a section number is not worth the cost, and the fact is unremarkable
 
 ### §4 Synthetic-data confirmation
 
-`fixtures/` holds exactly five files, 7,957 bytes total, and **no fixture path
-has ever been deleted** — the 89-path full-history file list contains no other
+`src/contextsafe/fixtures/reference/` (until 2026-09-02 `fixtures/reference/`;
+moved by `git mv` so the wheel ships it, bytes unchanged, and `git log --follow`
+carries each file's history across the move) holds exactly five files, 7,957
+bytes total, and **no fixture path has ever been deleted** — the 89-path
+full-history file list contains no other
 fixture.
 
 | File | Evidence that it is synthetic |

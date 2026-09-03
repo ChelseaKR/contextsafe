@@ -19,6 +19,9 @@ build/
 .idea/
 .vscode/
 artifacts/customer/
+# Written by `contextsafe fixtures export`. The tracked copy is package data
+# under src/contextsafe/fixtures/reference/, so only the root path is ignored.
+/fixtures/
 receipts/private/
 
 # Accessibility harness: node dependencies and the pages the gate renders.

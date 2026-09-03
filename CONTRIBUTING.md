@@ -13,8 +13,10 @@ and [`SECURITY.md`](SECURITY.md) for how to report a vulnerability.
 
 Every fixture is synthetic by construction, and the code enforces this fail-closed
 (synthetic namespaces, PHI canaries, direct-identifier checks). Reproduce bugs with
-the fixtures under [`fixtures/`](fixtures/) and [`tests/`](tests/); if a fixture you
-need doesn't exist, add a synthetic one rather than reaching for anything real. A
+the fixtures under
+[`src/contextsafe/fixtures/reference/`](src/contextsafe/fixtures/reference/) and
+[`tests/`](tests/); if a fixture you need doesn't exist, add a synthetic one rather
+than reaching for anything real. A
 pull request that violates this rule will be closed and, if needed, the history
 scrubbed.
 
