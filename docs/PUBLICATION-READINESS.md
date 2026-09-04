@@ -412,7 +412,7 @@ them against the tree. The same day, B-024 added a seventh packaged file,
 | `fhir-patient.json` | `urn:contextsafe:synthetic` / `CSYN-CTP-I01` as identifier and resource id; family `ZZZTESTCONTEXTSAFE`, given `CSYN-ASTER` and `CSYN-LEGAL-GIVEN-1`; `CSYN-GENDER-1`, `CSYN-PRONOUN-THEY-THEM`, and `CSYN-GOVERNMENT-ID` under `urn:contextsafe:fixture`; recorded sex or gender `X` |
 | `pack-draft.json` | `PACK-SYNTHETIC-REFERENCE-DRAFT`, limitations `synthetic-reference-only`, `not-clinically-reviewed`, `not-community-approved` |
 | `rules.json` | expectations mirror the values above |
-| `hl7v2-er7-message.hl7` (added 2026-09-04, B-024) | `CSYN-SENDER`/`CSYN-FACILITY`/`CSYN-RECEIVER`/`CSYN-LAB` in MSH; PID-3 `CSYN-CTP-I01` under `urn:contextsafe:synthetic`; family name `ZZZTESTCONTEXTSAFE` with given names `CSYN-ASTER` and `CSYN-LEGAL-I01`; processing ID `T`; GSP, OBR, and OBX values are `fixture-`, `ORDER-CSYN-`, and `SUP-CSYN-` tokens; MSH-7 is a fixed message timestamp, checked for shape and never carried |
+| `hl7v2-er7-message.hl7` | added 2026-09-04 by B-024; `CSYN-SENDER`/`CSYN-FACILITY`/`CSYN-RECEIVER`/`CSYN-LAB` in MSH; PID-3 `CSYN-CTP-I01` under `urn:contextsafe:synthetic`; family name `ZZZTESTCONTEXTSAFE` with given names `CSYN-ASTER` and `CSYN-LEGAL-I01`; processing ID `T`; GSP, OBR, and OBX values are `fixture-`, `ORDER-CSYN-`, and `SUP-CSYN-` tokens; MSH-7 is a fixed message timestamp, checked for shape and never carried |
 
 No name, MRN, date of birth, address, phone number, SSN, or NPI appears in any
 packaged fixture or in any accepting fixture, and none of them carries a
