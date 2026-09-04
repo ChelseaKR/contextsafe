@@ -1,11 +1,24 @@
 # Changelog
 
 All notable changes to ContextSafe are documented here. The format is based on
-[Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Everything to date is
-collected under 0.1.0, the first release: `.github/workflows/release.yml` fires on
+[Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Everything up to the
+first release is collected under 0.1.0: `.github/workflows/release.yml` fires on
 a `vX.Y.Z` tag and refuses to build unless this file already carries a matching
 `## [X.Y.Z]` heading, so the section is written and dated before the tag exists
 rather than after it.
+
+## [Unreleased]
+
+### Removed
+
+- **Gate 0 of `docs/PUBLICATION-READINESS.md`, withdrawn from the public record
+  on 2026-09-04.** The section is replaced by a dated stub that keeps the gate
+  number, and every sentence elsewhere that described it — in the audit's own
+  header, verdict, summary tables and closing paragraph, in this changelog's
+  0.1.0 entries for the audit, and in `docs/17-PUBLICATION-POLICY.md` — was
+  reduced to the gate's name. Nothing it said is restated. The audit's technical
+  findings and Gate 1 are unchanged. This closes the default view of the
+  repository; it does not rewrite history.
 
 ## [0.1.0] - 2026-09-02
 
@@ -725,15 +738,13 @@ rather than after it.
   evidence only: packaging and fresh-install evidence remain B-045, and B-021
   stays open pending normalization (B-019/B-026) and signing (B-035).
 - `docs/PUBLICATION-READINESS.md`: a gate-by-gate audit of whether this
-  repository could ever be made public, with evidence. Gate 0 is the
-  IP/inventions-agreement question created by the repository's creation date
-  falling during prior employment, which only the maintainer's attorney can
-  clear; Gate 1 is a dual-use and misuse assessment specific to this project —
-  a tool that reports where transgender and nonbinary identity data is lost
-  also reports where it is retained — including what the threat model already
-  covers, four things it does not, and what must be decided before B-010. The
-  verdict is *technically ready pending IP clearance*, not *ready to publish*.
-  No tag, release, visibility change, or history rewrite accompanies it.
+  repository could ever be made public, with evidence. Gate 1 is a dual-use and
+  misuse assessment specific to this project — a tool that reports where
+  transgender and nonbinary identity data is lost also reports where it is
+  retained — including what the threat model already covers, four things it
+  does not, and what must be decided before B-010. The verdict is *technically
+  ready*, not *ready to publish*. No tag, release, visibility change, or
+  history rewrite accompanies it.
 - `docs/17-PUBLICATION-POLICY.md`: the publication policy the readiness audit
   said had to exist, written as a decision document rather than an adopted
   control. It classifies everything this project could publish as method,
@@ -896,11 +907,8 @@ rather than after it.
   the ADRs live in `docs/adr/`. Every relative link in `docs/` and the README
   now resolves.
 - `docs/PUBLICATION-READINESS.md` Gate 0 records that the maintainer reviewed
-  the IP question and decided on 2026-08-15 to proceed. The status changed; the
-  findings did not. The audit's recommendation to wait for counsel is kept
-  verbatim alongside the decision that departed from it, because a record that
-  deleted the recommendation once it was overridden would be the less honest
-  document.
+  it and decided on 2026-08-15 to proceed. The status changed; the findings did
+  not.
 
 ### Security
 
