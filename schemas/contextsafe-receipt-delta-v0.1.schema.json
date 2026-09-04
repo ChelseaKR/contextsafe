@@ -90,8 +90,20 @@
         "affirmative_evidence_match",
         "ambiguous_evidence",
         "missing_evidence",
+        "overwritten_by_other_concept",
         "predeclared_not_applicable",
-        "semantic_mismatch"
+        "record_count_changed",
+        "record_count_preserved",
+        "semantic_mismatch",
+        "status_not_preserved",
+        "status_preserved",
+        "value_changed_across_checkpoints",
+        "value_coerced",
+        "value_not_coerced",
+        "value_not_overwritten",
+        "value_not_present",
+        "value_present",
+        "value_preserved_across_checkpoints"
       ]
     },
     "rule_change": {

@@ -84,6 +84,7 @@ _PAYLOAD_KEYS = frozenset(
     {
         "schema_version",
         "case_id",
+        "divergence",
         "hashes",
         "limitations",
         "results",
@@ -110,6 +111,7 @@ _RESULT_KEYS = frozenset(
         "rule_id",
         "rule_version",
         "status",
+        "trace",
     }
 )
 _STATUS_VALUES = frozenset(member.value for member in OutcomeStatus)
