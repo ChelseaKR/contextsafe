@@ -9,6 +9,25 @@ rather than after it.
 
 ## [Unreleased]
 
+### Fixed
+
+- **A mapping profile could write a name into an observation.** Every target
+  value is held to the synthetic grammar except the one field whose purpose is
+  to carry a person's name: `_target_problem` returned `None` for a name to use
+  on the reasoning that the observation contract already requires a `CSYN-`
+  prefix. A prefix is not a grammar. `CSYN-Jordan Rivera 555-01-0199` carries
+  it, and the published contract refused that document while the runtime
+  accepted it and emitted the value into an observation set at exit 0. The
+  contract was the stricter of the two only by accident: `nameToUseTarget`
+  inlined its own pattern instead of referencing the `syntheticToken` the file
+  already defines, so no test compared them. It references it now, a name
+  target is held to the same grammar as every other target, and the two are
+  pinned equal. Separately, every target string now goes through the same
+  boundary scan the source token already went through, which closes the
+  asymmetry that made `CSYN-9876543210` a `direct_identifier_detected`
+  rejection as a source token and an accepted value as a target. Found by
+  adversarial review of this branch, not by a gate.
+
 ### Removed
 
 - **Gate 0 of `docs/PUBLICATION-READINESS.md`, withdrawn from the public record

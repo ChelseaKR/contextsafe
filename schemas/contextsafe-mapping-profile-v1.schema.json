@@ -152,7 +152,7 @@
       "required": ["status", "value", "use"],
       "properties": {
         "status": {"enum": ["specified", "declined", "unknown", "absent"]},
-        "value": {"oneOf": [{"type": "null"}, {"type": "string", "pattern": "^CSYN-[A-Za-z0-9][A-Za-z0-9_.:-]{0,95}$"}]},
+        "value": {"oneOf": [{"type": "null"}, {"$ref": "#/$defs/syntheticToken"}]},
         "use": {"const": "usual"}
       }
     },

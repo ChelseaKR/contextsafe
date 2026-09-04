@@ -300,12 +300,21 @@ def test_a_token_that_trips_a_boundary_detector_is_refused_without_echo() -> Non
         ),
         ("pronouns", {"status": "specified", "value": "They/Them"}, "value"),
         ("pronouns", {"status": "specified", "value": "ze/hir/1"}, "value"),
+        (
+            "name_to_use",
+            {"status": "specified", "value": "CSYN-Jordan Rivera", "use": "usual"},
+            "value",
+        ),
     ],
 )
 def test_targets_outside_the_synthetic_grammar_are_refused_by_field(
     concept: str, value: dict[str, Any], field: str
 ) -> None:
-    carrier = {"recorded_sex_or_gender": "PID-8", "pronouns": "GSP-5"}[concept]
+    carrier = {
+        "recorded_sex_or_gender": "PID-8",
+        "pronouns": "GSP-5",
+        "name_to_use": "PID-5",
+    }[concept]
     document = _reference_profile("hl7v2-er7")
     document["rows"] = [
         {
@@ -958,12 +967,17 @@ _TARGET_REJECTIONS = (
         "path": "$.rows[0].target.value.value",
     },
     {
+        "code": "direct_identifier_detected",
+        "message": "a direct-identifier pattern was detected",
+        "path": "$.rows[0].target.value.value",
+    },
+    {
         "code": "invalid_unicode",
         "message": "string must contain only Unicode scalar values",
         "path": "$.rows[0].target.value.value",
     },
 )
-"""The only two error objects a pronoun target outside the grammar may raise.
+"""The only error objects a pronoun target outside the grammar may raise.
 
 Compared whole, the way the importer suites do, rather than by testing that
 the drawn value is absent from the message: a one-letter draw is a substring
@@ -1061,3 +1075,42 @@ def test_applying_a_profile_binds_exactly_the_matched_tokens_deterministically(
         assert (
             ImportWarningCode.MAPPING_PROFILE_ROW_UNMATCHED in first.warnings
         ) == bool(unmatched)
+
+
+@pytest.mark.parametrize(
+    ("concept", "carrier", "value"),
+    [
+        (
+            "name_to_use",
+            "PID-5",
+            {"status": "specified", "value": "CSYN-9876543210", "use": "usual"},
+        ),
+        (
+            "pronouns",
+            "GSP-5",
+            {"status": "specified", "value": "CSYN-555-01-0199"},
+        ),
+    ],
+)
+def test_a_target_shaped_like_an_identifier_is_refused_by_the_boundary_scan(
+    concept: str, carrier: str, value: dict[str, Any]
+) -> None:
+    """A target goes through the scan the source token already goes through.
+
+    Each of these satisfies the synthetic grammar, so the grammar alone would
+    admit it. The asymmetry this closes was real: the same string was refused
+    as a source token and accepted as a target.
+    """
+
+    document = _reference_profile("hl7v2-er7")
+    document["rows"] = [
+        {
+            "source": {"concept": concept, "carrier": carrier, "token": "X"},
+            "target": {"concept": concept, "value": value},
+        }
+    ]
+    error = _rejection(document)
+    assert error.code == "direct_identifier_detected"
+    assert error.path == "$.rows[0].target.value.value"
+    assert value["value"] not in str(error)
+    assert value["value"] not in canonical_json(error.to_dict())

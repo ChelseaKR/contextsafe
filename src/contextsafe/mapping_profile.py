@@ -436,13 +436,57 @@ def _pronouns_problem(target: Pronouns) -> str | None:
     return None
 
 
+def _target_strings(target: TargetValue) -> tuple[tuple[str, str], ...]:
+    """Every string a target would put into an observation, with its field name.
+
+    The grammars above bound the shape of each field; this is what hands the
+    same strings to the boundary scan the source token already goes through,
+    so a value shaped like a record number is refused on the way out as well
+    as on the way in.
+    """
+
+    named: tuple[tuple[str, str | None], ...]
+    match target:
+        case GenderIdentity():
+            named = (("value", target.value), ("code_system", target.code_system))
+        case RecordedSexOrGender():
+            named = (
+                ("value", target.value),
+                ("context", target.context),
+                ("source", target.source),
+            )
+        case Pronouns():
+            named = (("value", target.value),)
+        case NameToUse():
+            named = (("value", target.value), ("use", target.use))
+        case SpcuValueBinding():
+            named = (("value", target.value),)
+        case SexParameterForClinicalUse():
+            named = (("value", target.value), ("context_id", target.context_id))
+    return tuple((field, text) for field, text in named if text is not None)
+
+
+def _name_to_use_problem(target: NameToUse) -> str | None:
+    """A name target is held to the same grammar as every other target.
+
+    This once returned ``None`` on the reasoning that the observation
+    contract already requires a ``CSYN-`` prefix. A prefix is not a grammar:
+    ``CSYN-Jordan Rivera 555-01-0199`` carries that prefix, and the published
+    contract refused it while this accepted it, so the one field whose whole
+    purpose is to carry a person's name was the one field a profile could
+    write free text into.
+    """
+
+    if target.value is not None and not SYNTHETIC_TOKEN_PATTERN.fullmatch(target.value):
+        return "value"
+    return None
+
+
 def _target_problem(target: TargetValue) -> str | None:
     """The field of ``target`` outside the synthetic grammar, or ``None``.
 
-    Name to use needs no check of its own: the observation contract already
-    requires a ``CSYN-`` token. A complete sex parameter for clinical use
-    value is never a target (only its value binding is), so it falls with
-    name to use into the arm that has nothing to add.
+    A complete sex parameter for clinical use value is never a target (only
+    its value binding is), so it is the one arm with nothing to add.
     """
 
     match target:
@@ -454,7 +498,9 @@ def _target_problem(target: TargetValue) -> str | None:
             return _pronouns_problem(target)
         case SpcuValueBinding():
             return None if SYNTHETIC_TOKEN_PATTERN.fullmatch(target.value) else "value"
-        case NameToUse() | SexParameterForClinicalUse():
+        case NameToUse():
+            return _name_to_use_problem(target)
+        case SexParameterForClinicalUse():
             return None
 
 
@@ -476,6 +522,8 @@ def _target(
             "a target value must be in the synthetic namespace; a profile is "
             "not a route by which a real value reaches an observation",
         )
+    for field, text in _target_strings(target):
+        scan_text(text, f"{path}.value.{field}")
     return concept, target
 
 

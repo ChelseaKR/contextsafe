@@ -149,6 +149,9 @@ def test_contract_constants_are_the_runtime_constants() -> None:
         "(?:", "("
     )
     assert defs["fixtureSystem"]["pattern"] == FIXTURE_SYSTEM_PATTERN.pattern
+    assert defs["nameToUseTarget"]["properties"]["value"]["oneOf"][1] == {
+        "$ref": "#/$defs/syntheticToken"
+    }
     assert defs["pronounSet"]["pattern"] == PRONOUN_SET_PATTERN.pattern.replace(
         "(?:", "("
     )
