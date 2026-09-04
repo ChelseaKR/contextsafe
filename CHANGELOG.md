@@ -130,7 +130,7 @@ rather than after it.
   carries it, and the three-run determinism matrix pins its import digest.
 
   Rejections are whole-source, with a code and a location and never the
-  content, and nothing is stripped. Before the reader runs, the boundary
+  content, and nothing outside the allowlist is dropped. Before the reader runs, the boundary
   scan rejects any narrative (`text`, with its `div`), any `contained`
   resource, any `note`, `comment`, `telecom`, `address`, or `birthDate`
   key, and any URL that is not one of the five published constants (the
@@ -149,9 +149,20 @@ rather than after it.
   than one `given` token, a name part or coded value outside the synthetic
   alphabet, a `Bundle.total` that is not the integer one, and a Patient
   carrying none of the concepts. A recorded-sex-or-gender code outside the
-  contract's closed alphabet reaches the observation contract and is
-  rejected there with its own code, never normalized to the closest value
-  (A-033). Recorded sex or gender carries no presence state: the canonical
+  contract's closed alphabet (`F`, `M`, `X`, `unknown`, imported from the
+  contract rather than restated) rejects at the extension's own location
+  with `import_value_unsupported`, never normalized to the closest value
+  (A-033), and every coding's system and code is bounded at the
+  contract's 96-character token length where it sits in the source; the
+  contract's re-validation of the converted document stays as a second
+  check, and no rejection the reader produces names a path in the
+  converted document. What the allowlist admits and the canonical model
+  cannot hold is validated and not carried, and the list is closed:
+  `Patient.id`, `Patient.active`, every `HumanName` whose `use` is not
+  `usual`, `family` on the usual name, the pronouns coding's system, and
+  the recorded-sex-or-gender value's system; each is a bounded token, a
+  boolean, or a synthetic name part, and an emitted observation set is the
+  five concepts, not the whole Patient. Recorded sex or gender carries no presence state: the canonical
   concept has a value and a context and no status, so a `value` or `type`
   coding in the `data-absent-reason` system rejects with
   `import_concept_not_convertible` rather than arriving as a recorded value;
@@ -213,6 +224,20 @@ rather than after it.
   receipt's own limitation text is unchanged and still says this iteration
   does not ingest FHIR, which remains true of evidence import and is a
   wording the maintainer, not this change, decides.
+
+  The sibling `contextsafe-observation-v1` contract's
+  `candidates[*].source_pointer` is widened the same way, with the same
+  dated `$comment`, so a candidate read from a `fhir-r4-json` observation
+  set can carry its pointer; no runtime parser reads that contract, and a
+  test now holds the two contracts to one grammar. The synthetic-data
+  confirmation in `docs/PUBLICATION-READINESS.md` section 4 is corrected
+  under a dated update: the packaged set is six files (9,796 bytes) with
+  `fhir-patient.json` in its table, and the rejection fixtures under
+  `tests/fixtures/fhir-r4-json/` carry deliberately PII-shaped literals
+  (`1980-01-02`, `555-0100`, `CSYN-1234567890`, the `ALICE` canary) that
+  the section now names, each pinned to its rejection and guarded by the
+  never-echoed assertion; two tests derive the section's figures and its
+  literal list from the tree, because the claims gate does not read prose.
 
 ## [0.1.0] - 2026-09-02
 

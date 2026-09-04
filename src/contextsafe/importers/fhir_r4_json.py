@@ -10,27 +10,41 @@ implementation guide's exact element for a concept was uncertain, the choice
 made here is written into the profile constant's docstring rather than into
 the code path, so a reviewer can find and overturn it in one place.
 
-The source converts whole or not at all, and nothing is stripped. A FHIR
-document is not read as "the parts we recognise": every object is checked
-against an exact allowlist of element names, and the first element outside
-it rejects the document with a code and a location. A narrative, a contained
-resource, a note, an address, a telecom, a birth date, or a URL that is not
-one of the profile's published constants is rejected before this module sees
-the value, by the same boundary scan every other format runs through. A
-``display``, a ``comment`` sub-extension, a resource type outside the
-allowlist, a reference to anything, an identifier outside the synthetic
-namespace, a coded value outside the synthetic alphabet, or a Gender Harmony
-extension this reader knows and cannot carry rejects here. The rejection
-names a category and a location and never the content.
+The source converts whole or not at all, and nothing outside the allowlist
+is dropped. A FHIR document is not read as "the parts we recognise": every
+object is checked against an exact allowlist of element names, and the
+first element outside it rejects the document with a code and a location. A
+narrative, a contained resource, a note, an address, a telecom, a birth
+date, or a URL that is not one of the profile's published constants is
+rejected before this module sees the value, by the same boundary scan every
+other format runs through. A ``display``, a ``comment`` sub-extension, a
+resource type outside the allowlist, a reference to anything, an identifier
+outside the synthetic namespace, a coded value outside the synthetic
+alphabet, or a Gender Harmony extension this reader knows and cannot carry
+rejects here. The rejection names a category and a location and never the
+content.
+
+What the allowlist admits and the canonical model cannot hold is validated
+and not carried, and the list is closed: ``Patient.id`` and
+``Patient.active``; every ``HumanName`` whose ``use`` is not ``usual``;
+``family`` on the usual name; the system of the pronouns coding; and the
+system of the recorded-sex-or-gender ``value`` coding. Each is a bounded
+token, a boolean, or a synthetic name part, so nothing identifying passes
+through the gap, but an emitted observation set is the five concepts and
+not the whole Patient, and a consumer must not read it as one.
 
 Values are the source's own tokens, verbatim. A gender-identity code of
 ``CSYN-GENDER-1`` becomes exactly that string with the coding's own system;
-a pronouns code stays a token; a recorded-sex-or-gender code is carried to
-the observation contract, which is the authority on which values it admits
-and rejects the rest with its own code rather than normalizing to the
-closest one (A-033), except that a data-absent-reason code is not a recorded
-value at all and rejects here, because the canonical concept has no presence
-state for it to become. Sex parameter for clinical use comes only from its own
+a pronouns code stays a token; a recorded-sex-or-gender code is carried only
+if it is in the observation contract's own closed alphabet, which this
+module imports rather than restates, and rejects at the extension's own
+location otherwise, never normalized to the closest one (A-033). A
+data-absent-reason code is not a recorded value at all and rejects too,
+because the canonical concept has no presence state for it to become. Every
+coding's system and code is bounded here to the contract's token length, so
+that every rejection a caller sees names a location in the FHIR document
+and the contract's re-validation of the converted document is a second
+check that must not fire. Sex parameter for clinical use comes only from its own
 extension, and this iteration cannot carry it: the canonical concept needs
 an order context and a supporting-observation link, and neither an
 ``Encounter`` nor a ``ServiceRequest`` is implemented as a carrier, so the
@@ -53,7 +67,6 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from contextsafe.contract_validation import (
-    SAFE_TOKEN_PATTERN,
     array_value,
     boolean_value,
     bounded_string,
@@ -86,7 +99,7 @@ from contextsafe.models import (
 )
 from contextsafe.plan import SYNTHETIC_IDENTIFIER_SYSTEM
 from contextsafe.preflight import BoundaryProfile, ScannedSource, scan_source
-from contextsafe.validation import parse_observations
+from contextsafe.validation import RSG_VALUES, parse_observations
 
 FHIR_R4_FORMAT = "fhir-r4-json"
 """The ``--format`` name of this importer."""
@@ -182,9 +195,11 @@ reviewer may overturn by changing this constant and its version:
   arriving as a recorded value: the code ``unknown`` in that system means
   "not recorded" and the same token in the observation contract's alphabet
   means "recorded as unknown", and the reader does not let one become the
-  other. The ``value`` coding's system is otherwise not carried, because the
-  canonical model has no field for it; a reviewer may pin the systems an
-  RSG value may come from by adding them here.
+  other. The ``value`` code must be in the observation contract's closed
+  alphabet (``F``, ``M``, ``X``, ``unknown``), checked at the extension's
+  own location; the coding's system is otherwise not carried, because the
+  canonical model has no field for it, and a reviewer may pin the systems
+  an RSG value may come from by adding them here.
 * Name to use is the ``HumanName`` whose ``use`` is ``usual``, with exactly
   one ``given`` part, which is the value. ``family``, when present on any
   name, must be the synthetic family token or a ``CSYN-`` token. Every
@@ -194,6 +209,14 @@ reviewer may overturn by changing this constant and its version:
 * Sex parameter for clinical use is recognised by its URL and always
   rejects, because no allowlisted resource carries an order context or a
   supporting observation. This is a limit, not a mapping.
+* Admitted, validated, and not carried, because the canonical model has no
+  field for them: ``Patient.id`` (a synthetic token), ``Patient.active`` (a
+  boolean), every ``HumanName`` whose ``use`` is not ``usual`` (its parts
+  are still required to be synthetic), ``family`` on the usual name, the
+  pronouns coding's system, and the recorded-sex-or-gender ``value``
+  coding's system. Nothing else the allowlist admits goes uncarried, and a
+  reviewer who wants any of these carried changes the canonical model
+  first and this constant's version second.
 """
 
 FHIR_R4_MAPPING_VERSION = FHIR_R4_PROFILE.version
@@ -255,6 +278,16 @@ the intended outcome for an unknown extension, not a detour around it.
 _MAX_LIST_ITEMS = 64
 _RESOURCE_ID = re.compile(r"^CSYN-[A-Za-z0-9.-]{1,59}$")
 _SYNTHETIC_CODE = re.compile(r"^CSYN-[A-Z0-9][A-Z0-9_.:-]{0,95}$")
+_CODING_TOKEN_LENGTH = 96
+"""The observation contract's token bound, applied to every coding here.
+
+The contract bounds a code system, a context, and a value at 96 characters.
+A coding's system and code are bounded to the same length at the coding's
+own location, so an over-long one is rejected where it sits in the FHIR
+document rather than in the converted document at a path the source never
+had. The published FHIR source schema states the same bound.
+"""
+_CODING_TOKEN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9:/_.-]{0,95}$")
 _NAME_TOKEN = re.compile(r"^CSYN-[A-Za-z0-9][A-Za-z0-9_.-]{0,95}$")
 
 _PATIENT_REQUIRED = frozenset({"resourceType", "identifier"})
@@ -498,10 +531,14 @@ def _coding(value: object, cursor: _Cursor) -> _Coding:
         system=bounded_string(
             coding["system"],
             coding_cursor.child("system").path,
-            pattern=SAFE_TOKEN_PATTERN,
+            pattern=_CODING_TOKEN,
+            max_length=_CODING_TOKEN_LENGTH,
         ),
         code=bounded_string(
-            coding["code"], coding_cursor.child("code").path, pattern=SAFE_TOKEN_PATTERN
+            coding["code"],
+            coding_cursor.child("code").path,
+            pattern=_CODING_TOKEN,
+            max_length=_CODING_TOKEN_LENGTH,
         ),
     )
 
@@ -603,18 +640,41 @@ def _recorded_coding(coding: _Coding, cursor: _Cursor) -> _Coding:
     return coding
 
 
+def _recorded_value(coding: _Coding, cursor: _Cursor) -> str:
+    """Admit only the observation contract's own closed alphabet, verbatim.
+
+    ``female`` is not ``F`` and ``f`` is not ``F``: a code outside the
+    alphabet rejects at the extension's location and is never mapped to the
+    nearest member (A-033). The alphabet is imported from the contract, so
+    this reader cannot admit a value the contract would refuse.
+    """
+
+    if coding.code not in RSG_VALUES:
+        raise import_error(
+            ImportErrorCode.VALUE_UNSUPPORTED,
+            cursor.path,
+            "a recorded sex or gender value is outside the observation "
+            "contract's closed alphabet and is not normalized to a member of it",
+        )
+    return coding.code
+
+
 def _recorded_sex_or_gender(
     parts: dict[str, _Coding], cursor: _Cursor
 ) -> SemanticValue:
-    value = _recorded_coding(
-        _required_part(parts, FHIR_R4_PROFILE.value_sub_extension, cursor), cursor
+    value = _recorded_value(
+        _recorded_coding(
+            _required_part(parts, FHIR_R4_PROFILE.value_sub_extension, cursor),
+            cursor,
+        ),
+        cursor,
     )
     context = _recorded_coding(
         _required_part(parts, FHIR_R4_PROFILE.rsg_context_sub_extension, cursor),
         cursor,
     )
     return RecordedSexOrGender(
-        value=value.code,
+        value=value,
         context=_synthetic_code(context, cursor),
         source=UNBOUND_SOURCE,
     )
@@ -811,9 +871,10 @@ def convert_scanned(
     Gender Harmony extension and usual name becomes one observation at the
     checkpoint the caller asked for; a FHIR document names no checkpoint,
     and the result says so. The converted document is then re-validated by
-    the observation contract, so a value this reader carried and the
-    contract rejects (an unsupported RSG value, a non-synthetic name)
-    rejects the source with the contract's own code.
+    the observation contract as a second check: every value this reader
+    carries is bounded and alphabet-checked at its own location in the
+    source first, so a rejection from the contract here would be a defect
+    in this module, not a location a caller is expected to see.
     """
 
     resource, cursor = _document_patient(scanned.value)

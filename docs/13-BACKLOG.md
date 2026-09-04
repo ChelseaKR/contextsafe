@@ -193,8 +193,15 @@ name with no part, `data-absent-reason` coding on recorded sex or gender
 (the canonical concept has no presence state, so that system's `unknown` is
 never carried as the recorded value `unknown`), document over one MiB, or
 Patient carrying none of the concepts rejects the whole source with a code
-and a location; nothing is stripped, and a fixture per rejection class is
-committed and pinned. Two carriers of one concept are
+and a location; nothing outside the allowlist is dropped, a recorded-sex-or-gender
+value outside the contract's closed alphabet and any coding token over the
+contract's 96-character bound reject at their own location in the source
+rather than in the converted document, and a fixture per rejection class is
+committed and pinned. What the allowlist admits and the canonical model
+cannot hold is validated and not carried, and the list is closed:
+`Patient.id`, `Patient.active`, every `HumanName` whose `use` is not `usual`,
+`family` on the usual name, the pronouns coding's system, and the
+recorded-sex-or-gender value's system. Two carriers of one concept are
 two observations, which the evaluator reports as ambiguous. The reader's
 choices are one versioned profile constant with `reviewed` fixed to false, and
 the accepted subset is published as a reference-only schema. B-023 is not
@@ -210,9 +217,14 @@ SPCU acceptance is deferred with the B-026 profile work; name periods
 Harmony sub-extension are not carried; the reader takes a file and never a
 FHIR endpoint (Architecture section 10 remains P1); the coding system of a
 recorded-sex-or-gender `value` is checked only against the presence system
-and is otherwise not carried, because the canonical model has no field for
-it, and which systems an RSG value may come from is a profile choice left
-for the reviewer; neither `diagnostics` nor the support bundle enumerates
+and the token bound and is otherwise not carried, because the canonical
+model has no field for it, and which systems an RSG value may come from is a
+profile choice left for the reviewer; the synthetic-data confirmation in
+`docs/PUBLICATION-READINESS.md` section 4 was found describing the corpus as
+it stood before this item (five packaged files, no `birthDate` anywhere, no
+PII-shaped literal outside `tests/test_preflight.py`) and is corrected under a
+dated update with two tests that derive its figures and literal list from the
+tree; neither `diagnostics` nor the support bundle enumerates
 the importer registry's formats; and the receipt's limitation line still
 reads "does not ingest FHIR", a reviewed wording the maintainer decides.
 

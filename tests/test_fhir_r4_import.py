@@ -58,12 +58,20 @@ from contextsafe.preflight import (
     ScannedSource,
     scan_source,
 )
-from contextsafe.reference_fixtures import REFERENCE_ROOT
-from contextsafe.validation import parse_bundle, parse_case, parse_observations
+from contextsafe.reference_fixtures import REFERENCE_FILES, REFERENCE_ROOT
+from contextsafe.validation import (
+    RSG_VALUES,
+    parse_bundle,
+    parse_case,
+    parse_observations,
+)
 
 ROOT = Path(__file__).resolve().parents[1]
 REFERENCE = REFERENCE_ROOT
 FIXTURES = ROOT / "tests" / "fixtures" / "fhir-r4-json"
+AUDIT = ROOT / "docs" / "PUBLICATION-READINESS.md"
+CODING_TOKEN_LENGTH = 96
+"""The observation contract's token bound; the reader applies it to every coding."""
 PROFILE_SCHEMA = json.loads(
     (ROOT / "schemas" / "contextsafe-fhir-r4-source-v0.1.schema.json").read_text(
         encoding="utf-8"
@@ -103,6 +111,10 @@ REJECTIONS: dict[str, tuple[str, str]] = {
     "reject-code-not-synthetic.json": (
         ImportErrorCode.VALUE_UNSUPPORTED.value,
         "$.extension[0]",
+    ),
+    "reject-coding-system-too-long.json": (
+        "invalid_string",
+        "$.extension[0].extension[0].valueCodeableConcept.coding[0].system",
     ),
     "reject-comment-sub-extension.json": (
         ImportErrorCode.EXTENSION_UNKNOWN.value,
@@ -174,8 +186,8 @@ REJECTIONS: dict[str, tuple[str, str]] = {
         "$.extension[0]",
     ),
     "reject-rsg-unsupported-value.json": (
-        "invalid_rsg_value",
-        "$.observations[0].value.value",
+        ImportErrorCode.VALUE_UNSUPPORTED.value,
+        "$.extension[0]",
     ),
     "reject-rsg-without-type.json": (
         ImportErrorCode.CONTEXT_MISSING.value,
@@ -254,6 +266,21 @@ FIXTURE_CONTENT = (
     "CSYN-CTP-Z99",
 )
 """Strings that appear in fixture content and may never appear in an error."""
+
+PII_SHAPED_LITERALS: dict[str, str] = {
+    "1980-01-02": "reject-birth-date.json",
+    "555-0100": "reject-telecom.json",
+    "CSYN-1234567890": "reject-direct-identifier.json",
+    "CSYN-CTXSAFE-PHI-CANARY-ALICE": "reject-canary.json",
+}
+"""Every deliberately PII-shaped literal a committed fixture carries, by carrier.
+
+These are the repository's only fixture-file literals shaped like a date of
+birth, a phone number, a ten-digit run, or a PHI canary. Each exists to be
+refused. The synthetic-data confirmation in ``docs/PUBLICATION-READINESS.md``
+section 4 names every one of them, and the test below is what keeps that
+section describing the corpus after it was found stale on 2026-09-04.
+"""
 
 
 def _fixture(name: str) -> dict[str, Any]:
@@ -459,6 +486,44 @@ def test_each_rejection_class_rejects_the_whole_source_without_content(
     rendered = str(raised.value)
     for content in FIXTURE_CONTENT:
         assert content not in rendered
+
+
+def _audit_section_4() -> str:
+    text = AUDIT.read_text(encoding="utf-8")
+    start = text.index("### §4 Synthetic-data confirmation")
+    return text[start : text.index("### §5", start)]
+
+
+def test_pii_shaped_literals_live_only_in_pinned_rejections_and_the_audit_names_them() -> (
+    None
+):
+    """The synthetic-data confirmation describes the corpus that exists.
+
+    Each PII-shaped literal is carried by exactly the rejection fixture the
+    table names, that fixture is pinned to its rejection, the literal is
+    guarded by the never-echoed assertion, and the audit names both. No
+    accepting or packaged fixture carries any of them or a ``birthDate``.
+    """
+
+    section = _audit_section_4()
+    for literal, carrier in PII_SHAPED_LITERALS.items():
+        carriers = sorted(
+            path.name
+            for path in FIXTURES.iterdir()
+            if literal in path.read_text(encoding="utf-8")
+        )
+        assert carriers == [carrier], literal
+        assert carrier in REJECTIONS
+        assert any(marker in literal for marker in FIXTURE_CONTENT), literal
+        assert f"`{literal}`" in section, literal
+        assert f"`{carrier}`" in section, carrier
+    accepting = [FIXTURES / name for name in ACCEPTED] + [
+        REFERENCE / name for name in REFERENCE_FILES
+    ]
+    for path in accepting:
+        text = path.read_text(encoding="utf-8")
+        assert "birthDate" not in text, path.name
+        assert not any(literal in text for literal in PII_SHAPED_LITERALS), path.name
 
 
 @pytest.mark.parametrize("name", sorted(ACCEPTED))
@@ -682,24 +747,124 @@ def test_spcu_is_never_derived_from_gender_identity_or_rsg(
     assert result.observations[1].value.to_dict()["value"] == "M"
 
 
-def test_rsg_values_are_carried_verbatim_and_never_normalized(
+_RSG_ALPHABET_REJECTION = {
+    "code": ImportErrorCode.VALUE_UNSUPPORTED.value,
+    "path": "$.extension[0]",
+    "message": (
+        "a recorded sex or gender value is outside the observation contract's "
+        "closed alphabet and is not normalized to a member of it"
+    ),
+}
+"""The whole error object for an RSG value outside the alphabet.
+
+Fixed so that the assertion is structural: the message is a sentence that
+names no value, and the location is the extension in the source document,
+not a path in the converted document the source never had.
+"""
+
+
+@pytest.mark.parametrize("code", ["female", "f", "Male", "CSYN-X", "x", "U", "FM"])
+def test_rsg_values_outside_the_alphabet_reject_at_the_source_and_never_normalize(
+    case: SyntheticCase, code: str
+) -> None:
+    """A-033: ``female`` is not ``F`` and ``f`` is not ``F``; nothing is mapped."""
+
+    assert code not in RSG_VALUES
+    document = _patient(
+        extensions=[
+            _extension(
+                RSG_URL,
+                [("value", _coded(code)), ("type", _coded("CSYN-GOVERNMENT-ID"))],
+            )
+        ]
+    )
+    with pytest.raises(ContextSafeError) as raised:
+        convert_scanned(_scanned(document), case=case, checkpoint=Checkpoint.EHR)
+    assert raised.value.to_dict() == _RSG_ALPHABET_REJECTION
+
+
+@pytest.mark.parametrize("code", sorted(RSG_VALUES))
+def test_every_member_of_the_contract_alphabet_is_carried_verbatim(
+    case: SyntheticCase, code: str
+) -> None:
+    document = _patient(
+        extensions=[
+            _extension(
+                RSG_URL,
+                [("value", _coded(code)), ("type", _coded("CSYN-GOVERNMENT-ID"))],
+            )
+        ]
+    )
+    result = convert_scanned(_scanned(document), case=case, checkpoint=Checkpoint.EHR)
+    assert [item.value.to_dict()["value"] for item in result.observations] == [code]
+
+
+def _coding_of_length(length: int, *, system: bool) -> dict[str, Any]:
+    """A gender-identity coding whose system or code is exactly ``length`` long."""
+
+    if system:
+        return _coded("CSYN-GENDER-1", "urn:contextsafe:fixture:" + "a" * (length - 24))
+    return _coded("CSYN-" + "A" * (length - 5))
+
+
+@pytest.mark.parametrize("system", [True, False], ids=["system", "code"])
+def test_a_coding_token_at_the_contract_bound_is_carried(
+    case: SyntheticCase, system: bool
+) -> None:
+    coding = _coding_of_length(CODING_TOKEN_LENGTH, system=system)
+    document = _patient(extensions=[_extension(GI_URL, [("value", coding)])])
+
+    result = convert_scanned(_scanned(document), case=case, checkpoint=Checkpoint.EHR)
+
+    value = result.observations[0].value.to_dict()
+    assert len(value["code_system" if system else "value"]) == CODING_TOKEN_LENGTH
+
+
+@pytest.mark.parametrize("system", [True, False], ids=["system", "code"])
+def test_a_coding_token_over_the_contract_bound_rejects_at_its_own_location(
+    case: SyntheticCase, system: bool
+) -> None:
+    """The bound is the contract's, applied where the token sits in the source.
+
+    Without it a 97-character system passed the reader and was rejected by
+    the observation contract at ``$.observations[0].value.code_system``, a
+    path that exists in no FHIR document.
+    """
+
+    coding = _coding_of_length(CODING_TOKEN_LENGTH + 1, system=system)
+    document = _patient(extensions=[_extension(GI_URL, [("value", coding)])])
+    with pytest.raises(ContextSafeError) as raised:
+        convert_scanned(_scanned(document), case=case, checkpoint=Checkpoint.EHR)
+    assert raised.value.to_dict() == {
+        "code": "invalid_string",
+        "path": "$.extension[0].extension[0].valueCodeableConcept.coding[0]."
+        + ("system" if system else "code"),
+        "message": "expected a bounded non-empty string",
+    }
+
+
+def test_the_rsg_context_at_the_contract_bound_is_carried(case: SyntheticCase) -> None:
+    context = _coded("CSYN-" + "A" * (CODING_TOKEN_LENGTH - 5))
+    document = _patient(
+        extensions=[_extension(RSG_URL, [("value", _coded("X")), ("type", context)])]
+    )
+
+    result = convert_scanned(_scanned(document), case=case, checkpoint=Checkpoint.EHR)
+
+    assert len(result.observations[0].value.to_dict()["context"]) == CODING_TOKEN_LENGTH
+
+
+def test_no_rejection_the_reader_produces_names_a_converted_document_path(
     case: SyntheticCase,
 ) -> None:
-    """A-033: ``female`` is not ``F``; the contract rejects it, we do not fix it."""
+    """Every committed rejection is located in the FHIR document, not after it."""
 
-    for code in ("female", "f", "Male", "CSYN-X"):
-        document = _patient(
-            extensions=[
-                _extension(
-                    RSG_URL,
-                    [("value", _coded(code)), ("type", _coded("CSYN-GOVERNMENT-ID"))],
-                )
-            ]
-        )
+    for name in REJECTIONS:
         with pytest.raises(ContextSafeError) as raised:
-            convert_scanned(_scanned(document), case=case, checkpoint=Checkpoint.EHR)
-        assert raised.value.code == "invalid_rsg_value"
-        assert code not in raised.value.message
+            import_source(
+                FHIR_R4_FORMAT, FIXTURES / name, case=case, checkpoint=Checkpoint.EHR
+            )
+        assert not raised.value.path.startswith("$.observations"), name
 
 
 @pytest.mark.parametrize("part", ["value", "type"])

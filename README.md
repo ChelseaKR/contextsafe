@@ -340,8 +340,8 @@ the accepting synthetic Patient for CTP-I01; the accepted subset is published
 as the reference-only
 [FHIR R4 source profile](schemas/contextsafe-fhir-r4-source-v0.1.schema.json).
 
-What it does not claim. The conversion is whole or nothing and strips
-nothing: a narrative, a contained resource, any element outside the allowlist
+What it does not claim. The conversion is whole or nothing, and nothing
+outside the allowlist is dropped: a narrative, a contained resource, any element outside the allowlist
 (`gender`, `meta`, `telecom`, `address`, `birthDate` included), any extension
 or sub-extension outside the profile (`comment`, `period`), a `display`, a
 reference, an identifier outside `urn:contextsafe:synthetic` / `CSYN-`, a
@@ -350,7 +350,17 @@ a `data-absent-reason` coding on recorded sex or gender (the canonical
 concept has no presence state, so that system's `unknown` is never read as
 the recorded value `unknown`), a document over one MiB, or a Patient carrying
 none of the concepts rejects the whole source with a code and a location, and
-a fixture per class is committed under `tests/fixtures/fhir-r4-json/`. Values are the coding's own tokens, verbatim,
+a fixture per class is committed under `tests/fixtures/fhir-r4-json/`. A
+recorded-sex-or-gender code outside the observation contract's closed
+alphabet, and any coding system or code over the contract's 96-character
+token bound, reject at their own location in the FHIR document, so no
+rejection names a path in the converted document. What the allowlist admits
+and the canonical model cannot hold is validated and not carried, and the
+list is closed: `Patient.id`, `Patient.active`, every `HumanName` whose
+`use` is not `usual`, `family` on the usual name, the pronouns coding's
+system, and the recorded-sex-or-gender value's system; each is a bounded
+token, a boolean, or a synthetic name part, but an emitted observation set is
+the five concepts and not the whole Patient. Values are the coding's own tokens, verbatim,
 so evaluating the reference Patient against the reference rules passes the
 name-to-use rule (the token is identical), reports `semantic_mismatch` for
 the unbound gender-identity and pronoun tokens, and leaves the two rules at

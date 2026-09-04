@@ -145,7 +145,7 @@ because it was the finding.*
 | Published today | Not published today |
 |---|---|
 | JSON Schemas, a deterministic evaluator, an unsigned pack/plan compiler, a read-only evidence boundary check | Any governed case pack (B-009) or approved assertion (B-010) — none exists |
-| Five synthetic fixtures using invented tokens (`CSYN-`, `fixture-gender-1`) | Any real system, vendor, version, customer, or partner name — none exists |
+| Six synthetic fixtures using invented tokens (`CSYN-`, `fixture-gender-1`) | Any real system, vendor, version, customer, or partner name — none exists |
 | The concept separation itself: GI ≠ RSG ≠ SPCU ≠ NtU ≠ pronouns, and why conflating them harms patients | Any receipt about any real installed workflow — none has ever been produced |
 | The four-checkpoint model and the seeded-fault taxonomy | Reviewer identities — the governance roster is unrecruited |
 
@@ -386,30 +386,55 @@ history for a section number is not worth the cost, and the fact is unremarkable
 
 `src/contextsafe/fixtures/reference/` (until 2026-09-02 `fixtures/reference/`;
 moved by `git mv` so the wheel ships it, bytes unchanged, and `git log --follow`
-carries each file's history across the move) holds exactly five files, 7,957
-bytes total, and **no fixture path has ever been deleted** — the 89-path
-full-history file list contains no other
-fixture.
+carries each file's history across the move) holds exactly six files, 9,796
+bytes total, and **no fixture path has ever been deleted** — when this section
+was written the 89-path full-history file list contained no other fixture, and
+the only fixture directory added since is the one named below.
+
+**Update, 2026-09-04.** This section said five files and 7,957 bytes, "no
+`birthDate` field anywhere", and "the only PII-shaped literals in the
+repository are in `tests/test_preflight.py`" after all three had stopped being
+true: B-023 added `fhir-patient.json` (1,839 bytes) to the packaged set and
+committed the repository's first fixture files carrying PII-shaped literals,
+under `tests/fixtures/fhir-r4-json/`. The claims gate compares lists and
+values, not prose, so nothing caught it. The figures, the table, and the two
+statements below were re-derived on that date, and
+`tests/test_reference_fixtures.py` and `tests/test_fhir_r4_import.py` now hold
+them against the tree.
 
 | File | Evidence that it is synthetic |
 |---|---|
 | `case.json` | `urn:contextsafe:synthetic`, `CSYN-CTP-I01`, name `CSYN-ASTER`, `fixture-gender-1` under `urn:contextsafe:fixture`, `source: synthetic-fixture` |
 | `observations.json` | `OBS-I01-*` identifiers; `CSYN-`/`fixture-` values; evidence pointers are SHA-256 only |
 | `evidence-source.json` | `PLAN-SYNTHETIC-TEST`, `CSYN-CTP-I01`, `CSYN-PRONOUN-THEY-THEM` |
+| `fhir-patient.json` | `urn:contextsafe:synthetic` / `CSYN-CTP-I01` as identifier and resource id; family `ZZZTESTCONTEXTSAFE`, given `CSYN-ASTER` and `CSYN-LEGAL-GIVEN-1`; `CSYN-GENDER-1`, `CSYN-PRONOUN-THEY-THEM`, and `CSYN-GOVERNMENT-ID` under `urn:contextsafe:fixture`; recorded sex or gender `X` |
 | `pack-draft.json` | `PACK-SYNTHETIC-REFERENCE-DRAFT`, limitations `synthetic-reference-only`, `not-clinically-reviewed`, `not-community-approved` |
 | `rules.json` | expectations mirror the values above |
 
 No name, MRN, date of birth, address, phone number, SSN, or NPI appears in any
-fixture; there is no `birthDate` field anywhere. The rule is enforced in code,
-not by convention — `src/contextsafe/plan.py` pins
-`SYNTHETIC_IDENTIFIER_SYSTEM`, `SYNTHETIC_VALUE_PREFIX = "CSYN-"`, and
-`^CSYN-CTP-[A-Z0-9]{3,16}$`, and rejects anything outside them.
+packaged fixture or in any accepting fixture, and none of them carries a
+`birthDate` field. The rule is enforced in code, not by convention —
+`src/contextsafe/plan.py` pins `SYNTHETIC_IDENTIFIER_SYSTEM`,
+`SYNTHETIC_VALUE_PREFIX = "CSYN-"`, and `^CSYN-CTP-[A-Z0-9]{3,16}$`, and
+rejects anything outside them; the FHIR reader's boundary scan rejects a
+`birthDate` key before reading the value.
 
-The only PII-shaped literals in the repository are deliberate rejection canaries
-in `tests/test_preflight.py`: `123-45-6789` (the textbook invalid SSN),
-`415-555-0199` (the reserved fictional range), `MRN: ABCD1234`,
-`person@example.invalid`, `https://patient.invalid/record`. Each exists to be
-refused, and a companion assertion requires that the refusal never echoes it.
+Every PII-shaped literal in the repository exists to be refused. In
+`tests/test_preflight.py` they are rejection canaries: `123-45-6789` (the
+textbook invalid SSN), `415-555-0199` (the reserved fictional range), `MRN:
+ABCD1234`, `person@example.invalid`, `https://patient.invalid/record`, and a
+companion assertion requires that the refusal never echoes them. Since
+2026-09-04, `tests/fixtures/fhir-r4-json/` also holds rejection fixtures that
+carry deliberately PII-shaped literals: `1980-01-02` (a `birthDate`, in
+`reject-birth-date.json`), `555-0100` (a `telecom` value, in
+`reject-telecom.json`), `CSYN-1234567890` (a ten-digit run inside a
+well-formed synthetic token, in `reject-direct-identifier.json`), and the
+`CSYN-CTXSAFE-PHI-CANARY-ALICE` canary (in `reject-canary.json`). Each is
+pinned to its rejection code and location in `REJECTIONS` in
+`tests/test_fhir_r4_import.py`, the same parametrized test asserts that the
+rendered rejection contains no string in `FIXTURE_CONTENT`, which lists them,
+and a further test requires that every literal in this paragraph is carried by
+exactly the fixture named here and by no accepting or packaged fixture.
 
 ### §5 License, NOTICE, and citation
 

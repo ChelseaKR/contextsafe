@@ -9,7 +9,8 @@
     "no key anywhere normalizes to a prohibited free-text or identifying field (text, contained, note, comment, telecom, address, birthDate, and the rest of the canonical list)",
     "no string carries a boundary-whitespace, control, or format character, a known PHI canary, or a direct-identifier pattern; the five published URLs are exempt from the URL detector by exact equality only",
     "exactly one identifier value equals the case document's synthetic token",
-    "which coding shape each sub-extension admits is written below per extension: a gender-identity or pronouns value is a presence coding (the data-absent-reason system with asked-declined, unknown, or not-asked) or a synthetic coding; a recorded-sex-or-gender value is F, M, X, or unknown in any system other than data-absent-reason, because the canonical concept carries no presence state; a recorded-sex-or-gender type is a synthetic coding; the runtime holds the same rule and, for the recorded-sex-or-gender value, the observation contract's own closed alphabet",
+    "which coding shape each sub-extension admits is written below per extension: a gender-identity or pronouns value is a presence coding (the data-absent-reason system with asked-declined, unknown, or not-asked) or a synthetic coding; a recorded-sex-or-gender value is F, M, X, or unknown in any system other than data-absent-reason, because the canonical concept carries no presence state; a recorded-sex-or-gender type is a synthetic coding; the runtime holds the same rule, and checks the recorded-sex-or-gender value against the observation contract's own closed alphabet at the extension's location before conversion",
+    "elements admitted here and not carried into the observation set, because the canonical model has no field for them: Patient.id, Patient.active, every HumanName whose use is not usual, family on the usual name, the system of the pronouns coding, and the system of the recorded-sex-or-gender value coding; each is validated and none is free text",
     "a Patient carrying none of the concepts rejects; two gender-identity extensions or two usual names are two observations, which the evaluator reports as ambiguous"
   ],
   "oneOf": [
@@ -104,7 +105,9 @@
     },
     "codingSystem": {
       "type": "string",
-      "pattern": "^[A-Za-z0-9][A-Za-z0-9:/_.-]{0,127}$"
+      "maxLength": 96,
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9:/_.-]{0,95}$",
+      "description": "Bounded at 96 characters, the observation contract's token length, so that a document valid here is not rejected by the contract after conversion."
     },
     "presenceCoding": {
       "type": "object",
@@ -127,9 +130,9 @@
             {"not": {"const": "http://terminology.hl7.org/CodeSystem/data-absent-reason"}}
           ]
         },
-        "code": {"type": "string", "pattern": "^CSYN-[A-Z0-9][A-Z0-9_.:-]{0,95}$"}
+        "code": {"type": "string", "maxLength": 96, "pattern": "^CSYN-[A-Z0-9][A-Z0-9_.:-]{0,90}$"}
       },
-      "description": "A synthetic token in any system but the presence system."
+      "description": "A synthetic token in any system but the presence system, bounded at 96 characters like the system."
     },
     "recordedSexOrGenderCoding": {
       "type": "object",

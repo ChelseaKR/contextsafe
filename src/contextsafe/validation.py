@@ -73,7 +73,14 @@ _PROHIBITED_KEYS = frozenset(
 _REQUIRED_INFERENCES = frozenset(
     {"gender_identity_to_spcu", "recorded_sex_or_gender_to_spcu"}
 )
-_RSG_VALUES = frozenset({"F", "M", "X", "unknown"})
+RSG_VALUES = frozenset({"F", "M", "X", "unknown"})
+"""The closed recorded-sex-or-gender alphabet this contract admits.
+
+Public so that a reader can refuse a value outside it at the source's own
+location before conversion, instead of the converted document being rejected
+here at a path the source never had. The set is the contract's, not the
+reader's: nothing else may extend it, and nothing maps a value into it.
+"""
 
 
 def _error(code: str, path: str, message: str) -> ContextSafeError:
@@ -187,7 +194,7 @@ def _recorded_sex_or_gender(value: object, path: str) -> RecordedSexOrGender:
     data = _object(value, path)
     _exact_keys(data, frozenset({"value", "context", "source"}), path)
     rsg_value = _string(data["value"], f"{path}.value")
-    if rsg_value not in _RSG_VALUES:
+    if rsg_value not in RSG_VALUES:
         raise _error("invalid_rsg_value", f"{path}.value", "value is not supported")
     return RecordedSexOrGender(
         value=rsg_value,
