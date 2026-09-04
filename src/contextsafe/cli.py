@@ -20,7 +20,13 @@ from contextsafe.eventlog import Outcome, append_event
 from contextsafe.evidence import build_evidence_scope
 from contextsafe.html_receipt import render_receipt_page
 from contextsafe.i18n import SOURCE_LOCALE, Surface, available_locales, source_catalog
-from contextsafe.importers import available_formats, checkpoint_value, import_source
+from contextsafe.importers import (
+    available_formats,
+    checkpoint_value,
+    compile_profile,
+    import_source,
+    load_profile,
+)
 from contextsafe.jsonio import load_json
 from contextsafe.models import EvaluationBundle, OutcomeStatus
 from contextsafe.pack import compile_pack
@@ -208,7 +214,39 @@ def _parser() -> argparse.ArgumentParser:
     import_parser.add_argument("--source", required=True, type=Path)
     import_parser.add_argument("--case", required=True, type=Path)
     import_parser.add_argument("--checkpoint", required=True)
+    import_parser.add_argument(
+        "--mapping",
+        type=Path,
+        help=(
+            "a mapping profile to apply after the conversion; without it every "
+            "value is the source's own token. The profile is validated first, "
+            "must be for the same format, and its review status can only be "
+            "not_reviewed; every emitted observation then records the "
+            "profile's sha256 and version"
+        ),
+    )
     import_parser.add_argument("--output", type=Path)
+    mapping_parser = subparsers.add_parser(
+        "mapping",
+        help=(
+            "Work with mapping profiles: validate one and emit its canonical "
+            "unsigned form and digest. There is no mapping sign command"
+        ),
+    )
+    mapping_subparsers = mapping_parser.add_subparsers(
+        dest="mapping_command", required=True
+    )
+    mapping_validate = mapping_subparsers.add_parser(
+        "validate",
+        parents=[modes],
+        help=(
+            "validate a mapping profile against the registered importers and "
+            "emit its canonical unsigned form with its sha256; a profile "
+            "declaring any review status but not_reviewed is rejected"
+        ),
+    )
+    mapping_validate.add_argument("--profile", required=True, type=Path)
+    mapping_validate.add_argument("--output", type=Path)
     fixtures_parser = subparsers.add_parser(
         "fixtures",
         help="Work with the synthetic reference fixtures the package carries.",
@@ -333,13 +371,31 @@ def _import_command(args: argparse.Namespace) -> str:
     has no field for them.
     """
 
+    mapping_path: Path | None = args.mapping
+    profile = None if mapping_path is None else load_profile(load_json(mapping_path))
     result = import_source(
         args.format,
         args.source,
         case=parse_case(load_json(args.case)),
         checkpoint=checkpoint_value(args.checkpoint, "$.checkpoint"),
+        profile=profile,
     )
     return f"{canonical_json(result.observation_set())}\n"
+
+
+def _mapping_command(args: argparse.Namespace) -> str:
+    """Validate one mapping profile and emit its canonical form and digest.
+
+    ``mapping validate`` is the only mapping command. ``mapping sign``
+    (Architecture section 7) is not built: no signer key, trust manifest, or
+    enrolled reviewer exists, and the compiled document says so.
+    """
+
+    if args.mapping_command != "validate":
+        raise ContextSafeError(
+            "unsupported_command", "$", "mapping command is unsupported"
+        )
+    return f"{canonical_json(compile_profile(load_json(args.profile)).to_dict())}\n"
 
 
 def _render_command(args: argparse.Namespace) -> str:
@@ -360,6 +416,8 @@ def _conversion_command(args: argparse.Namespace) -> str | None:
         return _render_command(args)
     if args.command == "import":
         return _import_command(args)
+    if args.command == "mapping":
+        return _mapping_command(args)
     return None
 
 

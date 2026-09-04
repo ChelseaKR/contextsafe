@@ -36,7 +36,9 @@ Values are the source's own tokens, verbatim. A GSP value of ``they/them``
 becomes a pronouns value of exactly that string; PID-8 ``X`` becomes a
 recorded-sex-or-gender value of exactly ``X`` with the context
 ``administrative``. Binding a token to the value a rule expects is what a
-mapping profile does (B-026), and none exists.
+mapping profile does (B-026), applied after this conversion and never
+inside it; this reader records the carrier and token beside each observation
+so a profile row can match on what the message said.
 """
 
 import re
@@ -57,6 +59,7 @@ from contextsafe.importers.base import (
     import_error,
 )
 from contextsafe.importers.canonical_json import UNBOUND_CODE_SYSTEM
+from contextsafe.mapping_profile import SourceToken
 from contextsafe.models import (
     OBSERVATION_SCHEMA_VERSION,
     OBSERVATION_SET_SCHEMA_VERSION,
@@ -118,6 +121,32 @@ SUPPORTING_OBSERVATION_PREFIX = "SUP-CSYN-"
 ORDER_CONTEXT_PREFIX = "ORDER-CSYN-"
 """What an OBR-2 placer order number must start with to be an SPCU context."""
 
+NAME_CARRIER = "PID-5"
+ADMINISTRATIVE_SEX_CARRIER = "PID-8"
+GSP_VALUE_CARRIER = "GSP-5"
+
+HL7V2_ER7_CARRIERS: Mapping[str, frozenset[ConceptKind]] = MappingProxyType(
+    {
+        NAME_CARRIER: frozenset({ConceptKind.NAME_TO_USE}),
+        ADMINISTRATIVE_SEX_CARRIER: frozenset({ConceptKind.RECORDED_SEX_OR_GENDER}),
+        GSP_VALUE_CARRIER: frozenset(
+            {
+                ConceptKind.GENDER_IDENTITY,
+                ConceptKind.PRONOUNS,
+                ConceptKind.RECORDED_SEX_OR_GENDER,
+                ConceptKind.SEX_PARAMETER_FOR_CLINICAL_USE,
+            }
+        ),
+    }
+)
+"""What a mapping profile for this format may name as a carrier: a segment-field.
+
+PID-8 is recorded sex or gender here for the same reason it is nothing else
+in the reader: a profile row that reads it as gender identity or as sex
+parameter for clinical use is refused. GSP-5 carries whichever concept
+GSP-4 names, so a profile row for it says which.
+"""
+
 
 class Hl7RejectionCode(StrEnum):
     """Rejections that are about the ER7 encoding itself.
@@ -166,8 +195,9 @@ class Hl7v2Profile:
     """Every constant this importer decides an HL7 v2 message by.
 
     ``profile_reviewed`` is ``False`` and cannot be anything else: this is
-    the reference-only profile the code was written against, and a reviewed
-    profile is a B-026 artifact that does not exist. The values are written
+    the reference-only profile the code was written against, and no reviewed
+    profile exists (a B-026 mapping profile admits only ``not_reviewed``
+    as well). The values are written
     out rather than derived so that a reader can line each one up against
     the Gender Harmony guidance and say whether it is right.
     """
@@ -394,10 +424,14 @@ class _Emitter:
     checkpoint: Checkpoint
     source_sha256: str
     observations: list[Observation] = field(default_factory=list)
+    tokens: list[SourceToken] = field(default_factory=list)
 
-    def emit(self, value: SemanticValue, pointer: str) -> None:
+    def emit(
+        self, value: SemanticValue, pointer: str, carrier: str, token: str
+    ) -> None:
         concept = _CONCEPT_OF_TYPE[type(value)]
         index = len(self.observations)
+        self.tokens.append(SourceToken(concept=concept, carrier=carrier, token=token))
         self.observations.append(
             Observation(
                 schema_version=OBSERVATION_SCHEMA_VERSION,
@@ -908,11 +942,14 @@ def _name_repetition(
     return type_code, given
 
 
-def _name_to_use(pid: Segment) -> tuple[NameToUse, str] | None:
-    """The one PID-5 repetition typed as the name to use, if there is one."""
+def _name_to_use(pid: Segment) -> tuple[NameToUse, str, str] | None:
+    """The one PID-5 repetition typed as the name to use, if there is one.
+
+    Returns the value, its pointer, and the given token the source said.
+    """
 
     profile = HL7V2_ER7_PROFILE
-    found: list[tuple[NameToUse, str]] = []
+    found: list[tuple[NameToUse, str, str]] = []
     for rep_index, repetition in enumerate(pid.field(5), 1):
         if not any(value for component in repetition for value in component):
             continue
@@ -922,6 +959,7 @@ def _name_to_use(pid: Segment) -> tuple[NameToUse, str] | None:
                 (
                     NameToUse(status=ValueStatus.SPECIFIED, value=given, use="usual"),
                     pid.pointer(5, rep_index, 2),
+                    given,
                 )
             )
     if len(found) > 1:
@@ -958,10 +996,10 @@ def _convert_pid(pid: Segment, case: SyntheticCase, emitter: _Emitter) -> None:
     _check_identifier(pid, case)
     name = _name_to_use(pid)
     if name is not None:
-        emitter.emit(name[0], name[1])
+        emitter.emit(name[0], name[1], NAME_CARRIER, name[2])
     sex = _administrative_sex(pid)
     if sex is not None:
-        emitter.emit(sex, pid.pointer(8))
+        emitter.emit(sex, pid.pointer(8), ADMINISTRATIVE_SEX_CARRIER, sex.value)
 
 
 # --- GSP, OBR, OBX ------------------------------------------------------------
@@ -1034,7 +1072,9 @@ def _check_coding_system(
         )
 
 
-def _gsp_value(gsp: Segment, order: _OrderContext | None) -> SemanticValue:
+def _gsp_value(gsp: Segment, order: _OrderContext | None) -> tuple[SemanticValue, str]:
+    """The typed GSP-5 value and the code the source said."""
+
     concept = _concept_type(gsp)
     code, system = _gsp_code(gsp)
     _check_coding_system(gsp, concept, code, system)
@@ -1042,15 +1082,15 @@ def _gsp_value(gsp: Segment, order: _OrderContext | None) -> SemanticValue:
         status, value = _presence(code)
         return GenderIdentity(
             status=status, value=value, code_system=system or UNBOUND_CODE_SYSTEM
-        )
+        ), code
     if concept is ConceptKind.PRONOUNS:
         status, value = _presence(code)
-        return Pronouns(status=status, value=value)
+        return Pronouns(status=status, value=value), code
     if concept is ConceptKind.RECORDED_SEX_OR_GENDER:
         return RecordedSexOrGender(
             value=code, context=UNBOUND_CONTEXT, source=GSP_SOURCE
-        )
-    return _sex_parameter(gsp, code, order)
+        ), code
+    return _sex_parameter(gsp, code, order), code
 
 
 def _sex_parameter(
@@ -1085,7 +1125,8 @@ def _convert_gsp(gsp: Segment, order: _OrderContext | None, emitter: _Emitter) -
         raise import_error(
             ImportErrorCode.VALUE_MISSING, gsp.pointer(4), "GSP-4 is required"
         )
-    emitter.emit(_gsp_value(gsp, order), gsp.pointer(5))
+    value, code = _gsp_value(gsp, order)
+    emitter.emit(value, gsp.pointer(5), GSP_VALUE_CARRIER, code)
 
 
 def _order_identifier(obr: Segment, number: int, *, required: bool) -> str:
@@ -1215,6 +1256,7 @@ def convert_raw(
         record_count=len(validated),
         observations=validated,
         warnings=_WARNINGS,
+        source_tokens=tuple(emitter.tokens),
     )
 
 
@@ -1228,6 +1270,10 @@ class Hl7v2Er7Importer:
     @property
     def mapping_version(self) -> str:
         return HL7V2_ER7_MAPPING_VERSION
+
+    @property
+    def carriers(self) -> Mapping[str, frozenset[ConceptKind]]:
+        return HL7V2_ER7_CARRIERS
 
     def convert(
         self, source: Path, *, case: SyntheticCase, checkpoint: Checkpoint

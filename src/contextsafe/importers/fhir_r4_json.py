@@ -81,6 +81,7 @@ from contextsafe.importers.base import (
     ImportWarningCode,
     import_error,
 )
+from contextsafe.mapping_profile import SourceToken
 from contextsafe.models import (
     OBSERVATION_SCHEMA_VERSION,
     OBSERVATION_SET_SCHEMA_VERSION,
@@ -222,6 +223,27 @@ reviewer may overturn by changing this constant and its version:
 FHIR_R4_MAPPING_VERSION = FHIR_R4_PROFILE.version
 """Recorded as ``mapping.mapping_version`` on every observation emitted."""
 
+NAME_CARRIER = "Patient.name"
+"""The carrier a mapping profile names for the usual ``HumanName``'s given token.
+
+The name to use is not an extension, so it has no URL; this is the one
+carrier name in the FHIR table that is not one.
+"""
+
+FHIR_R4_CARRIERS: Mapping[str, frozenset[ConceptKind]] = {
+    FHIR_R4_PROFILE.gender_identity_url: frozenset({ConceptKind.GENDER_IDENTITY}),
+    FHIR_R4_PROFILE.pronouns_url: frozenset({ConceptKind.PRONOUNS}),
+    FHIR_R4_PROFILE.recorded_sex_or_gender_url: frozenset(
+        {ConceptKind.RECORDED_SEX_OR_GENDER}
+    ),
+    NAME_CARRIER: frozenset({ConceptKind.NAME_TO_USE}),
+}
+"""What a mapping profile for this format may name as a carrier.
+
+Each extension URL reads as exactly its own concept. The sex parameter URL
+is absent because the reader never emits it, so no profile can bind it.
+"""
+
 _PRESENCE_CODES: Mapping[str, ValueStatus] = dict(FHIR_R4_PROFILE.presence_codes)
 
 FHIR_R4_BOUNDARY_PROFILE = BoundaryProfile(
@@ -355,7 +377,8 @@ class _Coding:
     code: str
 
 
-type _Found = tuple[_Cursor, ConceptKind, SemanticValue]
+type _Found = tuple[_Cursor, ConceptKind, SemanticValue, SourceToken]
+"""Where it was read, what it is, the value built, and what the source said."""
 
 
 def _allowed_keys(
@@ -744,9 +767,15 @@ def _extensions(value: object, cursor: _Cursor) -> list[_Found]:
             extension_cursor.child("extension"),
             allowed=rule.sub_extensions,
         )
-        found.append(
-            (extension_cursor, rule.concept, rule.convert(parts, extension_cursor))
+        value = rule.convert(parts, extension_cursor)
+        # The conversion required the value sub-extension, so it is present;
+        # its code is the token the source said, before any profile binds it.
+        token = SourceToken(
+            concept=rule.concept,
+            carrier=url,
+            token=parts[FHIR_R4_PROFILE.value_sub_extension].code,
         )
+        found.append((extension_cursor, rule.concept, value, token))
     return found
 
 
@@ -801,7 +830,10 @@ def _names(value: object, cursor: _Cursor) -> list[_Found]:
                 "the name to use carries exactly one given token",
             )
         value_to_use = NameToUse(status=ValueStatus.SPECIFIED, value=given[0], use=use)
-        found.append((name_cursor, ConceptKind.NAME_TO_USE, value_to_use))
+        token = SourceToken(
+            concept=ConceptKind.NAME_TO_USE, carrier=NAME_CARRIER, token=given[0]
+        )
+        found.append((name_cursor, ConceptKind.NAME_TO_USE, value_to_use, token))
     return found
 
 
@@ -842,7 +874,7 @@ def _observation(
     checkpoint: Checkpoint,
     source_sha256: str,
 ) -> Observation:
-    cursor, concept, value = found
+    cursor, concept, value, _token = found
     return Observation(
         schema_version=OBSERVATION_SCHEMA_VERSION,
         observation_id=f"OBS-{case_id}-F{index:04d}",
@@ -903,6 +935,7 @@ def convert_scanned(
         record_count=len(found),
         observations=validated,
         warnings=_WARNINGS,
+        source_tokens=tuple(item[3] for item in found),
     )
 
 
@@ -916,6 +949,10 @@ class FhirR4JsonImporter:
     @property
     def mapping_version(self) -> str:
         return FHIR_R4_MAPPING_VERSION
+
+    @property
+    def carriers(self) -> Mapping[str, frozenset[ConceptKind]]:
+        return FHIR_R4_CARRIERS
 
     def convert(
         self, source: Path, *, case: SyntheticCase, checkpoint: Checkpoint

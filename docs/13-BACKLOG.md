@@ -308,6 +308,69 @@ its merits; an empty identity cell rejects rather than reading as `absent`,
 because deciding what an LIS's empty cell means is a profile decision; and
 the result's counts and warnings stay in process.
 
+Implementation note (2026-09-04, B-026): the versioned mapping profile
+exists as `schemas/contextsafe-mapping-profile-v1.schema.json`, a closed
+document naming the importer format it applies to, a SemVer version, a
+review record whose only admissible status is `not_reviewed` (no reviewer,
+no date; anything else rejects), and a table from source token — the
+carrier the importer read it from and the verbatim token — to the canonical
+concept and value the observation should carry. `contextsafe mapping
+validate --profile P.json --output canonical.json` emits the canonical
+unsigned profile and its SHA-256 as
+`contextsafe-compiled-mapping-profile-v1` (`signature_status:
+not_verified`, `executable: false`); `contextsafe mapping sign` from
+Architecture section 7 is not built. `contextsafe import ... --mapping
+PROFILE.json` validates the profile, requires it to be for the same format,
+converts as before, and applies the profile after parsing; without
+`--mapping` every importer keeps emitting verbatim tokens, byte-identical.
+Every importer now records a `SourceToken` (concept, carrier, token) beside
+each observation, and the registry's carrier table (`Importer.carriers`) is
+what a profile is validated against, so `PID-8` can be read only as
+recorded sex or gender and the FHIR sex-parameter URL is not a carrier at
+all. Validation rejects a row whose target is SPCU from a GI or RSG carrier
+first and by name (`prohibited_spcu_mapping`, A-020, A-021), any other
+cross-concept row, two rows collapsing two source values into one target
+(both are retained as distinct observations, which the evaluator reports
+ambiguous), a duplicate source, a target outside the synthetic grammar
+(`CSYN-`/`fixture-` tokens, `urn:contextsafe:` systems, the RSG alphabet, a
+closed set of recording contexts, a lowercase pronoun-set shape), and a
+sex-parameter target with any field but `value`, so a profile cannot bind an
+order context or a supporting observation. Every observation an import
+emits with a profile applied carries `profile_sha256` and `profile_version`
+in its mapping block — the observation-set contract is widened for the pair,
+required together, without a version bump, the way B-023 widened it — so
+`evaluate`'s input hash binds the profile. Five reference profiles ship as
+package data (`mapping-<format>.json`, exported by `fixtures export`), one
+per registered importer, binding the reference fixtures' tokens to the
+reference case's values so that import then evaluate passes every rule at
+the imported checkpoint and reports `missing_evidence`, never
+`semantic_mismatch`, for the rest; seventeen negative profiles, one per
+prohibited row class and more, sit under `tests/fixtures/mapping/`, each
+pinned to its code and location and to the layer that refuses it.
+`mapping_profile.py` and `importers/mapping.py` are safety modules;
+`import --mapping` per format and `mapping validate` are in the
+determinism matrix with pinned digests; the reference-receipt digest and the
+verbatim import digests are unchanged.
+B-026 is not closed: the "fixture approval" in the row's deliverable has
+not happened and cannot happen here — no interoperability reviewer has
+examined any profile, and the schema admits no status by which one could say
+so, deliberately; the reference profiles are synthetic bindings for the
+reference fixtures and not the mapping of any real system, and the
+recording context a row binds (the HL7 `PID-8` value to the case's
+`government-id` record) is a declaration the profile makes that nothing has
+confirmed; HL7 null flavors, the FHIR `data-absent-reason` codes beyond the
+three the reader already admits, and an LIS's empty cell are still not
+bound to presence states, because a profile row names a token the importer
+emitted and those sources reject before emitting one; a token with no row
+passes through verbatim with a closed warning rather than rejecting the
+source, a fail-closed alternative the maintainer may prefer; the synthetic
+target grammar (in particular the pronoun-set shape, admitted because the
+reference case's own value is `they/them`) is a reference-only choice no
+community reviewer has confirmed; the `mapping sign` command, a signer key,
+a trust manifest, and the enrolled ContextSafe interoperability reviewer it
+needs all wait on B-035; and the sibling `contextsafe-observation-v1`
+contract, which no runtime parser reads, carries no profile binding.
+
 ## Phase 4 — review and receipts
 
 | ID | Trace | Deliverable and acceptance | Owner | Dependency | Estimate |

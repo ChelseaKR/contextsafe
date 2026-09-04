@@ -1,0 +1,28 @@
+{
+  "schema_version": "contextsafe.mapping-profile/1.0.0",
+  "profile_id": "MAP-REJECT-FIXTURE",
+  "format": "fhir-r4-json",
+  "version": "0.1.0",
+  "review": {
+    "status": "not_reviewed",
+    "reviewed_by": null,
+    "reviewed_at": null
+  },
+  "rows": [
+    {
+      "source": {
+        "concept": "gender_identity",
+        "carrier": "http://hl7.org/fhir/StructureDefinition/individual-genderIdentity",
+        "token": "CSYN-GENDER-1"
+      },
+      "target": {
+        "concept": "gender_identity",
+        "value": {
+          "status": "specified",
+          "value": "fixture-gender-1",
+          "code_system": "http://terminology.example.invalid/gender"
+        }
+      }
+    }
+  ]
+}

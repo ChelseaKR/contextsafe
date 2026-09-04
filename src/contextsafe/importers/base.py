@@ -26,9 +26,19 @@ that happened.
 result this iteration can produce. The field exists so that the adapters
 that follow cannot omit the question, and so that a mapping profile (B-026)
 has a place to answer it once a governed one exists. Nothing in this package
-may set it to ``True``.
+may set it to ``True``. A mapping profile can now be applied
+(:mod:`contextsafe.importers.mapping`), and the result then carries the
+profile's digest and version; its review status is ``not_reviewed`` and
+``profile_reviewed`` stays ``False``.
+
+**Every observation says what the source said.** Beside each observation an
+importer records the :class:`~contextsafe.mapping_profile.SourceToken` it was
+read from -- the carrier (a field code, an extension URL, a segment-field, a
+column) and the verbatim token -- so a mapping profile row matches on the
+source's own words rather than on the canonical value the importer built.
 """
 
+from collections.abc import Mapping
 from dataclasses import dataclass
 from enum import StrEnum
 from pathlib import Path
@@ -37,9 +47,11 @@ from typing import Protocol
 from contextsafe.canonical import JsonValue
 from contextsafe.contract_validation import bounded_string, contract_error
 from contextsafe.errors import ContextSafeError
+from contextsafe.mapping_profile import SourceToken
 from contextsafe.models import (
     OBSERVATION_SET_SCHEMA_VERSION,
     Checkpoint,
+    ConceptKind,
     Observation,
     SyntheticCase,
 )
@@ -152,6 +164,9 @@ class ImportWarningCode(StrEnum):
     RESULT_COLUMNS_NOT_OBSERVED = "result_columns_not_observed"
     """The source carries laboratory result columns that became no observation."""
 
+    MAPPING_PROFILE_ROW_UNMATCHED = "mapping_profile_row_unmatched"
+    """A profile was applied and at least one token had no row; it stays verbatim."""
+
 
 UNBOUND_CODE_SYSTEM = "urn:contextsafe:unbound-code-system"
 """Gender identity's ``code_system`` when the source names none.
@@ -192,6 +207,12 @@ class ImportResult:
     a later item. It counts what was read and not claimed, so a caller
     holding the result can see that the source carried more than the
     observations say. It is zero for a format with no such column.
+
+    ``source_tokens`` is one :class:`SourceToken` per observation, in the
+    same order: what the source said before anything bound it. Every
+    registered importer records them; a result built without them cannot
+    have a mapping profile applied. ``profile_sha256`` and
+    ``profile_version`` name the profile that was applied, or are ``None``.
     """
 
     format_name: str
@@ -203,6 +224,9 @@ class ImportResult:
     warnings: tuple[ImportWarningCode, ...]
     profile_reviewed: bool = False
     unobserved_cell_count: int = 0
+    source_tokens: tuple[SourceToken, ...] = ()
+    profile_sha256: str | None = None
+    profile_version: str | None = None
 
     def __post_init__(self) -> None:
         if self.profile_reviewed:
@@ -222,6 +246,18 @@ class ImportResult:
                 "import_count_mismatch",
                 "$.unobserved_cell_count",
                 "a count of unobserved cells cannot be negative",
+            )
+        if self.source_tokens and len(self.source_tokens) != len(self.observations):
+            raise contract_error(
+                "import_count_mismatch",
+                "$.source_tokens",
+                "every observation records exactly one source token",
+            )
+        if (self.profile_sha256 is None) != (self.profile_version is None):
+            raise contract_error(
+                "mapping_profile_binding_incomplete",
+                "$.profile_sha256",
+                "a profile binding carries both profile_sha256 and profile_version",
             )
 
     def observation_set(self) -> dict[str, JsonValue]:
@@ -252,6 +288,8 @@ class ImportResult:
             "observation_count": len(self.observations),
             "persisted": False,
             "profile_reviewed": self.profile_reviewed,
+            "profile_sha256": self.profile_sha256,
+            "profile_version": self.profile_version,
             "record_count": self.record_count,
             "source_byte_count": self.source_byte_count,
             "source_sha256": self.source_sha256,
@@ -275,6 +313,16 @@ class Importer(Protocol):
     @property
     def mapping_version(self) -> str:
         """The version every emitted observation records as its mapping."""
+
+    @property
+    def carriers(self) -> Mapping[str, frozenset[ConceptKind]]:
+        """Every carrier this importer reads a token from, and as which concepts.
+
+        The closed vocabulary a mapping profile for this format may name in
+        a row's ``source.carrier``, each with the concepts the importer can
+        emit that carrier as. A carrier the importer reads as exactly one
+        concept lists exactly one, so a profile cannot read it as another.
+        """
 
     def convert(
         self, source: Path, *, case: SyntheticCase, checkpoint: Checkpoint

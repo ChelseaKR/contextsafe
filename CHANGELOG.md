@@ -22,6 +22,111 @@ rather than after it.
 
 ### Added
 
+- **The versioned mapping profile, `contextsafe import --mapping`, and
+  `contextsafe mapping validate` (B-026).** A mapping profile is the
+  document that says what a source's tokens mean: a closed, versioned table
+  for one registered importer format, from a source token (the carrier it was
+  read from — a field code, an extension URL or `Patient.name`, a segment-field
+  such as `PID-8` or `GSP-5`, a column — and the verbatim token) to the
+  canonical concept and value the observation should carry. It is published
+  as [`contextsafe-mapping-profile-v1`](schemas/contextsafe-mapping-profile-v1.schema.json),
+  and `contextsafe mapping validate --profile P.json --output canonical.json`
+  emits its canonical unsigned form (rows sorted by source, review fixed)
+  with its SHA-256, published as
+  [`contextsafe-compiled-mapping-profile-v1`](schemas/contextsafe-compiled-mapping-profile-v1.schema.json),
+  saying `signature_status: not_verified`, `executable: false`, and three
+  pinned limitations. The only review status a profile may declare is
+  `not_reviewed`, with no reviewer and no date; any other status, or a named
+  reviewer, rejects the profile — a declared approval authorizes nothing,
+  exactly as one on a pack does. `contextsafe mapping sign` (Architecture
+  section 7) is not built, and the compiled document says so.
+
+  Validation is whole and by name. A row whose target is sex parameter for
+  clinical use while its source concept is gender identity or recorded sex
+  or gender rejects first and as `prohibited_spcu_mapping` (A-020, A-021),
+  before any other check on the row; any other cross-concept row rejects as
+  `concept_type_mismatch`; two rows with different sources naming one target
+  value reject as `mapping_profile_target_collapses_sources` (ambiguity
+  retention: two source values never become one); a duplicate source, a
+  carrier the format's importer does not read, a carrier read as a concept
+  the importer never emits it as (`PID-8` is recorded sex or gender and
+  nothing else), a format no importer is registered under, and a token that
+  is not a bounded code or that trips the boundary scan each reject with
+  their own code and a location, never a token. Every target value must be
+  in the synthetic namespace: a `CSYN-` or `fixture-` token, a
+  `urn:contextsafe:` code system or source, the observation contract's
+  closed recorded-sex alphabet, a closed reference set of recording contexts
+  (`administrative`, `government-id`, `jurisdictional`, `laboratory`,
+  `payer`), or a lowercase pronoun-set shape such as `they/them`, which is
+  admitted because the reference case's own pronouns value has that shape
+  and is a shape, not a list. A sex-parameter row binds the value token and
+  nothing else: its target has one field, and the order context and
+  supporting observations stay the source's, so a profile cannot put an
+  SPCU on an order the source did not carry it on. The carrier table the
+  validator checks against is the importer registry's own declaration
+  (`Importer.carriers`, one per format), so a profile can name nothing an
+  importer does not read. One negative profile per prohibited row class is
+  committed under `tests/fixtures/mapping/` and pinned to its code and
+  location, and `tests/test_mapping_profile_schema.py` records which layer
+  — the schema or the runtime — refuses each.
+
+  `contextsafe import ... --mapping PROFILE.json` validates the profile
+  first, requires it to be for the same format, runs the conversion exactly
+  as before, and applies the profile to what it produced: every importer now
+  records, beside each observation, the source token it was read from, and a
+  row matches on that — on what the source said, not on the value the
+  importer built — so the token `CSYN-PRONOUN-THEY-THEM` read from the
+  canonical envelope's `pronouns` field binds to the case's `they/them`. A
+  token with no row stays verbatim and the in-process result carries the
+  closed warning `mapping_profile_row_unmatched`; nothing is dropped,
+  chosen between, or normalized, no observation changes concept or
+  disappears, and two observations that carried two tokens are two
+  observations after binding, which the evaluator reports as ambiguous.
+  Without `--mapping`, importers keep emitting verbatim tokens and the
+  document is byte-identical to what it was. Every observation an import
+  emits with a profile applied carries the profile's SHA-256 and version in
+  its `mapping` block (`profile_sha256`, `profile_version`, always
+  together), so `evaluate`'s input hash binds the profile that produced what
+  it evaluated. Five reference profiles ship as package data — one per
+  registered importer, `mapping-<format>.json` under
+  `src/contextsafe/fixtures/reference/`, exported by `fixtures export` —
+  binding each reference fixture's tokens to the reference case's values, so
+  that `import --mapping` followed by `evaluate` passes every rule at the
+  imported checkpoint (gender identity, name to use, and pronouns at `ehr`
+  for the FHIR and HL7 fixtures; pronouns for the canonical envelope;
+  recorded sex or gender at `registration` and sex parameter for clinical
+  use at `interface` when the HL7 message is imported there) and reports
+  `missing_evidence`, never `semantic_mismatch`, for the rest. The LIS
+  profiles bind the laboratory export's tokens in the `laboratory` context
+  and the reference rule set has no rule at `lis_return`, so those imports
+  evaluate to missing evidence only.
+
+  One published contract widened, the way B-023 widened it: the
+  observation-set v0.1 `mapping` block, and the runtime rule behind it, now
+  admit the optional `profile_sha256` and `profile_version` pair, required
+  together (`dependentRequired` in the schema,
+  `mapping_profile_binding_incomplete` at runtime). Every previously valid
+  document is still valid, an observation no profile touched is
+  byte-identical to before, no schema version moved, and the pinned
+  reference-receipt digest and the five verbatim import digests are
+  unchanged; a dated `$comment` on the block says so, because a consumer
+  holding the earlier copy of the file rejects every observation set an
+  import produced with `--mapping`. Five new pinned digests cover
+  `import --mapping` per format and one covers `mapping validate`.
+  `mapping` joins the event log's closed command vocabulary;
+  `src/contextsafe/mapping_profile.py` and
+  `src/contextsafe/importers/mapping.py` are declared safety modules; the
+  packaged reference set is fourteen files and the audit's synthetic-data
+  section is re-derived accordingly; `schemas/README.md` lists fifteen
+  contracts. No new runtime dependency. What this does not claim: no
+  interoperability, clinical, laboratory, or community reviewer has seen any
+  profile, the reference profiles are synthetic bindings for the reference
+  fixtures and not the mapping of any real system, `profile_reviewed` stays
+  `false` on every result, HL7 null flavors and an LIS's empty cell are
+  still not bound to presence states, nothing here signs, persists, or
+  authorizes anything, and a profile that a customer declares is exactly as
+  ungoverned as one this repository ships.
+
 - **`contextsafe import`, the read-only conversion step, and the importer
   registry the adapters that follow will share (B-022).**
   `contextsafe import --format canonical-json --source FILE --case CASE.json

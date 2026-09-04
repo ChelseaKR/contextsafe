@@ -96,6 +96,40 @@ only with the reference exports, the case document, or the LIS profile
 version.
 """
 
+MAPPED_OBSERVATIONS_SHA256: dict[str, str] = {
+    "canonical-json": "4433f908c6075efe1954b6f3830215879d5d4631f5b47e9ba0e2c0fdad1b4327",
+    "fhir-r4-json": "fb9511062f9b8e4673fb9b1d64caf3d967a7ad50baa00816db72a5031604022a",
+    "hl7v2-er7": "9931fceddc9d9199f5468188f716e8a426b9dd084cb32d996560cc0d54dcba21",
+    "lis-csv": "806bce429f12329bef50f79830d4d4c94b09b1247e034b96aea1258c8129e39e",
+    "lis-json": "e60f8b50f05839d9b7ffc3853e90444c1393b0252bdb62872096ecee86733b17",
+}
+"""SHA-256 of ``import --mapping`` over each reference source with its profile.
+
+One constant per registered format, because every observation carries the
+profile's digest and version beside the source's digest, so a platform that
+changed one byte of a profile's canonical form would change every bound
+observation set. They move only with the reference sources, the case
+document, the importers' mapping versions, or the reference profiles.
+"""
+
+COMPILED_MAPPING_PROFILE_SHA256 = (
+    "779d687047e2f93f314c52b52e15398af9c46be99fad4fa9e805d3e45c7d0228"
+)
+"""SHA-256 of ``mapping validate`` over the reference FHIR profile.
+
+The compiled document carries the profile's canonical form and the digest
+of that form, so this pin also covers the row ordering the canonical form
+fixes. It moves only with the reference profile.
+"""
+
+_MAPPED_SOURCES: dict[str, tuple[str, str]] = {
+    "canonical-json": ("evidence-source.json", "ehr"),
+    "fhir-r4-json": ("fhir-patient.json", "ehr"),
+    "hl7v2-er7": ("hl7v2-er7-message.hl7", "ehr"),
+    "lis-csv": ("lis-export.csv", "lis_return"),
+    "lis-json": ("lis-export.json", "lis_return"),
+}
+
 _ENVIRONMENTS: tuple[dict[str, str], ...] = (
     {
         "TZ": "UTC",
@@ -689,6 +723,95 @@ def test_lis_import_rejection_is_deterministic(tmp_path: Path) -> None:
     assert json.loads(runs[0].stderr.decode("utf-8"))["error"]["code"] == (
         "import_checkpoint_mismatch"
     )
+
+
+@pytest.mark.skipif(os.name == "nt", reason=_WINDOWS_UNSUPPORTED)
+@pytest.mark.parametrize("format_name", sorted(_MAPPED_SOURCES))
+def test_import_with_mapping_profile_is_deterministic_and_pinned(
+    tmp_path: Path, format_name: str
+) -> None:
+    """A bound observation set is byte-stable, and each digest is one constant.
+
+    The profile is read from the same copied input directory as the source,
+    so the artifact cannot depend on where either was read from; the
+    profile's digest on every observation is the digest of its canonical
+    form, not of its bytes or its path.
+    """
+
+    source, checkpoint = _MAPPED_SOURCES[format_name]
+    runs = _three_runs(
+        tmp_path,
+        lambda reference: [
+            "import",
+            "--format",
+            format_name,
+            "--source",
+            str(reference / source),
+            "--case",
+            str(reference / "case.json"),
+            "--checkpoint",
+            checkpoint,
+            "--mapping",
+            str(reference / f"mapping-{format_name}.json"),
+        ],
+        with_output=True,
+    )
+    _assert_identical(runs)
+    assert runs[0].returncode == 0
+    assert runs[0].stdout == b""
+    assert runs[0].stderr == b""
+    artifact = runs[0].artifact
+    assert artifact is not None
+    _assert_canonical_line(artifact)
+    assert (
+        hashlib.sha256(artifact).hexdigest() == MAPPED_OBSERVATIONS_SHA256[format_name]
+    )
+    for fragment in (str(tmp_path), str(ROOT), "Kiritimati", "en_US", "inputs-b"):
+        assert fragment.encode("utf-8") not in artifact
+
+
+def test_mapping_validate_is_deterministic_and_pinned(tmp_path: Path) -> None:
+    """The compiled profile is byte-stable, and its digest is one constant."""
+
+    runs = _three_runs(
+        tmp_path,
+        lambda reference: [
+            "mapping",
+            "validate",
+            "--profile",
+            str(reference / "mapping-fhir-r4-json.json"),
+        ],
+        with_output=True,
+    )
+    _assert_identical(runs)
+    assert runs[0].returncode == 0
+    assert runs[0].stdout == b""
+    assert runs[0].stderr == b""
+    artifact = runs[0].artifact
+    assert artifact is not None
+    _assert_canonical_line(artifact)
+    assert hashlib.sha256(artifact).hexdigest() == COMPILED_MAPPING_PROFILE_SHA256
+    for fragment in (str(tmp_path), str(ROOT), "Kiritimati", "en_US", "inputs-b"):
+        assert fragment.encode("utf-8") not in artifact
+
+
+def test_mapping_validate_rejection_is_deterministic(tmp_path: Path) -> None:
+    """A refused profile is the same one-line error object on every run."""
+
+    rejected = ROOT / "tests" / "fixtures" / "mapping" / "reject-gi-to-spcu.json"
+    runs = _three_runs(
+        tmp_path,
+        lambda _reference: ["mapping", "validate", "--profile", str(rejected)],
+    )
+    _assert_identical(runs)
+    assert runs[0].returncode == 2
+    assert runs[0].stdout == b""
+    _assert_canonical_line(runs[0].stderr)
+    assert json.loads(runs[0].stderr.decode("utf-8"))["error"] == {
+        "code": "prohibited_spcu_mapping",
+        "message": "GI and RSG can never be mapped into SPCU",
+        "path": "$.rows[0].target",
+    }
 
 
 def test_platforms_without_descriptor_relative_open_fail_closed(

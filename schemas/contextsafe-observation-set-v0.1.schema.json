@@ -118,7 +118,23 @@
       "type": "object",
       "additionalProperties": false,
       "required": ["source_concept", "target_concept", "mapping_version"],
+      "dependentRequired": {
+        "profile_sha256": ["profile_version"],
+        "profile_version": ["profile_sha256"]
+      },
+      "$comment": "Widened on 2026-09-04 by B-026 to admit the optional profile_sha256 and profile_version pair without a version bump: every document valid under the earlier shape is still valid, and an observation no profile touched is byte-identical to before. A consumer holding the earlier copy of this file rejects every observation set an import produced with --mapping.",
       "properties": {
+        "profile_sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$",
+          "description": "SHA-256 of the canonical mapping profile (contextsafe-mapping-profile-v1) that was applied to this observation. Present only when one was; always beside profile_version."
+        },
+        "profile_version": {
+          "type": "string",
+          "maxLength": 128,
+          "pattern": "^(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)$",
+          "description": "The applied mapping profile's own SemVer version. Present only beside profile_sha256."
+        },
         "source_concept": {
           "enum": [
             "gender_identity",

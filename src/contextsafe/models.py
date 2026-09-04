@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from enum import StrEnum
 
 from contextsafe.canonical import JsonValue
+from contextsafe.errors import ContextSafeError
 
 CASE_SCHEMA_VERSION = "contextsafe.case/0.1.0"
 OBSERVATION_SCHEMA_VERSION = "contextsafe.observation/0.1.0"
@@ -202,20 +203,41 @@ class SyntheticCase:
 
 @dataclass(frozen=True, slots=True)
 class MappingDescriptor:
-    """A typed mapping that cannot cross canonical concept boundaries."""
+    """A typed mapping that cannot cross canonical concept boundaries.
+
+    ``profile_sha256`` and ``profile_version`` are the mapping profile
+    (B-026) that was applied to the observation, or both ``None`` when none
+    was. They are written only when set, so an observation no profile
+    touched is byte-identical to what it was before profiles existed, and
+    when they are written the evaluator's input hash binds them.
+    """
 
     source_concept: ConceptKind
     target_concept: ConceptKind
     mapping_version: str
+    profile_sha256: str | None = None
+    profile_version: str | None = None
+
+    def __post_init__(self) -> None:
+        if (self.profile_sha256 is None) != (self.profile_version is None):
+            raise ContextSafeError(
+                "mapping_profile_binding_incomplete",
+                "$.mapping",
+                "a profile binding carries both profile_sha256 and profile_version",
+            )
 
     def to_dict(self) -> dict[str, JsonValue]:
         """Return the canonical exchange representation."""
 
-        return {
+        descriptor: dict[str, JsonValue] = {
             "mapping_version": self.mapping_version,
             "source_concept": self.source_concept.value,
             "target_concept": self.target_concept.value,
         }
+        if self.profile_sha256 is not None:
+            descriptor["profile_sha256"] = self.profile_sha256
+            descriptor["profile_version"] = self.profile_version
+        return descriptor
 
 
 @dataclass(frozen=True, slots=True)

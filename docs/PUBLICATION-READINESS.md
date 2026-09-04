@@ -145,7 +145,7 @@ because it was the finding.*
 | Published today | Not published today |
 |---|---|
 | JSON Schemas, a deterministic evaluator, an unsigned pack/plan compiler, a read-only evidence boundary check | Any governed case pack (B-009) or approved assertion (B-010) — none exists |
-| Nine synthetic fixtures using invented tokens (`CSYN-`, `fixture-gender-1`) | Any real system, vendor, version, customer, or partner name — none exists |
+| Fourteen synthetic fixtures using invented tokens (`CSYN-`, `fixture-gender-1`) | Any real system, vendor, version, customer, or partner name — none exists |
 | The concept separation itself: GI ≠ RSG ≠ SPCU ≠ NtU ≠ pronouns, and why conflating them harms patients | Any receipt about any real installed workflow — none has ever been produced |
 | The four-checkpoint model and the seeded-fault taxonomy | Reviewer identities — the governance roster is unrecruited |
 
@@ -386,7 +386,7 @@ history for a section number is not worth the cost, and the fact is unremarkable
 
 `src/contextsafe/fixtures/reference/` (until 2026-09-02 `fixtures/reference/`;
 moved by `git mv` so the wheel ships it, bytes unchanged, and `git log --follow`
-carries each file's history across the move) holds exactly nine files, 11,416
+carries each file's history across the move) holds exactly fourteen files, 17,501
 bytes total, and **no fixture path has ever been deleted** — when this section
 was written the 89-path full-history file list contained no other fixture, and
 the only fixture directories added since are the two named below.
@@ -402,7 +402,12 @@ statements below were re-derived on that date, and
 `tests/test_reference_fixtures.py` and `tests/test_fhir_r4_import.py` now hold
 them against the tree. The same day, B-024 added a seventh packaged file,
 `hl7v2-er7-message.hl7` (544 bytes), and three rejection messages under
-`tests/fixtures/hl7v2/`; the figures above include it.
+`tests/fixtures/hl7v2/`; the figures above include it. Later the same day,
+B-025 added the two `lis-export` files and B-026 added the five `mapping-*`
+reference profiles (6,085 bytes together) and seventeen rejection profiles
+under `tests/fixtures/mapping/`, none of which carries a PII-shaped literal;
+the figures above include all of them, and
+`tests/test_reference_fixtures.py` re-derives them from the packaged set.
 
 | File | Evidence that it is synthetic |
 |---|---|
@@ -415,6 +420,11 @@ them against the tree. The same day, B-024 added a seventh packaged file,
 | `hl7v2-er7-message.hl7` | added 2026-09-04 by B-024; `CSYN-SENDER`/`CSYN-FACILITY`/`CSYN-RECEIVER`/`CSYN-LAB` in MSH; PID-3 `CSYN-CTP-I01` under `urn:contextsafe:synthetic`; family name `ZZZTESTCONTEXTSAFE` with given names `CSYN-ASTER` and `CSYN-LEGAL-I01`; processing ID `T`; GSP, OBR, and OBX values are `fixture-`, `ORDER-CSYN-`, and `SUP-CSYN-` tokens; MSH-7 is a fixed message timestamp, checked for shape and never carried |
 | `lis-export.csv` | added 2026-09-04 by B-025; two rows for `CSYN-CTP-I01` with `CSYN-ASTER`, `CSYN-PRONOUN-THEY-THEM`, and sex `X`; analytes `CSYN-ANALYTE-K` and `CSYN-ANALYTE-NA` with numeric values, `mmol/L`, an `N` flag, `ORDER-CSYN-I01-A`, and `CSYN-SPECIMEN-I01-A`; the result columns are counted and never carried |
 | `lis-export.json` | added 2026-09-04 by B-025; the same two rows as `lis-export.csv` under `schema_version` `contextsafe.lis-export/0.1.0`, so the two readers' observation sets differ only in the source digest |
+| `mapping-canonical-json.json` | added 2026-09-04 by B-026; profile `MAP-REFERENCE-CANONICAL-JSON`, `not_reviewed`, one row binding `CSYN-PRONOUN-THEY-THEM` to the case's `they/them` |
+| `mapping-fhir-r4-json.json` | added 2026-09-04 by B-026; profile `MAP-REFERENCE-FHIR-R4-JSON`, `not_reviewed`; rows bind `CSYN-GENDER-1`, `CSYN-PRONOUN-THEY-THEM`, `X`, and `CSYN-ASTER` to the case's `fixture-gender-1` under `urn:contextsafe:fixture`, `they/them`, the `government-id` / `synthetic-fixture` record, and `CSYN-ASTER` |
+| `mapping-hl7v2-er7.json` | added 2026-09-04 by B-026; profile `MAP-REFERENCE-HL7V2-ER7`, `not_reviewed`; rows over `PID-5`, `PID-8`, and `GSP-5` bind `CSYN-ASTER`, `X`, `fixture-gender-1`, `they/them`, and `fixture-context-1` to the case's values; the SPCU row binds the value only |
+| `mapping-lis-csv.json` | added 2026-09-04 by B-026; profile `MAP-REFERENCE-LIS-CSV`, `not_reviewed`; rows bind `CSYN-ASTER`, `CSYN-PRONOUN-THEY-THEM`, and sex `X` in the `laboratory` context with source `CSYN-LIS-EXPORT` |
+| `mapping-lis-json.json` | added 2026-09-04 by B-026; profile `MAP-REFERENCE-LIS-JSON`, the same rows as `mapping-lis-csv.json` under `format` `lis-json` |
 
 No name, MRN, date of birth, address, phone number, SSN, or NPI appears in any
 packaged fixture or in any accepting fixture, and none of them carries a

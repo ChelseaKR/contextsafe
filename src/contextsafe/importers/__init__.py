@@ -6,6 +6,12 @@ registered under here. Adding a format is one new module implementing
 :data:`REGISTRY`; the command line derives its ``--format`` choices from the
 registry and does not change. Every importer is a read-only conversion that
 never persists the source and never sets ``profile_reviewed``.
+
+The registry is also the authority a mapping profile (B-026) is validated
+against: :func:`carrier_table` collects every importer's declared carriers,
+so a profile can name only a carrier an importer reads and only under a
+concept that importer emits it as, and :func:`import_source` applies a
+validated profile after the conversion, never during it.
 """
 
 from collections.abc import Mapping
@@ -25,6 +31,14 @@ from contextsafe.importers.canonical_json import CANONICAL_JSON_IMPORTER
 from contextsafe.importers.fhir_r4_json import FHIR_R4_JSON_IMPORTER
 from contextsafe.importers.hl7v2_er7 import HL7V2_ER7_IMPORTER
 from contextsafe.importers.lis import LIS_CSV_IMPORTER, LIS_JSON_IMPORTER
+from contextsafe.importers.mapping import apply_profile
+from contextsafe.mapping_profile import (
+    CarrierTable,
+    MappingProfile,
+    MappingProfileCompilation,
+    compile_mapping_profile,
+    parse_mapping_profile,
+)
 from contextsafe.models import Checkpoint, SyntheticCase
 
 __all__ = [
@@ -33,10 +47,14 @@ __all__ = [
     "ImportResult",
     "ImportWarningCode",
     "Importer",
+    "apply_profile",
     "available_formats",
+    "carrier_table",
     "checkpoint_value",
+    "compile_profile",
     "import_source",
     "importer_for",
+    "load_profile",
 ]
 
 REGISTRY: Mapping[str, Importer] = MappingProxyType(
@@ -76,13 +94,42 @@ def importer_for(format_name: object) -> Importer:
     return importer
 
 
+def carrier_table() -> CarrierTable:
+    """Every registered format's carriers, as the profile validator needs them."""
+
+    return MappingProxyType(
+        {name: importer.carriers for name, importer in REGISTRY.items()}
+    )
+
+
+def load_profile(value: object) -> MappingProfile:
+    """Validate a mapping profile document against the registered carriers."""
+
+    return parse_mapping_profile(value, carriers=carrier_table())
+
+
+def compile_profile(value: object) -> MappingProfileCompilation:
+    """Validate a mapping profile and return its canonical form and digest."""
+
+    return compile_mapping_profile(value, carriers=carrier_table())
+
+
 def import_source(
     format_name: object,
     source: Path,
     *,
     case: SyntheticCase,
     checkpoint: Checkpoint,
+    profile: MappingProfile | None = None,
 ) -> ImportResult:
-    """Convert ``source`` with the importer registered under ``format_name``."""
+    """Convert ``source`` with the importer registered under ``format_name``.
 
-    return importer_for(format_name).convert(source, case=case, checkpoint=checkpoint)
+    With a ``profile``, the conversion runs exactly as without one and the
+    profile is applied to what it produced; without one, every value is the
+    source's own token, verbatim.
+    """
+
+    result = importer_for(format_name).convert(source, case=case, checkpoint=checkpoint)
+    if profile is None:
+        return result
+    return apply_profile(result, profile)

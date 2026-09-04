@@ -7,7 +7,7 @@ receipt that states its own limits. The clinically and community-governed
 service that would run it against a real health system is a plan, not a
 product.**
 
-The tool is here now. Eleven subcommands, no network access, committed synthetic
+The tool is here now. Twelve subcommands, no network access, committed synthetic
 fixtures that ship inside the package. With
 [`uv`](https://docs.astral.sh/uv/) installed, this returns a full receipt:
 
@@ -312,9 +312,9 @@ nothing else, not because the source said so — so evaluating the imported
 reference source against the
 reference `rules.json` reports `semantic_mismatch` for the pronouns rule and
 `missing_evidence` for the rest. That is correct: the tool has not been told
-the two are the same, and the mapping profile that would say so (B-026) does
-not exist, which every result records as `profile_reviewed: false`. The
-mapping is reference-only and ungoverned. The source's `plan_id` is checked
+the two are the same; a mapping profile passed with `--mapping` (B-026) is
+what says so, and every result records `profile_reviewed: false` either
+way. The mapping is reference-only and ungoverned. The source's `plan_id` is checked
 for shape and not against a plan, sex-parameter records reject rather than
 arrive without the supporting-observation link the concept needs, and the
 result's counts and warnings stay in process because the observation-set
@@ -405,7 +405,8 @@ reject as segments outside the allowlist) are choices no interoperability,
 clinical, or community reviewer has confirmed. Values are carried verbatim:
 `U` in PID-8 is not turned into `unknown`, it rejects, and presence states
 are read from the literal tokens `declined`, `unknown`, and `absent` rather
-than from HL7 null flavors until a mapping profile (B-026) binds them. A
+than from HL7 null flavors, which a mapping profile (B-026) still cannot
+bind because the reader rejects them before emitting a token. A
 coding system in GSP-5.3 is read only as the `code_system` of a specified
 gender identity value; with pronouns, recorded sex or gender, sex parameter
 for clinical use, or a presence state it rejects the message rather than
@@ -439,6 +440,48 @@ value. Rows that disagree stay ambiguous and never pass. No laboratory,
 interoperability, clinical, or community reviewer has seen the profile; it
 is not the shape of any real system's export, and no result observation
 exists yet.
+
+### B-026: the versioned mapping profile
+
+`contextsafe import ... --mapping fixtures/reference/mapping-fhir-r4-json.json`
+applies a mapping profile after the conversion, and
+`contextsafe mapping validate --profile P.json --output canonical.json` emits
+a profile's canonical unsigned form with its SHA-256. A profile is a closed,
+versioned table for one importer format, from a source token — the carrier
+it was read from (a field code, an extension URL or `Patient.name`, `PID-5`,
+`PID-8`, or `GSP-5`, a column) and the verbatim token — to the canonical
+concept and value the observation should carry, published as the
+[mapping profile contract](schemas/contextsafe-mapping-profile-v1.schema.json)
+with its [compiled form](schemas/contextsafe-compiled-mapping-profile-v1.schema.json).
+Every importer now records the source token beside each observation, so a
+row matches on what the source said, not on the value the importer built.
+Every observation an import emits with a profile applied carries the
+profile's digest and version in its `mapping` block, so `evaluate`'s input
+hash binds them. Without `--mapping`, importers keep emitting verbatim
+tokens, byte for byte as before. Five reference profiles ship as package
+data, one per importer, binding each reference fixture's tokens to the
+reference case's values: with them, import followed by evaluate passes
+every rule at the imported checkpoint and reports `missing_evidence`,
+never `semantic_mismatch`, for the rest.
+
+What it does not claim. A profile's only admissible review status is
+`not_reviewed`, with no reviewer and no date, and any other declaration
+rejects it: a declared approval authorizes nothing, exactly as on a pack,
+and `contextsafe mapping sign` is not built. A row whose target is sex
+parameter for clinical use from a gender-identity or recorded-sex carrier
+rejects first and by name (`prohibited_spcu_mapping`, A-020 and A-021), any
+other cross-concept row rejects, two rows collapsing two source values into
+one target reject (both stay distinct observations, which evaluate as
+ambiguous), a target outside the synthetic grammar rejects, and a
+sex-parameter row binds the value token only — never an order context or a
+supporting observation. A token with no row stays verbatim and the result
+says so. The reference profiles are synthetic bindings for the reference
+fixtures, not the mapping of any real system; no interoperability,
+clinical, laboratory, or community reviewer has seen one; HL7 null flavors
+and an LIS's empty cell are still not bound to presence states; and the
+recording context a profile binds (a `PID-8` value to the `government-id`
+record, say) is a declaration the profile's author makes and nothing here
+has confirmed.
 
 The durable evidence store has no CLI import route; `contextsafe import` writes
 only an observation-set document and never an evidence record. Every iteration-3 evidence record says

@@ -1,0 +1,28 @@
+{
+  "schema_version": "contextsafe.mapping-profile/1.0.0",
+  "profile_id": "MAP-REJECT-FIXTURE",
+  "format": "canonical-json",
+  "version": "0.1.0",
+  "review": {
+    "status": "not_reviewed",
+    "reviewed_by": null,
+    "reviewed_at": null
+  },
+  "rows": [
+    {
+      "source": {
+        "concept": "pronouns",
+        "carrier": "pronouns",
+        "token": "CSYN-PRONOUN-THEY-THEM"
+      },
+      "target": {
+        "concept": "pronouns",
+        "value": {
+          "status": "specified",
+          "value": "they/them"
+        }
+      }
+    }
+  ],
+  "approved_by": "CSYN-NOBODY"
+}

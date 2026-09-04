@@ -6,10 +6,11 @@ community reviewer has approved it, and it is not a mapping profile in the
 B-026 sense. Every value it emits is the source's own token, carried
 verbatim: a ``value_code`` of ``CSYN-PRONOUN-THEY-THEM`` becomes a pronouns
 value of exactly that string, not ``they/them``. Binding a token to the
-value a rule expects is what a mapping profile does, and until one exists
-evaluating an imported observation against a rule that expects the bound
-value reports ``semantic_mismatch``. That is the correct result: the tool
-has not been told the two are the same, so it does not say they are.
+value a rule expects is what a mapping profile does (B-026), applied after
+this conversion and never inside it; until one is applied, evaluating an
+imported observation against a rule that expects the bound value reports
+``semantic_mismatch``. That is the correct result: the tool has not been
+told the two are the same, so it does not say they are.
 
 What the envelope does not carry is not invented from what it does. Gender
 identity needs a code system and recorded sex or gender needs a source; the
@@ -38,6 +39,7 @@ from contextsafe.importers.base import (
     ImportWarningCode,
     import_error,
 )
+from contextsafe.mapping_profile import SourceToken
 from contextsafe.models import (
     OBSERVATION_SCHEMA_VERSION,
     OBSERVATION_SET_SCHEMA_VERSION,
@@ -70,6 +72,7 @@ to this number.
 """
 
 __all__ = [
+    "CANONICAL_JSON_CARRIERS",
     "CANONICAL_JSON_FORMAT",
     "CANONICAL_JSON_IMPORTER",
     "CANONICAL_JSON_MAPPING_VERSION",
@@ -93,6 +96,15 @@ The boundary envelope also admits laboratory field codes (``result``,
 observation-set contract has no concept for them, so a source carrying one
 is not an observation set with some records left out; it is a source this
 importer cannot convert.
+"""
+
+CANONICAL_JSON_CARRIERS: Mapping[str, frozenset[ConceptKind]] = {
+    code: frozenset({concept}) for code, concept in _FIELD_CODE_CONCEPTS.items()
+}
+"""What a mapping profile for this format may name as a carrier: a field code.
+
+Each reads as exactly the concept it names, so a profile row cannot read a
+``recorded_sex_or_gender`` record as anything else.
 """
 
 _STATUS_CODES: Mapping[str, ValueStatus] = {
@@ -297,6 +309,18 @@ def convert_scanned(
         )
         for index, record in enumerate(envelope.records)
     )
+    # A record that converted carried a value code; the carrier is its field
+    # code and the token is that code, verbatim, before any profile binds it.
+    tokens = tuple(
+        SourceToken(
+            concept=item.concept,
+            carrier=record.field_code,
+            token=_required_value(record, f"$.records[{index}]"),
+        )
+        for index, (record, item) in enumerate(
+            zip(envelope.records, converted, strict=True)
+        )
+    )
     validated = parse_observations(
         {
             "observations": [item.to_dict() for item in converted],
@@ -311,6 +335,7 @@ def convert_scanned(
         record_count=len(envelope.records),
         observations=validated,
         warnings=_WARNINGS,
+        source_tokens=tokens,
     )
 
 
@@ -324,6 +349,10 @@ class CanonicalJsonImporter:
     @property
     def mapping_version(self) -> str:
         return CANONICAL_JSON_MAPPING_VERSION
+
+    @property
+    def carriers(self) -> Mapping[str, frozenset[ConceptKind]]:
+        return CANONICAL_JSON_CARRIERS
 
     def convert(
         self, source: Path, *, case: SyntheticCase, checkpoint: Checkpoint

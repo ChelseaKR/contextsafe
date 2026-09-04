@@ -1,0 +1,46 @@
+{
+  "schema_version": "contextsafe.mapping-profile/1.0.0",
+  "profile_id": "MAP-REFERENCE-LIS-JSON",
+  "format": "lis-json",
+  "version": "0.1.0",
+  "review": {
+    "status": "not_reviewed",
+    "reviewed_by": null,
+    "reviewed_at": null
+  },
+  "rows": [
+    {
+      "source": {
+        "concept": "name_to_use",
+        "carrier": "name_to_use",
+        "token": "CSYN-ASTER"
+      },
+      "target": {
+        "concept": "name_to_use",
+        "value": {"status": "specified", "value": "CSYN-ASTER", "use": "usual"}
+      }
+    },
+    {
+      "source": {
+        "concept": "pronouns",
+        "carrier": "pronouns",
+        "token": "CSYN-PRONOUN-THEY-THEM"
+      },
+      "target": {
+        "concept": "pronouns",
+        "value": {"status": "specified", "value": "they/them"}
+      }
+    },
+    {
+      "source": {
+        "concept": "recorded_sex_or_gender",
+        "carrier": "sex",
+        "token": "X"
+      },
+      "target": {
+        "concept": "recorded_sex_or_gender",
+        "value": {"value": "X", "context": "laboratory", "source": "CSYN-LIS-EXPORT"}
+      }
+    }
+  ]
+}

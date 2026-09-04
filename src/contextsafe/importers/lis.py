@@ -70,6 +70,7 @@ from contextsafe.importers.base import (
 )
 from contextsafe.importers.canonical_json import UNBOUND_SOURCE
 from contextsafe.importers.lis_csv import CsvBounds, parse_csv
+from contextsafe.mapping_profile import SourceToken
 from contextsafe.models import (
     OBSERVATION_SCHEMA_VERSION,
     OBSERVATION_SET_SCHEMA_VERSION,
@@ -220,6 +221,15 @@ _IDENTITY_SUFFIXES: Mapping[str, str] = {
     "pronouns": "PRN",
     "sex": "RSG",
 }
+
+LIS_CARRIERS: Mapping[str, frozenset[ConceptKind]] = {
+    column: frozenset({concept}) for column, concept in _IDENTITY_CONCEPTS.items()
+}
+"""What a mapping profile for either LIS format may name as a carrier: a column.
+
+Each identity column reads as exactly its own concept, so a profile row
+cannot read ``sex`` as gender identity or as sex parameter for clinical use.
+"""
 
 
 @dataclass(frozen=True, slots=True)
@@ -559,6 +569,12 @@ def convert_table(
 
     _require_lis_checkpoint(checkpoint)
     read = _read_rows(table, case)
+    distinct = tuple(
+        (column, cell, row_index)
+        for column in LIS_PROFILE.identity_columns
+        if column in read.first_rows
+        for cell, row_index in read.first_rows[column].items()
+    )
     converted = tuple(
         _observation(
             column,
@@ -567,9 +583,11 @@ def convert_table(
             case_id=case.case_id,
             source_sha256=source_sha256,
         )
-        for column in LIS_PROFILE.identity_columns
-        if column in read.first_rows
-        for cell, row_index in read.first_rows[column].items()
+        for column, cell, row_index in distinct
+    )
+    tokens = tuple(
+        SourceToken(concept=_IDENTITY_CONCEPTS[column], carrier=column, token=cell)
+        for column, cell, _row_index in distinct
     )
     validated = parse_observations(
         {
@@ -589,6 +607,7 @@ def convert_table(
         observations=validated,
         warnings=tuple(warnings),
         unobserved_cell_count=read.unobserved_cell_count,
+        source_tokens=tokens,
     )
 
 
@@ -609,6 +628,10 @@ class LisCsvImporter:
     @property
     def mapping_version(self) -> str:
         return LIS_PROFILE.version
+
+    @property
+    def carriers(self) -> Mapping[str, frozenset[ConceptKind]]:
+        return LIS_CARRIERS
 
     def convert(
         self, source: Path, *, case: SyntheticCase, checkpoint: Checkpoint
@@ -637,6 +660,10 @@ class LisJsonImporter:
     @property
     def mapping_version(self) -> str:
         return LIS_PROFILE.version
+
+    @property
+    def carriers(self) -> Mapping[str, frozenset[ConceptKind]]:
+        return LIS_CARRIERS
 
     def convert(
         self, source: Path, *, case: SyntheticCase, checkpoint: Checkpoint

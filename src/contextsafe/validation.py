@@ -73,6 +73,8 @@ _PROHIBITED_KEYS = frozenset(
 _REQUIRED_INFERENCES = frozenset(
     {"gender_identity_to_spcu", "recorded_sex_or_gender_to_spcu"}
 )
+_PROFILE_BINDING_KEYS = frozenset({"profile_sha256", "profile_version"})
+"""The optional pair on an observation's mapping block naming its profile (B-026)."""
 RSG_VALUES = frozenset({"F", "M", "X", "unknown"})
 """The closed recorded-sex-or-gender alphabet this contract admits.
 
@@ -99,8 +101,14 @@ def _array(value: object, path: str) -> list[object]:
     return cast(list[object], value)
 
 
-def _exact_keys(data: dict[str, object], expected: frozenset[str], path: str) -> None:
-    unexpected = data.keys() - expected
+def _exact_keys(
+    data: dict[str, object],
+    expected: frozenset[str],
+    path: str,
+    *,
+    optional: frozenset[str] = frozenset(),
+) -> None:
+    unexpected = data.keys() - expected - optional
     if unexpected:
         raise _error("unknown_field", path, "field is not allowed")
     missing = sorted(expected - data.keys())
@@ -376,13 +384,39 @@ def parse_case(value: object) -> SyntheticCase:
     )
 
 
+def _profile_binding(
+    data: dict[str, object], path: str
+) -> tuple[str | None, str | None]:
+    """The optional mapping-profile binding: both fields, or neither.
+
+    A digest without a version, or a version without a digest, is a binding
+    a reader could not check, so it rejects rather than being read as one.
+    """
+
+    present = _PROFILE_BINDING_KEYS & data.keys()
+    if not present:
+        return None, None
+    if present != _PROFILE_BINDING_KEYS:
+        raise _error(
+            "mapping_profile_binding_incomplete",
+            path,
+            "a profile binding carries both profile_sha256 and profile_version",
+        )
+    return (
+        _string(data["profile_sha256"], f"{path}.profile_sha256", pattern=_SHA256),
+        _string(data["profile_version"], f"{path}.profile_version", pattern=_SEMVER),
+    )
+
+
 def _mapping(value: object, path: str, concept: ConceptKind) -> MappingDescriptor:
     data = _object(value, path)
     _exact_keys(
         data,
         frozenset({"source_concept", "target_concept", "mapping_version"}),
         path,
+        optional=_PROFILE_BINDING_KEYS,
     )
+    profile_sha256, profile_version = _profile_binding(data, path)
     source = _enum(ConceptKind, data["source_concept"], f"{path}.source_concept")
     target = _enum(ConceptKind, data["target_concept"], f"{path}.target_concept")
     if target is ConceptKind.SEX_PARAMETER_FOR_CLINICAL_USE and source in {
@@ -412,6 +446,8 @@ def _mapping(value: object, path: str, concept: ConceptKind) -> MappingDescripto
         mapping_version=_string(
             data["mapping_version"], f"{path}.mapping_version", pattern=_SEMVER
         ),
+        profile_sha256=profile_sha256,
+        profile_version=profile_version,
     )
 
 
