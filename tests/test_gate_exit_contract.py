@@ -447,8 +447,18 @@ def _claims_unavailable(tmp_path: Path) -> int:
     return int(gate.main(["--root", str(root)]))
 
 
+def _fresh_install_unavailable(tmp_path: Path) -> int:
+    """No wheel to install: nothing was examined, so nothing is clean."""
+
+    gate = _load("fresh_install_gate")
+    dist = tmp_path / "fresh-install" / "dist"
+    dist.mkdir(parents=True, exist_ok=True)
+    workdir = tmp_path / "fresh-install" / "work"
+    return int(gate.main(["--dist", str(dist), "--workdir", str(workdir)]))
+
+
 def _secret_scan_unavailable(tmp_path: Path) -> int:
-    """The shell gate, driven into the same state as the six Python ones."""
+    """The shell gate, driven into the same state as the Python ones."""
 
     repo = _empty_repo(tmp_path / "secret-scan")
     return _scan(repo, GITLEAKS_BIN=str(repo / "absent")).returncode
@@ -462,6 +472,7 @@ UNAVAILABLE_CASES: tuple[tuple[str, Callable[[Path], int]], ...] = (
     ("tools/a11y_gate.py", _a11y_unavailable),
     ("tools/mutation_gate.py", _mutation_unavailable),
     ("tools/claims_gate.py", _claims_unavailable),
+    ("tools/fresh_install_gate.py", _fresh_install_unavailable),
     ("tools/secret-scan-full-history.sh", _secret_scan_unavailable),
 )
 

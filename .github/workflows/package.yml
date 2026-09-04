@@ -1,0 +1,186 @@
+# Packaging and fresh-install evidence: the part of B-045 that CI can produce.
+#
+# `make verify` and the determinism matrix in ci.yml run against the checkout,
+# where an editable install finds a file in the tree whether or not the wheel
+# carries it. This workflow examines the other thing: the artifact a release
+# would ship. One job builds the sdist and wheel with `uv build`, exports a
+# CycloneDX SBOM from the locked graph, and records checksums. A matrix then
+# installs that wheel with `pip --no-index` into an empty virtual environment on
+# Ubuntu, macOS and Windows, runs the README Quickstart from a directory outside
+# the checkout, and requires the receipt document to reproduce the digest
+# `tests/test_determinism.py` pins -- read from that file by
+# `tools/fresh_install_gate.py`, so there is one copy of the constant. Only after
+# every platform passes is build provenance attested for the recorded checksums.
+#
+# What this is not. These are GitHub's server images, not the Windows 11 and
+# macOS desktop fresh installs RG-15 names, so this is packaging evidence and
+# not the RG-15 gate. The artifacts are unsigned: build provenance says which
+# workflow at which commit produced these bytes, and nothing about whether
+# anyone authorized them, which is the B-035 signing path and does not exist.
+# There is no publish step, for the reason release.yml gives.
+#
+# It fires on a `v*` tag and on request. release.yml still owns the release
+# gate -- the full-history secret scan, `make verify` at the tag, and the
+# CHANGELOG heading -- and this workflow does not repeat or replace any of it.
+name: package
+
+on:
+  workflow_dispatch:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: package-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: build sdist and wheel, export SBOM, record checksums
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    env:
+      UV_PYTHON: "3.12"
+      UV_PYTHON_DOWNLOADS: never
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.3.0
+        with:
+          python-version: "3.12"
+          check-latest: false
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
+        with:
+          version: "0.11.28"
+          # Cache off, as in release.yml: a poisoned cross-run cache is exactly
+          # the supply-chain surface an artifact-producing job must not share
+          # with branch CI.
+          enable-cache: false
+
+      # The same target a maintainer runs locally: a clean dist/, `uv build`,
+      # the CycloneDX export from the locked graph, and the wheel listing.
+      - name: make package
+        run: make package
+
+      # One line per artifact, checked again before anything is attested. The
+      # SBOM is included: it is an artifact of this build and gets provenance
+      # like the others.
+      - name: Record checksums
+        run: |
+          cd dist
+          sha256sum -- *.whl *.tar.gz *.cdx.json > SHA256SUMS
+          cat SHA256SUMS
+
+      - name: Upload the built artifacts
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: dist
+          path: dist/
+          if-no-files-found: error
+
+  fresh-install:
+    # pip, not uv: the customer path. `python -m venv` makes an empty
+    # environment, `pip install --no-index` proves the wheel needs nothing from
+    # an index (the `dependencies = []` claim, enforced), and the Quickstart runs
+    # from $RUNNER_TEMP with the installed console script. The gate reads the
+    # README and the pinned digest from the checkout and runs nothing from it.
+    name: fresh install (${{ matrix.os }})
+    needs: build
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, macos-15, windows-2025]
+    permissions:
+      contents: read
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.3.0
+        with:
+          python-version: "3.12"
+          check-latest: false
+
+      # v8 fails the job on a digest mismatch by default, where v7 warned.
+      - name: Download the built artifacts
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: dist
+          path: dist
+
+      # Stdlib only, so no `uv sync` here: the gate must not need the
+      # checkout's environment to examine the wheel. Exit 0 installed, ran and
+      # matched; 1 examined and wrong; 2 not examined, which is never a pass.
+      - name: Install the wheel with pip into an empty venv and run the Quickstart outside the checkout
+        shell: bash
+        run: >-
+          python tools/fresh_install_gate.py
+          --dist dist
+          --workdir "$RUNNER_TEMP/fresh-install"
+          --json "$RUNNER_TEMP/fresh-install-report.json"
+
+      # Digests, counts, codes and a platform name; the gate writes no path.
+      - name: Upload the fresh-install report
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: fresh-install-${{ matrix.os }}
+          path: ${{ runner.temp }}/fresh-install-report.json
+          if-no-files-found: error
+
+  provenance:
+    # After every platform, not beside them: provenance for an artifact that
+    # failed a fresh install would be a signed statement about a broken wheel.
+    # `id-token: write` is the OIDC identity Sigstore signs with, and
+    # `attestations: write` stores the statement against this repository; both
+    # are scoped to this job. The statement binds the artifact digests to this
+    # workflow at this commit. It is not the B-035 signing path and it does not
+    # say anyone authorized the artifact.
+    name: build provenance
+    needs: [build, fresh-install]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      id-token: write # the OIDC identity Sigstore signs the statement with
+      attestations: write # stores the statement against this repository
+    steps:
+      - name: Download the built artifacts
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: dist
+          path: dist
+
+      # The bytes the build job recorded are the bytes about to be attested.
+      - name: Verify the recorded checksums
+        run: |
+          cd dist
+          sha256sum --check --strict SHA256SUMS
+
+      - name: Attest build provenance
+        id: attest
+        uses: actions/attest-build-provenance@96278af6caaf10aea03fd8d33a09a777ca52d62f # v3.2.0
+        with:
+          subject-checksums: dist/SHA256SUMS
+
+      - name: Upload the provenance bundle
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: provenance
+          path: ${{ steps.attest.outputs.bundle-path }}
+          if-no-files-found: error

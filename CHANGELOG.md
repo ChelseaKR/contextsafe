@@ -852,6 +852,57 @@ rather than after it.
   `not_verified`. See
   [ADR 0010](docs/adr/0010-signing-layer-dependency-and-trust-model.md).
 
+- **Packaging and fresh-install evidence, the part of B-045 that CI can
+  produce.** `.github/workflows/package.yml` fires on a `v*` tag and on
+  request. One job builds the sdist and wheel with `uv build`, exports a
+  CycloneDX 1.5 SBOM from the locked graph with `uv export` (the pinned `uv`
+  already in every workflow; no action, no new dependency of any kind), and
+  records a `SHA256SUMS`. A matrix on `ubuntu-24.04`, `macos-15` and
+  `windows-2025` then installs that wheel with `pip install --no-index` into an
+  empty `python -m venv`, changes to a directory outside the checkout, runs
+  `contextsafe fixtures export` and the README Quickstart, and requires the
+  receipt document to reproduce the digest `tests/test_determinism.py` pins.
+  `--no-index` is the `dependencies = []` claim enforced: a wheel that needs
+  anything from an index fails to install. Only after every platform passes is
+  build provenance attested with `actions/attest-build-provenance` (pinned by
+  SHA, `id-token` and `attestations` write scoped to that one job) over the
+  recorded checksums, and the artifacts, the per-platform reports and the
+  provenance bundle are uploaded. Least-privilege permissions, immutable action
+  SHAs with version comments and `persist-credentials: false` throughout;
+  actionlint 1.7.12 and zizmor 1.16.3 (pedantic persona) report nothing.
+
+  The gate is `tools/fresh_install_gate.py`, stdlib only, with the three exit
+  codes every gate here has: 0 installed, ran and matched; 1 examined and
+  wrong; 2 not examined -- no wheel, two wheels, no pip, no pin, a Quickstart
+  line it cannot run, a working directory inside the checkout -- which is never
+  a pass. It reads the pinned digest from `tests/test_determinism.py` with
+  `ast`, so there is one copy of the constant and the gate cannot agree with a
+  stale one; the Quickstart parser that used to live in
+  `tests/test_wheel_quickstart.py` moved into the gate, and that test now
+  builds the wheel and drives the gate's real subprocess path on every
+  `make verify`. Its report carries digests, counts, closed-vocabulary codes
+  and a platform name and no path; a failed command is reduced to its exit
+  code and, where stderr is the tool's own JSON error object, the error code.
+  `tests/test_fresh_install_gate.py` drives all three states with a stand-in
+  runner and pins that no path reaches the report. `make package` builds the
+  same artifacts locally and lists the wheel's contents, so a reviewer can see
+  what shipped; the reference fixtures were missing from it until 2026-09-02
+  and nothing showed that.
+
+  What this is not. These are GitHub's server images, not the Windows 11 and
+  macOS desktop fresh installs RG-15 names: it is packaging evidence, and B-045
+  stays open for the desktop half. The artifacts are unsigned. Build provenance
+  states which workflow at which commit produced these bytes and nothing about
+  whether anyone authorized them; it is not the B-035 signing path, and it does
+  not make the release artifacts "signed" in the sense `docs/10-OPERATIONS-SRE.md`
+  §4 uses. The SBOM is derived from `uv.lock` rather than read back out of the
+  wheel, and `uv export`'s CycloneDX output carries a fresh serial number and
+  timestamp on every run, so two exports of the same commit are not
+  byte-identical; the provenance statement, not the SBOM, is what binds the
+  artifact digests. `release.yml` is untouched: it still owns the full-history
+  secret scan, `make verify` at the tag and the CHANGELOG heading, and there is
+  still no publish step. Nothing here has fired: no tag exists.
+
 ## [0.1.0] - 2026-09-02
 
 ### Fixed

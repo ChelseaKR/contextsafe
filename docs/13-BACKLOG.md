@@ -735,6 +735,26 @@ and localization figure the row requires cannot be computed until the
 seventeen waiting rows have a mechanism and the five hidden faults have an
 author.
 
+Implementation note (2026-09-04, B-045): the part CI can do.
+`.github/workflows/package.yml` builds the sdist and wheel with `uv build`,
+exports a CycloneDX SBOM from the locked graph with `uv export`, records
+checksums, and then installs the wheel with `pip install --no-index` into an
+empty virtual environment on `ubuntu-24.04`, `macos-15` and `windows-2025`,
+runs `fixtures export` and the README Quickstart from a directory outside the
+checkout, and requires the receipt document to reproduce the digest
+`tests/test_determinism.py` pins. Build provenance is attested over the
+recorded checksums only after every platform passes. The gate is
+`tools/fresh_install_gate.py` (stdlib, three exit codes, a report of digests
+and codes with no path in it); `tests/test_wheel_quickstart.py` drives its
+real path on every `make verify`, and `make package` builds the same artifacts
+locally and lists the wheel. B-045 is not closed: the matrix runs GitHub's
+server images, not the Windows 11 and macOS desktop fresh installs RG-15
+names, and that half needs a person with those machines; the artifacts are
+unsigned, because build provenance says which workflow produced the bytes and
+nothing about who authorized them, and the signing path is B-035; the SBOM is
+derived from `uv.lock` and is not byte-reproducible run to run; and the
+workflow has never fired, since no tag exists.
+
 ## Phase 6 — pilot and v1
 
 | ID | Trace | Deliverable and acceptance | Owner | Dependency | Estimate |
