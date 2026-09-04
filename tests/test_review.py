@@ -779,7 +779,7 @@ def _valid_log(
         (
             lambda r: r[1]["event"].update(severity="cs1_critical"),
             "severity_forbidden",
-            "$.log[1].severity",
+            "$.log[1].event.severity",
         ),
         (
             lambda r: r.append(copy.deepcopy(r[1])),
@@ -845,15 +845,27 @@ def _raw_log(build: EventBuilder) -> bytes:
     return raw
 
 
-@given(index=st.integers(min_value=0), replacement=st.binary(min_size=1, max_size=1))
-@settings(max_examples=200, deadline=None, suppress_health_check=list(HealthCheck))
+_FIXTURE_BUILT_ONCE = (HealthCheck.function_scoped_fixture,)
+"""The one health check these properties suppress, and why it is safe: the
+``review_event`` and ``tmp_path`` fixtures are read, never mutated, so a
+function-scoped fixture shared across examples is the same value each time."""
+
+
+@given(data=st.data())
+@settings(max_examples=200, deadline=None, suppress_health_check=_FIXTURE_BUILT_ONCE)
 def test_any_single_changed_byte_anywhere_in_the_log_is_refused(
-    review_event: EventBuilder, index: int, replacement: bytes
+    review_event: EventBuilder, data: st.DataObject
 ) -> None:
-    """The append-only claim, stated over the whole file rather than a field."""
+    """The append-only claim, stated over the whole file rather than a field.
+
+    The index is drawn from the file's actual length, so no example is discarded
+    for falling past the end; only a replacement equal to the byte it replaces
+    is rejected, and that is one draw in 256.
+    """
 
     raw = _raw_log(review_event)
-    assume(index < len(raw))
+    index = data.draw(st.integers(0, len(raw) - 1))
+    replacement = data.draw(st.binary(min_size=1, max_size=1))
     assume(raw[index : index + 1] != replacement)
     assert _finding(replay_log(raw)).disposition is Disposition.OWNED
     with pytest.raises(ContextSafeError):
@@ -861,7 +873,7 @@ def test_any_single_changed_byte_anywhere_in_the_log_is_refused(
 
 
 @given(data=st.data())
-@settings(max_examples=60, deadline=None, suppress_health_check=list(HealthCheck))
+@settings(max_examples=60, deadline=None, suppress_health_check=_FIXTURE_BUILT_ONCE)
 def test_any_legal_walk_replays_to_the_same_state_bytes(
     tmp_path: Path,
     finding_receipt: dict[str, Any],
@@ -1122,5 +1134,85 @@ def test_a_log_whose_lines_name_two_receipts_is_refused_on_replay(
         previous = record.sha256()
     raw = b"".join(record.line() for record in records)
     _assert_code(
-        lambda: replay_log(raw), "receipt_binding_mismatch", path="$.log[1].receipt"
+        lambda: replay_log(raw),
+        "receipt_binding_mismatch",
+        path="$.log[1].event.receipt",
     )
+
+
+def _chained(events: tuple[dict[str, Any], ...]) -> bytes:
+    """Correctly hashed and chained lines for events the append path would refuse."""
+
+    raw = b""
+    previous = GENESIS_SHA256
+    for sequence, value in enumerate(events):
+        event = parse_review_event(value)
+        record = review_module.LogRecord(
+            sequence=sequence,
+            previous_record_sha256=previous,
+            event_sha256=sha256_json(event.to_dict()),
+            event=event,
+        )
+        raw += record.line()
+        previous = record.sha256()
+    return raw
+
+
+def test_a_replayed_transition_refusal_points_inside_the_record_event(
+    review_event: EventBuilder,
+) -> None:
+    """A field of a replayed event is at ``$.log[i].event.<field>``, not ``$.log[i].<field>``.
+
+    The record has a ``decision`` only inside its ``event`` member; a path that
+    dropped the segment would name a field the record does not have.
+    """
+
+    raw = _chained((review_event("confirmed"), review_event("confirmed")))
+    _assert_code(
+        lambda: replay_log(raw), "illegal_transition", path="$.log[1].event.decision"
+    )
+    withdrawn = review_event("withdrawn")
+    withdrawn["outcome"] = {**FINDING_OUTCOME, "rule_id": "A-I06"}
+    raw = _chained((review_event("confirmed"), withdrawn))
+    _assert_code(
+        lambda: replay_log(raw), "illegal_transition", path="$.log[1].event.decision"
+    )
+
+
+def test_tail_truncation_replays_cleanly_and_only_the_head_hash_records_it(
+    tmp_path: Path, finding_receipt: dict[str, Any], review_event: EventBuilder
+) -> None:
+    """The pinned limit: a self-contained chain cannot see records removed from its end.
+
+    A log cut back to its first line is a valid one-record log. What changes is
+    ``log_head_sha256``, which is why the state document carries it: an operator
+    who records the head after each append can detect the cut; the tool alone
+    cannot.
+    """
+
+    log, raw = _valid_log(tmp_path, finding_receipt, review_event)
+    full = derive_review_state(log)
+    assert full.event_count == 2
+    log.write_bytes(raw.split(b"\n", 1)[0] + b"\n")
+    truncated = derive_review_state(log)
+    assert truncated.event_count == 1
+    assert _finding(truncated).disposition is Disposition.CONFIRMED
+    assert truncated.head_sha256 != full.head_sha256
+    log.write_bytes(b"")
+    assert derive_review_state(log).head_sha256 == GENESIS_SHA256
+
+
+def test_a_fifo_log_is_refused_without_blocking(
+    tmp_path: Path, finding_receipt: dict[str, Any], review_event: EventBuilder
+) -> None:
+    """Opening a FIFO read-only blocks until a writer appears unless ``O_NONBLOCK`` is set."""
+
+    fifo = tmp_path / "review.jsonl"
+    os.mkfifo(fifo)
+    _assert_code(lambda: derive_review_state(fifo), "input_path_unsafe", path="$")
+    _assert_code(
+        lambda: append_review_event(fifo, review_event("confirmed"), finding_receipt),
+        "input_path_unsafe",
+        path="$",
+    )
+    assert fifo.is_fifo()

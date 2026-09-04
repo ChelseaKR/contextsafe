@@ -22,7 +22,8 @@ Add `tools/mutation_gate.py`, run as `make mutants`. It changes one operator or
 one constant in a declared safety module, runs the tests, and requires them to
 fail.
 
-**Declared scope, not implied scope.** `DECLARED_TARGETS` is two modules,
+**Declared scope, not implied scope.** `DECLARED_TARGETS` is two modules
+(three since 2026-09-04; see "What this is not"),
 `contract_validation.py` and `identifiers.py`, chosen because they are where the
 accept-or-reject decisions live: the bounded-string and provenance grammars from
 ADR 0006, and the PHI canary and direct-identifier detectors. That is a subset
@@ -130,7 +131,9 @@ a clean clone lacks.
   program would have been caught.
 - **It does not cover fourteen of the sixteen safety modules.** That is the
   declared subset, visible in `DECLARED_TARGETS`, and widening it is a runtime
-  decision rather than a design one.
+  decision rather than a design one. (Widened once, on 2026-09-04, when
+  `review.py` joined both `SAFETY_MODULES` and `DECLARED_TARGETS` with B-032:
+  thirteen of sixteen remain outside it.)
 
 ## Rejected alternatives
 

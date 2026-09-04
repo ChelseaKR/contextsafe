@@ -826,12 +826,19 @@ is no free-text field, by construction**, as with the support bundle. The
 state machine is data, and every transition the table does not contain is
 tested as a refusal. The log is one canonical line per event, hash-chained;
 every read re-hashes and replays the whole file before anything is appended,
-a single changed byte anywhere in it is refused, and no line is ever
-rewritten. Its limits are the point: **signers are declared, not verified.**
+a single changed byte anywhere in it is refused, no line is ever rewritten,
+and `--output` naming the log (by path, symlink, or hard link) is refused as
+`output_path_unsafe` before the log is opened. What the chain cannot see is a
+record removed from its end: a log cut back to an earlier line is a valid
+shorter log. Detecting that needs an external record of the state document's
+`log_head_sha256`, which is one reason the document carries it. Its limits are
+the point: **signers are declared, not verified.**
 Every event and every signer says `signature_status: not_verified`, an
 accepted residual risk needs two declared signers with distinct roles and
 organizations or is refused, and **a declared signer authorizes nothing** —
-review signatures are B-035. The vocabularies are reference-only and
+review signatures are B-035. A `remediated` decision binds no rerun receipt,
+so its rationale code is a declaration the tool cannot check, exactly like a
+signer. The vocabularies are reference-only and
 ungoverned, not the approved rubric. Dispositions are not bound into any
 receipt; the receipt contract is unchanged. Like the other descriptor-anchored
 commands, both fail closed with `input_path_unsupported` where the platform
