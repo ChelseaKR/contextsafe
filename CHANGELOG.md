@@ -853,8 +853,10 @@ rather than after it.
   [ADR 0010](docs/adr/0010-signing-layer-dependency-and-trust-model.md).
 
 - **Packaging and fresh-install evidence, the part of B-045 that CI can
-  produce.** `.github/workflows/package.yml` fires on a `v*` tag and on
-  request. One job builds the sdist and wheel with `uv build`, exports a
+  produce.** `.github/workflows/package.yml` fires on a `vX.Y.Z` tag (the
+  shape `release.yml` listens for; the two run independently, and an
+  attestation's existence says nothing about whether the release gate passed)
+  and on request. One job builds the sdist and wheel with `uv build`, exports a
   CycloneDX 1.5 SBOM from the locked graph with `uv export` (the pinned `uv`
   already in every workflow; no action, no new dependency of any kind), and
   records a `SHA256SUMS`. A matrix on `ubuntu-24.04`, `macos-15` and
@@ -874,8 +876,18 @@ rather than after it.
   The gate is `tools/fresh_install_gate.py`, stdlib only, with the three exit
   codes every gate here has: 0 installed, ran and matched; 1 examined and
   wrong; 2 not examined -- no wheel, two wheels, no pip, no pin, a Quickstart
-  line it cannot run, a working directory inside the checkout -- which is never
-  a pass. It reads the pinned digest from `tests/test_determinism.py` with
+  line it cannot run, a working directory inside the checkout or one that
+  already exists -- which is never a pass. The pre-existence refusal closes a
+  fail-open shape found in review before merge: `python -m venv` over a kept
+  environment and `pip install --no-index` of an already-installed version
+  both exit 0, so a `--workdir` whose `outside/` had been removed but whose
+  `venv/` remained would have run the Quickstart from the stale install and
+  printed the clean line with the new wheel's name and digest. The gate now
+  refuses any working directory that exists before it runs (the default path
+  creates a private parent and works in a child of it), passes `--clear` to
+  `venv` and `--force-reinstall` to `pip` as second guards under that first,
+  and treats a bare `uv run contextsafe` Quickstart line as not examined
+  rather than as a traceback. It reads the pinned digest from `tests/test_determinism.py` with
   `ast`, so there is one copy of the constant and the gate cannot agree with a
   stale one; the Quickstart parser that used to live in
   `tests/test_wheel_quickstart.py` moved into the gate, and that test now

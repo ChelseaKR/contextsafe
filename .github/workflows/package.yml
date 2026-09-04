@@ -19,15 +19,19 @@
 # anyone authorized them, which is the B-035 signing path and does not exist.
 # There is no publish step, for the reason release.yml gives.
 #
-# It fires on a `v*` tag and on request. release.yml still owns the release
-# gate -- the full-history secret scan, `make verify` at the tag, and the
-# CHANGELOG heading -- and this workflow does not repeat or replace any of it.
+# It fires on a `vX.Y.Z` tag, the same shape release.yml listens for, and on
+# request. release.yml still owns the release gate -- the full-history secret
+# scan, `make verify` at the tag, and the CHANGELOG heading -- and this
+# workflow does not repeat or replace any of it. The two run independently on
+# the same tag, so an attestation's existence is not evidence that the release
+# gate passed: a reader of the attestation store must look up release.yml's
+# result for the same commit separately.
 name: package
 
 on:
   workflow_dispatch:
   push:
-    tags: ["v*"]
+    tags: ["v*.*.*"]
 
 permissions:
   contents: read
@@ -135,13 +139,16 @@ jobs:
           --json "$RUNNER_TEMP/fresh-install-report.json"
 
       # Digests, counts, codes and a platform name; the gate writes no path.
+      # On exit 2 the gate writes no report at all -- nothing was examined, so
+      # there is nothing to report -- and the step above is already red; this
+      # step warns rather than adding a second failure over a missing file.
       - name: Upload the fresh-install report
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: fresh-install-${{ matrix.os }}
           path: ${{ runner.temp }}/fresh-install-report.json
-          if-no-files-found: error
+          if-no-files-found: warn
 
   provenance:
     # After every platform, not beside them: provenance for an artifact that
