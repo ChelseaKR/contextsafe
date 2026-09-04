@@ -18,6 +18,25 @@ from contextsafe.reference_fixtures import (
 )
 
 DIGEST = re.compile(r"[0-9a-f]{64}")
+ROOT = Path(__file__).resolve().parents[1]
+AUDIT = ROOT / "docs" / "PUBLICATION-READINESS.md"
+NUMBER_WORDS = (
+    "zero",
+    "one",
+    "two",
+    "three",
+    "four",
+    "five",
+    "six",
+    "seven",
+    "eight",
+    "nine",
+    "ten",
+    "eleven",
+    "twelve",
+    "thirteen",
+    "fourteen",
+)
 
 
 def test_the_packaged_set_is_exactly_the_named_set() -> None:
@@ -26,6 +45,25 @@ def test_the_packaged_set_is_exactly_the_named_set() -> None:
     assert sorted(path.name for path in REFERENCE_ROOT.iterdir()) == sorted(
         REFERENCE_FILES
     )
+
+
+def test_the_publication_audit_describes_the_packaged_set_it_names() -> None:
+    """Section 4 of the audit states the count, the byte total, and a row per file.
+
+    The figures went stale once (five files and 7,957 bytes after a sixth was
+    added), and the claims gate cannot see prose. Deriving them here from the
+    packaged set is what makes the document move with it.
+    """
+
+    text = AUDIT.read_text(encoding="utf-8")
+    start = text.index("### §4 Synthetic-data confirmation")
+    section = " ".join(text[start : text.index("### §5", start)].split())
+    total = sum(len((REFERENCE_ROOT / name).read_bytes()) for name in REFERENCE_FILES)
+    word = NUMBER_WORDS[len(REFERENCE_FILES)]
+    assert f"holds exactly {word} files, {total:,} bytes total" in section
+    for name in REFERENCE_FILES:
+        assert f"| `{name}` |" in section, name
+    assert f"| {word.capitalize()} synthetic fixtures using invented tokens" in text
 
 
 def test_export_writes_every_fixture_byte_for_byte(tmp_path: Path) -> None:
@@ -108,7 +146,7 @@ def test_export_refuses_a_path_it_cannot_compare(tmp_path: Path) -> None:
 def test_export_fails_before_writing_when_the_install_is_incomplete(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """Four fixtures out of five is not an export; it is a broken install."""
+    """All but one fixture is not an export; it is a broken install."""
 
     partial = tmp_path / "partial"
     partial.mkdir()

@@ -340,21 +340,32 @@ def test_the_rule_lapses_if_the_makefile_goes_back_to_frozen(repo: Path) -> None
 # --- schema-contracts -------------------------------------------------------
 
 
+def _stated(count: int) -> str:
+    """How the gate words a contract count: a number word while it has one."""
+
+    return gate.NUMBER_WORDS.get(count, str(count))
+
+
 def test_a_new_contract_missing_from_the_schema_readme_is_a_finding(repo: Path) -> None:
+    shipped = len(gate.schema_contracts(repo))
     (repo / "schemas" / "contextsafe-later-v1.schema.json").write_text("{}\n", "utf-8")
     findings = gate.run_gate(repo)
     assert _checks(findings) == {"schema-contracts"}
-    assert any("twelve contracts" in f.detail for f in findings)
+    assert any(f"{_stated(shipped + 1)} contracts" in f.detail for f in findings)
     assert any("contextsafe-later-v1.schema.json" in f.detail for f in findings)
 
 
 def test_a_count_beyond_the_number_words_is_reported_in_digits(repo: Path) -> None:
-    for index in range(3):
+    shipped = len(gate.schema_contracts(repo))
+    added = max(gate.NUMBER_WORDS) + 1 - shipped + 2
+    assert added > 0
+    for index in range(added):
         (repo / "schemas" / f"contextsafe-extra{index}-v1.schema.json").write_text(
             "{}\n", encoding="utf-8"
         )
     findings = [f for f in gate.run_gate(repo) if "contracts'" in f.detail]
-    assert findings and "'14 contracts'" in findings[0].detail
+    assert findings and f"'{shipped + added} contracts'" in findings[0].detail
+    assert (shipped + added) not in gate.NUMBER_WORDS
 
 
 def test_an_empty_schemas_directory_cannot_be_examined(repo: Path) -> None:

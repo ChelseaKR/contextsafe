@@ -49,7 +49,13 @@
         "additionalProperties": false,
         "required": ["source_pointer", "typed_value"],
         "properties": {
-          "source_pointer": {"type": "string", "pattern": "^\\$[.\\[\\]A-Za-z0-9_-]{1,127}$"},
+          "source_pointer": {
+            "type": "string",
+            "maxLength": 128,
+            "pattern": "^(\\$[.\\[\\]A-Za-z0-9_-]{1,127}|(/[A-Za-z0-9_.-]+){1,16})$",
+            "$comment": "Widened on 2026-09-04 by B-023 to admit the JSON Pointer alternative without a version bump, in step with contextsafe-observation-set-v0.1: every document valid under the earlier pattern is still valid, and a candidate read from a fhir-r4-json observation set can now carry its pointer here.",
+            "description": "A $-rooted ContextSafe path, or an RFC 6901 JSON Pointer with unescaped alphanumeric reference tokens as emitted by the FHIR R4 reader. Structural only; never a source value."
+          },
           "typed_value": {"type": "object"}
         }
       }

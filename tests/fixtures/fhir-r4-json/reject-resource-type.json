@@ -1,0 +1,10 @@
+{
+  "resourceType": "Observation",
+  "id": "CSYN-OBS-1",
+  "identifier": [
+    {
+      "system": "urn:contextsafe:synthetic",
+      "value": "CSYN-CTP-I01"
+    }
+  ]
+}

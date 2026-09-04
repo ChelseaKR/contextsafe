@@ -1,0 +1,26 @@
+{
+  "schema_version": "contextsafe.mapping-profile/1.0.0",
+  "profile_id": "MAP-REJECT-FIXTURE",
+  "format": "hl7v2-er7",
+  "version": "0.1.0",
+  "review": {
+    "status": "not_reviewed",
+    "reviewed_by": null,
+    "reviewed_at": null
+  },
+  "rows": [
+    {
+      "source": {
+        "concept": "recorded_sex_or_gender",
+        "carrier": "PID-8",
+        "token": "X"
+      },
+      "target": {
+        "concept": "sex_parameter_for_clinical_use",
+        "value": {
+          "value": "fixture-context-1"
+        }
+      }
+    }
+  ]
+}

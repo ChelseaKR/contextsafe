@@ -1,0 +1,9 @@
+{
+  "schema_version": "contextsafe.lis-export/0.1.0",
+  "rows": [
+    {
+      "patient_id": "CSYN-CTP-Z99",
+      "name_to_use": "CSYN-ASTER"
+    }
+  ]
+}

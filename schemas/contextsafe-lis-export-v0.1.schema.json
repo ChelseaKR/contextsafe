@@ -1,0 +1,64 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://contextsafe.invalid/schemas/contextsafe-lis-export-v0.1.schema.json",
+  "title": "ContextSafe LIS export identity profile 0.1",
+  "description": "Reference-only and ungoverned. The JSON shape `contextsafe import --format lis-json` reads: a synthetic laboratory result export whose identity columns (patient_id, name_to_use, pronouns, sex) become observations at the lis_return checkpoint and whose result columns (analyte, value, unit, range, flag, order, specimen) are recognized and counted but produce no observation, because the laboratory result observation family is a later item. No laboratory, interoperability, clinical, or community reviewer has approved this profile as the shape of any real export, and profile_reviewed is false on every result it produces. The column set is closed: a key outside it rejects the whole source.",
+  "$comment": "JSON Schema validates structure. ContextSafe runtime validation additionally enforces the x-contextsafe-semantic-constraints below.",
+  "x-contextsafe-semantic-constraints": [
+    "every row carries exactly the first row's key set",
+    "at least one of name_to_use, pronouns, or sex is present",
+    "every row's patient_id equals the case document's synthetic identifier",
+    "every cell passes the evidence boundary scan: no boundary whitespace, control or format character, PHI canary, or direct-identifier pattern",
+    "no cell begins with =, +, -, or @",
+    "sex is read as recorded_sex_or_gender with the fixed context laboratory and never as gender_identity or sex_parameter_for_clinical_use",
+    "one observation is emitted per distinct value per identity column, so rows that disagree evaluate as ambiguous"
+  ],
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "rows"],
+  "properties": {
+    "schema_version": {"const": "contextsafe.lis-export/0.1.0"},
+    "rows": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 2000,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["patient_id"],
+        "properties": {
+          "patient_id": {"type": "string", "pattern": "^CSYN-CTP-[A-Z0-9]{3,16}$"},
+          "name_to_use": {"$ref": "#/$defs/presenceOrSyntheticToken"},
+          "pronouns": {"$ref": "#/$defs/presenceOrSyntheticToken"},
+          "sex": {"enum": ["F", "M", "X", "unknown"]},
+          "analyte": {"$ref": "#/$defs/resultCell"},
+          "value": {"$ref": "#/$defs/resultCell"},
+          "unit": {"$ref": "#/$defs/resultCell"},
+          "range": {"$ref": "#/$defs/resultCell"},
+          "flag": {"$ref": "#/$defs/resultCell"},
+          "order": {"$ref": "#/$defs/syntheticIdentifierCell"},
+          "specimen": {"$ref": "#/$defs/syntheticIdentifierCell"}
+        }
+      }
+    }
+  },
+  "$defs": {
+    "presenceOrSyntheticToken": {
+      "description": "A presence state that carries no value, or the source's own synthetic token carried verbatim. An empty string is not a value and is rejected; specified without a value is ambiguous and is rejected.",
+      "oneOf": [
+        {"enum": ["declined", "unknown", "absent"]},
+        {"type": "string", "pattern": "^CSYN-[A-Z0-9][A-Z0-9_.:-]{0,95}$"}
+      ]
+    },
+    "resultCell": {
+      "description": "Recognized and counted, not observed. Empty, or a bounded token without whitespace; not interpreted by this profile.",
+      "type": "string",
+      "pattern": "^(?:[A-Za-z0-9<>][A-Za-z0-9:/_.%<>-]{0,63})?$"
+    },
+    "syntheticIdentifierCell": {
+      "description": "An accession-shaped identifier, so synthetic only: empty, or a CSYN- or ORDER-CSYN- token.",
+      "type": "string",
+      "pattern": "^(?:(?:ORDER-)?CSYN-[A-Z0-9][A-Z0-9_.:-]{0,95})?$"
+    }
+  }
+}

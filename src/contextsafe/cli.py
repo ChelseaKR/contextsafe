@@ -20,6 +20,13 @@ from contextsafe.eventlog import Outcome, append_event
 from contextsafe.evidence import build_evidence_scope
 from contextsafe.html_receipt import render_receipt_page
 from contextsafe.i18n import SOURCE_LOCALE, Surface, available_locales, source_catalog
+from contextsafe.importers import (
+    available_formats,
+    checkpoint_value,
+    compile_profile,
+    import_source,
+    load_profile,
+)
 from contextsafe.jsonio import load_json
 from contextsafe.models import EvaluationBundle, OutcomeStatus
 from contextsafe.pack import compile_pack
@@ -30,7 +37,7 @@ from contextsafe.reference_fixtures import (
     DEFAULT_EXPORT_DIRECTORY,
     export_reference_fixtures,
 )
-from contextsafe.validation import parse_bundle
+from contextsafe.validation import parse_bundle, parse_case
 
 EXIT_SUCCESS = 0
 """The command completed and every requested contract check passed."""
@@ -190,6 +197,56 @@ def _parser() -> argparse.ArgumentParser:
     evidence_preflight.add_argument("--source-type", required=True)
     evidence_preflight.add_argument("--media-type", required=True)
     evidence_preflight.add_argument("--output", type=Path)
+    import_parser = subparsers.add_parser(
+        "import", parents=[modes], help=_HELP.text("cli.command.import")
+    )
+    # ``choices`` makes argparse echo an unrecognized format name on stderr,
+    # as ``--fail-on`` and ``--lang`` already do. A format name is a registry
+    # key, not identity data. Do not extend the pattern to ``--checkpoint`` or
+    # to any flag whose value comes from a source: those are validated by the
+    # command and rejected with a code and a location, never echoed.
+    import_parser.add_argument(
+        "--format",
+        required=True,
+        choices=available_formats(),
+        help=_HELP.text("cli.flag.format"),
+    )
+    import_parser.add_argument("--source", required=True, type=Path)
+    import_parser.add_argument("--case", required=True, type=Path)
+    import_parser.add_argument("--checkpoint", required=True)
+    import_parser.add_argument(
+        "--mapping",
+        type=Path,
+        help=(
+            "a mapping profile to apply after the conversion; without it every "
+            "value is the source's own token. The profile is validated first, "
+            "must be for the same format, and its review status can only be "
+            "not_reviewed; every emitted observation then records the "
+            "profile's sha256 and version"
+        ),
+    )
+    import_parser.add_argument("--output", type=Path)
+    mapping_parser = subparsers.add_parser(
+        "mapping",
+        help=(
+            "Work with mapping profiles: validate one and emit its canonical "
+            "unsigned form and digest. There is no mapping sign command"
+        ),
+    )
+    mapping_subparsers = mapping_parser.add_subparsers(
+        dest="mapping_command", required=True
+    )
+    mapping_validate = mapping_subparsers.add_parser(
+        "validate",
+        parents=[modes],
+        help=(
+            "validate a mapping profile against the registered importers and "
+            "emit its canonical unsigned form with its sha256; a profile "
+            "declaring any review status but not_reviewed is rejected"
+        ),
+    )
+    mapping_validate.add_argument("--profile", required=True, type=Path)
+    mapping_validate.add_argument("--output", type=Path)
     fixtures_parser = subparsers.add_parser(
         "fixtures",
         help="Work with the synthetic reference fixtures the package carries.",
@@ -304,6 +361,43 @@ def _operator_command(args: argparse.Namespace) -> str | None:
     return None
 
 
+def _import_command(args: argparse.Namespace) -> str:
+    """Convert one boundary-scanned source into an observation-set document.
+
+    Read-only: the source is opened once through the evidence boundary
+    scan, never copied, indexed, or logged, and the only thing emitted is
+    the document ``evaluate --observations`` accepts. The result's counts
+    and closed-vocabulary warnings stay in process because that contract
+    has no field for them.
+    """
+
+    mapping_path: Path | None = args.mapping
+    profile = None if mapping_path is None else load_profile(load_json(mapping_path))
+    result = import_source(
+        args.format,
+        args.source,
+        case=parse_case(load_json(args.case)),
+        checkpoint=checkpoint_value(args.checkpoint, "$.checkpoint"),
+        profile=profile,
+    )
+    return f"{canonical_json(result.observation_set())}\n"
+
+
+def _mapping_command(args: argparse.Namespace) -> str:
+    """Validate one mapping profile and emit its canonical form and digest.
+
+    ``mapping validate`` is the only mapping command. ``mapping sign``
+    (Architecture section 7) is not built: no signer key, trust manifest, or
+    enrolled reviewer exists, and the compiled document says so.
+    """
+
+    if args.mapping_command != "validate":
+        raise ContextSafeError(
+            "unsupported_command", "$", "mapping command is unsupported"
+        )
+    return f"{canonical_json(compile_profile(load_json(args.profile)).to_dict())}\n"
+
+
 def _render_command(args: argparse.Namespace) -> str:
     document = load_json(args.receipt)
     if not isinstance(document, dict):
@@ -315,12 +409,25 @@ def _render_command(args: argparse.Namespace) -> str:
     return render_receipt_page(document, locale=args.lang)
 
 
+def _conversion_command(args: argparse.Namespace) -> str | None:
+    """Handle the commands that turn one document into another, or None."""
+
+    if args.command == "render":
+        return _render_command(args)
+    if args.command == "import":
+        return _import_command(args)
+    if args.command == "mapping":
+        return _mapping_command(args)
+    return None
+
+
 def _run(args: argparse.Namespace) -> str:
     operator = _operator_command(args)
     if operator is not None:
         return operator
-    if args.command == "render":
-        return _render_command(args)
+    conversion = _conversion_command(args)
+    if conversion is not None:
+        return conversion
     if args.command == "pack":
         if args.pack_command != "validate":
             raise ContextSafeError(

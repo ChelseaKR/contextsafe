@@ -1,0 +1,236 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://contextsafe.invalid/schemas/contextsafe-mapping-profile-v1.schema.json",
+  "title": "ContextSafe mapping profile v1",
+  "description": "Reference-only and ungoverned. A versioned token table for one registered importer format: each row binds a source token (the carrier it was read from and the verbatim token) to the canonical concept and value the observation should carry, and `contextsafe import --mapping` applies it after the conversion. The only review status this iteration admits is not_reviewed; a declared approval authorizes nothing, exactly as a declared approval on a pack authorizes nothing. No interoperability, clinical, laboratory, or community reviewer has approved any profile, `contextsafe mapping sign` does not exist, and profile_reviewed stays false on every import result. A row whose target is sex_parameter_for_clinical_use while its source concept is gender_identity or recorded_sex_or_gender is prohibited (A-020, A-021); every row's source and target concept are the same concept; a sex-parameter row binds the value token only, never the order context or the supporting observations; and every target value is in the synthetic namespace.",
+  "$comment": "JSON Schema validates structure. ContextSafe runtime validation additionally enforces the x-contextsafe-semantic-constraints below; a document this schema accepts has not been shown to be a profile the runtime reads.",
+  "x-contextsafe-semantic-constraints": [
+    "every carrier a row names is one the format's registered importer reads, and the row's source.concept is one that importer emits that carrier as (PID-8 is recorded_sex_or_gender and nothing else)",
+    "no two rows name the same source (concept, carrier, token)",
+    "no two rows with different sources name the same target concept and value, so two source values are never collapsed into one",
+    "every source token passes the evidence boundary scan: no boundary whitespace, control or format character, PHI canary, or direct-identifier pattern",
+    "a sex_parameter_for_clinical_use target binds the value only; the order context and supporting observations are the source's",
+    "the profile's sha256 is the digest of its canonical form, rows sorted by source, and every observation an import emits with the profile applied records that digest and the profile's version"
+  ],
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "profile_id", "format", "version", "review", "rows"],
+  "properties": {
+    "schema_version": {"const": "contextsafe.mapping-profile/1.0.0"},
+    "profile_id": {"$ref": "#/$defs/id"},
+    "format": {"enum": ["canonical-json", "fhir-r4-json", "hl7v2-er7", "lis-csv", "lis-json"]},
+    "version": {"$ref": "#/$defs/semver"},
+    "review": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status", "reviewed_by", "reviewed_at"],
+      "properties": {
+        "status": {"const": "not_reviewed"},
+        "reviewed_by": {"type": "null"},
+        "reviewed_at": {"type": "null"}
+      }
+    },
+    "rows": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 256,
+      "items": {"$ref": "#/$defs/row"}
+    }
+  },
+  "allOf": [
+    {
+      "if": {"properties": {"format": {"const": "canonical-json"}}},
+      "then": {"properties": {"rows": {"items": {"properties": {"source": {"properties": {"carrier": {"enum": ["gender_identity", "name_to_use", "pronouns", "recorded_sex_or_gender", "sex_parameter_for_clinical_use"]}}}}}}}}
+    },
+    {
+      "if": {"properties": {"format": {"const": "fhir-r4-json"}}},
+      "then": {"properties": {"rows": {"items": {"properties": {"source": {"properties": {"carrier": {"enum": ["http://hl7.org/fhir/StructureDefinition/individual-genderIdentity", "http://hl7.org/fhir/StructureDefinition/individual-pronouns", "http://hl7.org/fhir/StructureDefinition/individual-recordedSexOrGender", "Patient.name"]}}}}}}}}
+    },
+    {
+      "if": {"properties": {"format": {"const": "hl7v2-er7"}}},
+      "then": {"properties": {"rows": {"items": {"properties": {"source": {"properties": {"carrier": {"enum": ["PID-5", "PID-8", "GSP-5"]}}}}}}}}
+    },
+    {
+      "if": {"properties": {"format": {"enum": ["lis-csv", "lis-json"]}}},
+      "then": {"properties": {"rows": {"items": {"properties": {"source": {"properties": {"carrier": {"enum": ["name_to_use", "pronouns", "sex"]}}}}}}}}
+    }
+  ],
+  "$defs": {
+    "id": {"type": "string", "pattern": "^[A-Z][A-Z0-9-]{2,63}$"},
+    "semver": {
+      "type": "string",
+      "maxLength": 128,
+      "pattern": "^(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)$"
+    },
+    "concept": {
+      "enum": [
+        "gender_identity",
+        "recorded_sex_or_gender",
+        "sex_parameter_for_clinical_use",
+        "name_to_use",
+        "pronouns"
+      ]
+    },
+    "sourceToken": {
+      "description": "The source's own token, verbatim: a bounded code, never prose.",
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9:/_.+-]{0,95}$"
+    },
+    "syntheticToken": {
+      "description": "A value in the synthetic namespace: a CSYN- token or a fixture- token.",
+      "type": "string",
+      "pattern": "^(CSYN-[A-Z0-9][A-Z0-9_.:-]{0,95}|fixture-[a-z0-9][a-z0-9-]{0,63})$"
+    },
+    "fixtureSystem": {
+      "description": "A code system or recording source a target may name: this project's own URNs.",
+      "type": "string",
+      "pattern": "^urn:contextsafe:[a-z0-9][a-z0-9.-]{0,63}$"
+    },
+    "pronounSet": {
+      "description": "A pronoun set as a lowercase slash-separated shape (they/them). A shape, not a list; it admits no capital, digit, or space.",
+      "type": "string",
+      "pattern": "^[a-z]{1,12}/[a-z]{1,12}(/[a-z]{1,12})?$"
+    },
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["concept", "carrier", "token"],
+      "properties": {
+        "concept": {"$ref": "#/$defs/concept"},
+        "carrier": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "description": "The format's own name for where the token sat: a field code (canonical-json), an extension URL or Patient.name (fhir-r4-json), a segment-field (hl7v2-er7), or a column (lis-csv, lis-json). Closed per format above."
+        },
+        "token": {"$ref": "#/$defs/sourceToken"}
+      }
+    },
+    "genderIdentityTarget": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status", "value", "code_system"],
+      "properties": {
+        "status": {"enum": ["specified", "declined", "unknown", "absent"]},
+        "value": {"oneOf": [{"type": "null"}, {"$ref": "#/$defs/syntheticToken"}]},
+        "code_system": {"$ref": "#/$defs/fixtureSystem"}
+      }
+    },
+    "recordedSexOrGenderTarget": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["value", "context", "source"],
+      "properties": {
+        "value": {"enum": ["F", "M", "X", "unknown"]},
+        "context": {
+          "oneOf": [
+            {"enum": ["administrative", "government-id", "jurisdictional", "laboratory", "payer"]},
+            {"$ref": "#/$defs/syntheticToken"}
+          ]
+        },
+        "source": {
+          "oneOf": [
+            {"enum": ["synthetic-fixture"]},
+            {"$ref": "#/$defs/syntheticToken"},
+            {"$ref": "#/$defs/fixtureSystem"}
+          ]
+        }
+      }
+    },
+    "spcuValueTarget": {
+      "description": "The value token alone. A profile cannot bind an order context or a supporting observation; both stay the source's.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["value"],
+      "properties": {
+        "value": {"$ref": "#/$defs/syntheticToken"}
+      }
+    },
+    "nameToUseTarget": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status", "value", "use"],
+      "properties": {
+        "status": {"enum": ["specified", "declined", "unknown", "absent"]},
+        "value": {"oneOf": [{"type": "null"}, {"$ref": "#/$defs/syntheticToken"}]},
+        "use": {"const": "usual"}
+      }
+    },
+    "pronounsTarget": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status", "value"],
+      "properties": {
+        "status": {"enum": ["specified", "declined", "unknown", "absent"]},
+        "value": {"oneOf": [{"type": "null"}, {"$ref": "#/$defs/syntheticToken"}, {"$ref": "#/$defs/pronounSet"}]}
+      }
+    },
+    "target": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["concept", "value"],
+      "properties": {
+        "concept": {"$ref": "#/$defs/concept"},
+        "value": {"type": "object"}
+      },
+      "allOf": [
+        {
+          "if": {"properties": {"concept": {"const": "gender_identity"}}},
+          "then": {"properties": {"value": {"$ref": "#/$defs/genderIdentityTarget"}}}
+        },
+        {
+          "if": {"properties": {"concept": {"const": "recorded_sex_or_gender"}}},
+          "then": {"properties": {"value": {"$ref": "#/$defs/recordedSexOrGenderTarget"}}}
+        },
+        {
+          "if": {"properties": {"concept": {"const": "sex_parameter_for_clinical_use"}}},
+          "then": {"properties": {"value": {"$ref": "#/$defs/spcuValueTarget"}}}
+        },
+        {
+          "if": {"properties": {"concept": {"const": "name_to_use"}}},
+          "then": {"properties": {"value": {"$ref": "#/$defs/nameToUseTarget"}}}
+        },
+        {
+          "if": {"properties": {"concept": {"const": "pronouns"}}},
+          "then": {"properties": {"value": {"$ref": "#/$defs/pronounsTarget"}}}
+        }
+      ]
+    },
+    "row": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["source", "target"],
+      "properties": {
+        "source": {"$ref": "#/$defs/source"},
+        "target": {"$ref": "#/$defs/target"}
+      },
+      "allOf": [
+        {
+          "$comment": "A-020 and A-021, stated by name: no row reaches sex parameter for clinical use from gender identity or recorded sex or gender.",
+          "if": {"properties": {"target": {"properties": {"concept": {"const": "sex_parameter_for_clinical_use"}}}}},
+          "then": {"properties": {"source": {"properties": {"concept": {"not": {"enum": ["gender_identity", "recorded_sex_or_gender"]}}}}}}
+        },
+        {
+          "if": {"properties": {"target": {"properties": {"concept": {"const": "gender_identity"}}}}},
+          "then": {"properties": {"source": {"properties": {"concept": {"const": "gender_identity"}}}}}
+        },
+        {
+          "if": {"properties": {"target": {"properties": {"concept": {"const": "recorded_sex_or_gender"}}}}},
+          "then": {"properties": {"source": {"properties": {"concept": {"const": "recorded_sex_or_gender"}}}}}
+        },
+        {
+          "if": {"properties": {"target": {"properties": {"concept": {"const": "sex_parameter_for_clinical_use"}}}}},
+          "then": {"properties": {"source": {"properties": {"concept": {"const": "sex_parameter_for_clinical_use"}}}}}
+        },
+        {
+          "if": {"properties": {"target": {"properties": {"concept": {"const": "name_to_use"}}}}},
+          "then": {"properties": {"source": {"properties": {"concept": {"const": "name_to_use"}}}}}
+        },
+        {
+          "if": {"properties": {"target": {"properties": {"concept": {"const": "pronouns"}}}}},
+          "then": {"properties": {"source": {"properties": {"concept": {"const": "pronouns"}}}}}
+        }
+      ]
+    }
+  }
+}

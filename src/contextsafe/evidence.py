@@ -428,10 +428,17 @@ def _nullable_context_code(value: object, path: str) -> str | None:
     return bounded_string(value, path, pattern=_CONTEXT_TOKEN_PATTERN)
 
 
-def parse_evidence_source(
-    value: object, *, scope: EvidenceScope
-) -> EvidenceSourceEnvelope:
-    """Parse the exact field allowlist and namespace-bound source envelope."""
+def parse_evidence_envelope(value: object) -> EvidenceSourceEnvelope:
+    """Parse the exact field allowlist of the code-only source envelope.
+
+    Structural and self-consistent only: the schema version, the ID and token
+    grammars, the record bound, the fixed synthetic identifier system, the
+    identifier value equal to the envelope's own case token, and pointer
+    uniqueness. It binds the envelope to nothing outside itself. A caller
+    holding an execution plan uses :func:`parse_evidence_source`, which adds
+    the plan-scope equality check; a caller holding only a case document
+    makes its own cross-check against what it holds and says so.
+    """
 
     data = object_value(value, "$")
     exact_keys(
@@ -470,17 +477,6 @@ def parse_evidence_source(
         raise contract_error(
             "unsupported_source_type", "$.source_type", "source type is unsupported"
         )
-    if (
-        plan_id != scope.plan_id
-        or case_token != scope.case_token
-        or checkpoint != scope.checkpoint.value
-        or source_type != scope.source_type
-    ):
-        raise contract_error(
-            "evidence_scope_mismatch",
-            "$",
-            "evidence envelope does not match the requested plan scope",
-        )
     identifier = object_value(data["synthetic_identifier"], "$.synthetic_identifier")
     exact_keys(
         identifier,
@@ -497,12 +493,12 @@ def parse_evidence_source(
     )
     if (
         identifier_system != SYNTHETIC_IDENTIFIER_SYSTEM
-        or identifier_value != scope.case_token
+        or identifier_value != case_token
     ):
         raise contract_error(
             "namespace_mismatch",
             "$.synthetic_identifier",
-            "the plan-pinned synthetic identifier is required",
+            "the fixed synthetic identifier must match the envelope case token",
         )
     raw_records = array_value(data["records"], "$.records")
     if not raw_records or len(raw_records) > 2_000:
@@ -550,6 +546,26 @@ def parse_evidence_source(
         identifier_value=identifier_value,
         records=tuple(records),
     )
+
+
+def parse_evidence_source(
+    value: object, *, scope: EvidenceScope
+) -> EvidenceSourceEnvelope:
+    """Parse the source envelope and require it to match one plan scope."""
+
+    envelope = parse_evidence_envelope(value)
+    if (
+        envelope.plan_id != scope.plan_id
+        or envelope.case_token != scope.case_token
+        or envelope.checkpoint is not scope.checkpoint
+        or envelope.source_type != scope.source_type
+    ):
+        raise contract_error(
+            "evidence_scope_mismatch",
+            "$",
+            "evidence envelope does not match the requested plan scope",
+        )
+    return envelope
 
 
 def _provenance_token(value: object, path: str, grammar: Grammar) -> str:

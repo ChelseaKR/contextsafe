@@ -35,6 +35,46 @@ from contextsafe.validation import (
 ROOT = Path(__file__).resolve().parents[1]
 
 
+def _pointer_patterns(schema: object) -> set[str]:
+    """Every pattern a contract binds to a ``source_pointer`` property."""
+
+    found: set[str] = set()
+    if isinstance(schema, dict):
+        for key, value in schema.items():
+            if key == "source_pointer" and isinstance(value, dict):
+                found.add(str(value["pattern"]))
+            found |= _pointer_patterns(value)
+    elif isinstance(schema, list):
+        for item in schema:
+            found |= _pointer_patterns(item)
+    return found
+
+
+def test_the_observation_contracts_share_one_source_pointer_grammar() -> None:
+    """A pointer the set contract emits is admissible as a candidate pointer.
+
+    ``contextsafe-observation-v1`` has no runtime parser, so nothing but this
+    test notices when its ``candidates[*].source_pointer`` falls behind the
+    grammar the observation-set contract admits.
+    """
+
+    schemas = ROOT / "schemas"
+    observation_set = json.loads(
+        (schemas / "contextsafe-observation-set-v0.1.schema.json").read_text("utf-8")
+    )
+    observation = json.loads(
+        (schemas / "contextsafe-observation-v1.schema.json").read_text("utf-8")
+    )
+    patterns = _pointer_patterns(observation_set)
+    assert len(patterns) == 1
+    assert _pointer_patterns(observation) == patterns
+    grammar = re.compile(patterns.pop())
+    assert grammar.fullmatch("$.records[0]")
+    assert grammar.fullmatch("/entry/0/resource/extension/1")
+    assert grammar.fullmatch("unsafe path") is None
+    assert grammar.fullmatch("/") is None
+
+
 def _assert_code(code: str, call: Any, value: object) -> None:
     with pytest.raises(ContextSafeError) as caught:
         call(value)

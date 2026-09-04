@@ -1,6 +1,6 @@
 """The packaged synthetic reference fixtures, and the command that exports them.
 
-The five reference inputs under ``fixtures/reference`` beside this module are
+The fourteen reference inputs under ``fixtures/reference`` beside this module are
 package data, so an installed wheel carries them exactly as a checkout does.
 Every documented quickstart names them by the relative path
 ``fixtures/reference/<name>``; ``contextsafe fixtures export`` writes them to
@@ -32,6 +32,15 @@ REFERENCE_ROOT = Path(__file__).parent / "fixtures" / "reference"
 REFERENCE_FILES: tuple[str, ...] = (
     "case.json",
     "evidence-source.json",
+    "fhir-patient.json",
+    "hl7v2-er7-message.hl7",
+    "lis-export.csv",
+    "lis-export.json",
+    "mapping-canonical-json.json",
+    "mapping-fhir-r4-json.json",
+    "mapping-hl7v2-er7.json",
+    "mapping-lis-csv.json",
+    "mapping-lis-json.json",
     "observations.json",
     "pack-draft.json",
     "rules.json",
@@ -39,7 +48,13 @@ REFERENCE_FILES: tuple[str, ...] = (
 """The complete reference set, named rather than globbed.
 
 A glob over an incomplete install would export a shorter list and call it
-done. Naming the files makes a missing one a failure instead.
+done. Naming the files makes a missing one a failure instead. The two
+``lis-export`` files are the synthetic laboratory export the ``lis-csv`` and
+``lis-json`` importers read (B-025); their tokens are invented and they are
+not the shape of any real system's export. The five ``mapping-*`` files are
+one reference mapping profile per registered importer (B-026), each binding
+that importer's reference fixture tokens to the reference case's values;
+every one says ``not_reviewed``, and none is the profile of any real system.
 """
 
 DEFAULT_EXPORT_DIRECTORY = Path("fixtures") / "reference"

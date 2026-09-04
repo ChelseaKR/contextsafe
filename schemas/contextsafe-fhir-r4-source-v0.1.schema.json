@@ -1,0 +1,270 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://contextsafe.invalid/schemas/contextsafe-fhir-r4-source-v0.1.schema.json",
+  "title": "ContextSafe FHIR R4 JSON source profile 0.1",
+  "description": "The exact subset of a FHIR R4 JSON document that `contextsafe import --format fhir-r4-json` reads: one Patient, alone or as the only entry of a Bundle, carrying synthetic identifiers, synthetic HumanName tokens, and the HL7 Gender Harmony gender-identity, pronouns, and recorded-sex-or-gender extensions in the form this reader's profile chooses. Reference-only and ungoverned: no interoperability, clinical, or community reviewer has approved this profile, and validating against it authorizes nothing. It is not a FHIR conformance profile and does not claim conformance with the implementation guide.",
+  "$comment": "JSON Schema validates structure. The ContextSafe runtime additionally runs the evidence boundary scan before this shape is read, and the observation contract after it; the constraints below are enforced there and cannot be expressed here.",
+  "x-contextsafe-semantic-constraints": [
+    "the source is at most one MiB, is a regular file reached without a final link, and is strict UTF-8 JSON without duplicate keys",
+    "no key anywhere normalizes to a prohibited free-text or identifying field (text, contained, note, comment, telecom, address, birthDate, and the rest of the canonical list)",
+    "no string carries a boundary-whitespace, control, or format character, a known PHI canary, or a direct-identifier pattern; the five published URLs are exempt from the URL detector by exact equality only",
+    "exactly one identifier value equals the case document's synthetic token",
+    "which coding shape each sub-extension admits is written below per extension: a gender-identity or pronouns value is a presence coding (the data-absent-reason system with asked-declined, unknown, or not-asked) or a synthetic coding; a recorded-sex-or-gender value is F, M, X, or unknown in any system other than data-absent-reason, because the canonical concept carries no presence state; a recorded-sex-or-gender type is a synthetic coding; the runtime holds the same rule, and checks the recorded-sex-or-gender value against the observation contract's own closed alphabet at the extension's location before conversion",
+    "elements admitted here and not carried into the observation set, because the canonical model has no field for them: Patient.id, Patient.active, every HumanName whose use is not usual, family on the usual name, the system of the pronouns coding, and the system of the recorded-sex-or-gender value coding; each is validated and none is free text",
+    "a Patient carrying none of the concepts rejects; two gender-identity extensions or two usual names are two observations, which the evaluator reports as ambiguous"
+  ],
+  "oneOf": [
+    {"$ref": "#/$defs/patient"},
+    {"$ref": "#/$defs/bundle"}
+  ],
+  "$defs": {
+    "bundle": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["resourceType", "type", "entry"],
+      "properties": {
+        "resourceType": {"const": "Bundle"},
+        "type": {"enum": ["collection", "searchset"]},
+        "total": {"type": "integer", "const": 1},
+        "entry": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 1,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["resource"],
+            "properties": {
+              "resource": {"$ref": "#/$defs/patient"}
+            }
+          }
+        }
+      }
+    },
+    "patient": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["resourceType", "identifier"],
+      "properties": {
+        "resourceType": {"const": "Patient"},
+        "id": {"type": "string", "pattern": "^CSYN-[A-Za-z0-9.-]{1,59}$"},
+        "identifier": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 64,
+          "items": {"$ref": "#/$defs/identifier"}
+        },
+        "active": {"type": "boolean"},
+        "name": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 64,
+          "items": {"$ref": "#/$defs/humanName"}
+        },
+        "extension": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 64,
+          "items": {"$ref": "#/$defs/extension"}
+        }
+      }
+    },
+    "identifier": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["system", "value"],
+      "properties": {
+        "system": {"const": "urn:contextsafe:synthetic"},
+        "value": {"type": "string", "pattern": "^CSYN-[A-Z0-9][A-Z0-9_.:-]{0,95}$"}
+      }
+    },
+    "nameToken": {
+      "type": "string",
+      "pattern": "^(CSYN-[A-Za-z0-9][A-Za-z0-9_.-]{0,95}|ZZZTESTCONTEXTSAFE)$"
+    },
+    "humanName": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["use"],
+      "anyOf": [{"required": ["given"]}, {"required": ["family"]}],
+      "properties": {
+        "use": {"enum": ["usual", "official", "temp", "nickname", "anonymous", "old", "maiden"]},
+        "family": {"$ref": "#/$defs/nameToken"},
+        "given": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 64,
+          "items": {"$ref": "#/$defs/nameToken"}
+        }
+      },
+      "if": {"properties": {"use": {"const": "usual"}}},
+      "then": {
+        "required": ["use", "given"],
+        "properties": {"given": {"minItems": 1, "maxItems": 1}}
+      }
+    },
+    "codingSystem": {
+      "type": "string",
+      "maxLength": 96,
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9:/_.-]{0,95}$",
+      "description": "Bounded at 96 characters, the observation contract's token length, so that a document valid here is not rejected by the contract after conversion."
+    },
+    "presenceCoding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["system", "code"],
+      "properties": {
+        "system": {"const": "http://terminology.hl7.org/CodeSystem/data-absent-reason"},
+        "code": {"enum": ["asked-declined", "unknown", "not-asked"]}
+      },
+      "description": "A presence state: declined, unknown, or not collected. Admissible only where the canonical concept carries a status."
+    },
+    "syntheticCoding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["system", "code"],
+      "properties": {
+        "system": {
+          "allOf": [
+            {"$ref": "#/$defs/codingSystem"},
+            {"not": {"const": "http://terminology.hl7.org/CodeSystem/data-absent-reason"}}
+          ]
+        },
+        "code": {"type": "string", "maxLength": 96, "pattern": "^CSYN-[A-Z0-9][A-Z0-9_.:-]{0,90}$"}
+      },
+      "description": "A synthetic token in any system but the presence system, bounded at 96 characters like the system."
+    },
+    "recordedSexOrGenderCoding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["system", "code"],
+      "properties": {
+        "system": {
+          "allOf": [
+            {"$ref": "#/$defs/codingSystem"},
+            {"not": {"const": "http://terminology.hl7.org/CodeSystem/data-absent-reason"}}
+          ]
+        },
+        "code": {"enum": ["F", "M", "X", "unknown"]}
+      },
+      "description": "The observation contract's closed recorded-sex-or-gender alphabet. The concept carries no presence state, so the presence system is not admissible here and its unknown is not this unknown."
+    },
+    "identityValue": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["coding"],
+      "properties": {
+        "coding": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 1,
+          "items": {
+            "oneOf": [
+              {"$ref": "#/$defs/presenceCoding"},
+              {"$ref": "#/$defs/syntheticCoding"}
+            ]
+          }
+        }
+      }
+    },
+    "syntheticValue": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["coding"],
+      "properties": {
+        "coding": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 1,
+          "items": {"$ref": "#/$defs/syntheticCoding"}
+        }
+      }
+    },
+    "recordedSexOrGenderValue": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["coding"],
+      "properties": {
+        "coding": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 1,
+          "items": {"$ref": "#/$defs/recordedSexOrGenderCoding"}
+        }
+      }
+    },
+    "identityValueSubExtension": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["url", "valueCodeableConcept"],
+      "properties": {
+        "url": {"const": "value"},
+        "valueCodeableConcept": {"$ref": "#/$defs/identityValue"}
+      }
+    },
+    "recordedSexOrGenderValueSubExtension": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["url", "valueCodeableConcept"],
+      "properties": {
+        "url": {"const": "value"},
+        "valueCodeableConcept": {"$ref": "#/$defs/recordedSexOrGenderValue"}
+      }
+    },
+    "typeSubExtension": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["url", "valueCodeableConcept"],
+      "properties": {
+        "url": {"const": "type"},
+        "valueCodeableConcept": {"$ref": "#/$defs/syntheticValue"}
+      }
+    },
+    "extension": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["url", "extension"],
+          "properties": {
+            "url": {
+              "enum": [
+                "http://hl7.org/fhir/StructureDefinition/individual-genderIdentity",
+                "http://hl7.org/fhir/StructureDefinition/individual-pronouns"
+              ]
+            },
+            "extension": {
+              "type": "array",
+              "minItems": 1,
+              "maxItems": 1,
+              "items": {"$ref": "#/$defs/identityValueSubExtension"}
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["url", "extension"],
+          "properties": {
+            "url": {"const": "http://hl7.org/fhir/StructureDefinition/individual-recordedSexOrGender"},
+            "extension": {
+              "type": "array",
+              "minItems": 2,
+              "maxItems": 2,
+              "allOf": [
+                {"contains": {"$ref": "#/$defs/recordedSexOrGenderValueSubExtension"}, "minContains": 1, "maxContains": 1},
+                {"contains": {"$ref": "#/$defs/typeSubExtension"}, "minContains": 1, "maxContains": 1}
+              ],
+              "items": {
+                "oneOf": [
+                  {"$ref": "#/$defs/recordedSexOrGenderValueSubExtension"},
+                  {"$ref": "#/$defs/typeSubExtension"}
+                ]
+              }
+            }
+          }
+        }
+      ]
+    }
+  }
+}

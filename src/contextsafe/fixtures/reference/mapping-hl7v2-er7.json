@@ -1,0 +1,72 @@
+{
+  "schema_version": "contextsafe.mapping-profile/1.0.0",
+  "profile_id": "MAP-REFERENCE-HL7V2-ER7",
+  "format": "hl7v2-er7",
+  "version": "0.1.0",
+  "review": {
+    "status": "not_reviewed",
+    "reviewed_by": null,
+    "reviewed_at": null
+  },
+  "rows": [
+    {
+      "source": {
+        "concept": "name_to_use",
+        "carrier": "PID-5",
+        "token": "CSYN-ASTER"
+      },
+      "target": {
+        "concept": "name_to_use",
+        "value": {"status": "specified", "value": "CSYN-ASTER", "use": "usual"}
+      }
+    },
+    {
+      "source": {
+        "concept": "recorded_sex_or_gender",
+        "carrier": "PID-8",
+        "token": "X"
+      },
+      "target": {
+        "concept": "recorded_sex_or_gender",
+        "value": {"value": "X", "context": "government-id", "source": "synthetic-fixture"}
+      }
+    },
+    {
+      "source": {
+        "concept": "gender_identity",
+        "carrier": "GSP-5",
+        "token": "fixture-gender-1"
+      },
+      "target": {
+        "concept": "gender_identity",
+        "value": {
+          "status": "specified",
+          "value": "fixture-gender-1",
+          "code_system": "urn:contextsafe:fixture"
+        }
+      }
+    },
+    {
+      "source": {
+        "concept": "pronouns",
+        "carrier": "GSP-5",
+        "token": "they/them"
+      },
+      "target": {
+        "concept": "pronouns",
+        "value": {"status": "specified", "value": "they/them"}
+      }
+    },
+    {
+      "source": {
+        "concept": "sex_parameter_for_clinical_use",
+        "carrier": "GSP-5",
+        "token": "fixture-context-1"
+      },
+      "target": {
+        "concept": "sex_parameter_for_clinical_use",
+        "value": {"value": "fixture-context-1"}
+      }
+    }
+  ]
+}

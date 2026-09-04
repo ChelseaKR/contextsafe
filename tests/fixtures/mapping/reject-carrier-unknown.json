@@ -1,0 +1,28 @@
+{
+  "schema_version": "contextsafe.mapping-profile/1.0.0",
+  "profile_id": "MAP-REJECT-FIXTURE",
+  "format": "canonical-json",
+  "version": "0.1.0",
+  "review": {
+    "status": "not_reviewed",
+    "reviewed_by": null,
+    "reviewed_at": null
+  },
+  "rows": [
+    {
+      "source": {
+        "concept": "gender_identity",
+        "carrier": "gender",
+        "token": "CSYN-GENDER-1"
+      },
+      "target": {
+        "concept": "gender_identity",
+        "value": {
+          "status": "specified",
+          "value": "fixture-gender-1",
+          "code_system": "urn:contextsafe:fixture"
+        }
+      }
+    }
+  ]
+}

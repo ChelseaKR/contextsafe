@@ -172,9 +172,11 @@ Customer and engagement-specific reviewer public keys are enrolled in the immuta
 | contextsafe plan sign | canonical validated plan and authorized customer-sponsor or ContextSafe-delivery-owner key | detached `plan` role/purpose signature; refuses noncanonical or invalid plan |
 | contextsafe plan verify | canonical plan, detached signatures, trust state | verification report; nonzero unless both required plan roles and the referenced verified pack pass |
 | contextsafe evidence preflight | unsigned plan-shaped contract, one canonical JSON source, case/checkpoint/type | read-only boundary result; never copies, indexes, logs, or authorizes execution |
+| contextsafe import | registered format name, one caller-owned source, case document, checkpoint | observation-set document for `evaluate --observations`, whole or nothing; reference-only ungoverned mapping, `profile_reviewed` always false; never persists, copies, indexes, logs, or checks a plan (B-022); `lis-csv` and `lis-json` read only the identity columns of a laboratory export at `lis_return`, and result columns are counted but not observed (B-025) |
 | contextsafe evidence import | plan, checkpoint, caller-owned files | evidence IDs; fail before any ContextSafe copy/index/log on boundary violation |
 | contextsafe normalize | evidence IDs, mapping | canonical evidence; never overwrites |
-| contextsafe mapping sign | canonical mapping profile and authorized signer key | detached role/purpose signature |
+| contextsafe mapping validate | mapping profile document | canonical unsigned profile and its hash, `signature_status: not_verified`, `executable: false`; the only review status admitted is `not_reviewed`, and a row reaching SPCU from GI or RSG rejects by name (B-026). `contextsafe import --mapping` applies a validated profile after parsing, and every bound observation records the profile's hash and version |
+| contextsafe mapping sign | canonical mapping profile and authorized signer key | detached role/purpose signature (not built) |
 | contextsafe evaluate | plan and normalized evidence | immutable run outcomes |
 | contextsafe finding review | run, finding, reviewer, decision | canonical unsigned append-only review event and hash |
 | contextsafe review sign | canonical review event and authorized reviewer key | detached role/purpose signature |

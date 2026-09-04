@@ -398,6 +398,10 @@ def test_usage_errors_exit_with_dedicated_code(
         [*_args("validate"), "--unknown-flag"],
         ["pack"],
         ["evidence", "preflight"],
+        ["import"],
+        ["import", "--format", "canonical-json"],
+        ["mapping"],
+        ["mapping", "validate"],
     ]
     for argv in usage_errors:
         with pytest.raises(SystemExit) as raised:
@@ -459,6 +463,48 @@ def test_no_color_accepted_and_output_never_contains_ansi(
             ],
         ),
         (0, [*_evidence_preflight_args(plan_path), "--no-color"]),
+        (
+            0,
+            [
+                "import",
+                "--no-color",
+                "--format",
+                "canonical-json",
+                "--source",
+                str(REFERENCE / "evidence-source.json"),
+                "--case",
+                str(REFERENCE / "case.json"),
+                "--checkpoint",
+                "ehr",
+            ],
+        ),
+        (
+            0,
+            [
+                "import",
+                "--no-color",
+                "--format",
+                "canonical-json",
+                "--source",
+                str(REFERENCE / "evidence-source.json"),
+                "--case",
+                str(REFERENCE / "case.json"),
+                "--checkpoint",
+                "ehr",
+                "--mapping",
+                str(REFERENCE / "mapping-canonical-json.json"),
+            ],
+        ),
+        (
+            0,
+            [
+                "mapping",
+                "validate",
+                "--no-color",
+                "--profile",
+                str(REFERENCE / "mapping-canonical-json.json"),
+            ],
+        ),
     ]
     for expected_exit, argv in invocations:
         assert main(argv) == expected_exit

@@ -146,6 +146,231 @@ still depends on B-010/B-019/B-026, and invariants 2, 5, 6, 7, and 8 need
 pack-lifecycle execution blocking, review signatures, HTML rendering, and
 signature verification that do not exist yet.
 
+Implementation note (2026-09-04, B-022): `contextsafe import --format
+canonical-json` now exists as the read-only conversion step: it runs the
+iteration-3 evidence boundary scan on one canonical JSON envelope and converts
+it, whole or not at all, into the observation-set document `evaluate` accepts,
+with the source digest and record pointer on every observation, the importer's
+version as the mapping version, and the case token cross-checked against the
+case document. `src/contextsafe/importers/` is the boundary the FHIR, HL7, and
+LIS adapters (B-023–B-025) will register into: a shared `ImportResult`, a
+closed warning vocabulary, an `import_*` rejection family, and a registry the
+command line reads, so a new format is one module and one entry. Values are
+carried as the source's own tokens, so evaluating an imported observation
+against the reference rule set reports `semantic_mismatch` until a mapping
+profile binds the token, and `profile_reviewed` is `false` on every result.
+A gender-identity, name, or pronouns record whose value is a recorded-sex code
+or a laboratory status (which the envelope admits for any field) rejects the
+source rather than arriving as that concept's value under a foreign token;
+`evidence preflight` accepts and rejects the same sources as before, with the
+plan-scope check now run after the envelope parse. The property suites assert
+value-free rejection structurally (whole error object in a closed set at the
+expected path), not by substring, so the gate is the same colour for the same
+tree on every Hypothesis draw.
+B-022 is not closed: the field-code mapping is reference-only and no
+interoperability, clinical, or community reviewer has approved it; the source's
+`plan_id` is checked for shape and not against a plan, because the plan-bound,
+persisting `evidence import` still depends on B-035; sex-parameter records
+reject rather than convert, because the envelope cannot carry the
+supporting-observation link and no profile (B-026) exists to bind one; the
+result's counts and warnings stay in process because the observation-set
+contract has no field for them; and the property suites cover the
+machine-checkable invariants only, not adapter acceptance against a partner
+export.
+
+Implementation note (2026-09-04, B-023): `contextsafe import --format
+fhir-r4-json` now reads one FHIR R4 JSON `Patient`, alone or as the only
+entry of a `collection` or `searchset` `Bundle`, through the shared boundary
+scan and an exact element allowlist, and converts the HL7 Gender Harmony
+`individual-genderIdentity`, `individual-pronouns`, and
+`individual-recordedSexOrGender` extensions and the `HumanName` with `use`
+`usual` into the observation set `evaluate` accepts, with the source digest,
+the profile version, and an RFC 6901 pointer on every observation. Any
+narrative, contained resource, element outside the allowlist, unknown
+extension or sub-extension, `display`, `comment`, reference, identifier
+outside the synthetic namespace, coded value outside the synthetic alphabet,
+name with no part, `data-absent-reason` coding on recorded sex or gender
+(the canonical concept has no presence state, so that system's `unknown` is
+never carried as the recorded value `unknown`), document over one MiB, or
+Patient carrying none of the concepts rejects the whole source with a code
+and a location; nothing outside the allowlist is dropped, a recorded-sex-or-gender
+value outside the contract's closed alphabet and any coding token over the
+contract's 96-character bound reject at their own location in the source
+rather than in the converted document, and a fixture per rejection class is
+committed and pinned. What the allowlist admits and the canonical model
+cannot hold is validated and not carried, and the list is closed:
+`Patient.id`, `Patient.active`, every `HumanName` whose `use` is not `usual`,
+`family` on the usual name, the pronouns coding's system, and the
+recorded-sex-or-gender value's system. Two carriers of one concept are
+two observations, which the evaluator reports as ambiguous. The reader's
+choices are one versioned profile constant with `reviewed` fixed to false, and
+the accepted subset is published as a reference-only schema. B-023 is not
+closed: no interoperability reviewer (the 8h the row budgets) has examined the
+profile, and the elements chosen where the guide is uncertain (the `value`
+sub-extension form, `type` as the RSG context, the three `data-absent-reason`
+presence codes) are recorded as choices, not as conformance; sex parameter for
+clinical use is recognised by its extension URL and always rejects, because
+neither `Encounter` nor `ServiceRequest` is implemented as an order-context
+carrier and no allowlisted resource can carry a supporting observation, so
+SPCU acceptance is deferred with the B-026 profile work; name periods
+(CTP-009), RSG jurisdiction and source document, and every other Gender
+Harmony sub-extension are not carried; the reader takes a file and never a
+FHIR endpoint (Architecture section 10 remains P1); the coding system of a
+recorded-sex-or-gender `value` is checked only against the presence system
+and the token bound and is otherwise not carried, because the canonical
+model has no field for it, and which systems an RSG value may come from is a
+profile choice left for the reviewer; the synthetic-data confirmation in
+`docs/PUBLICATION-READINESS.md` section 4 was found describing the corpus as
+it stood before this item (five packaged files, no `birthDate` anywhere, no
+PII-shaped literal outside `tests/test_preflight.py`) and is corrected under a
+dated update with two tests that derive its figures and literal list from the
+tree; neither `diagnostics` nor the support bundle enumerates
+the importer registry's formats; and the receipt's limitation line still
+reads "does not ingest FHIR", a reviewed wording the maintainer decides.
+
+Implementation note (2026-09-04, B-024): `contextsafe import --format
+hl7v2-er7` now exists, registered through the B-022 importer registry with no
+change to the command line: a bounded (one MiB) read of one ER7 message
+through the same no-follow, descriptor-retaining first pass as the other
+boundary commands, a strict parse whose delimiters are exactly MSH-1 and
+MSH-2, and a closed segment allowlist of MSH, PID, GSP, OBR, and OBX. Every
+profile decision is a versioned constant (`HL7V2_ER7_PROFILE`, 0.1.0,
+`profile_reviewed` false and unsettable): PID-3 must carry the synthetic
+identifier system and the case's token; PID-5 name type `D` is the name to
+use; GSP-4 is a closed concept-type table carrying GI, pronouns, SPCU, and RSG
+each to its own concept; OBR and OBX are read only to locate SPCU context and
+supporting-observation tokens and to reject free text. PID-8 reaches
+`recorded_sex_or_gender` with context `administrative` and nothing else, by
+the type of the one function that reads it rather than by any table, and a
+property suite pins that over arbitrary values with a structural comparison
+against a closed set of rejections. A Z-segment, a populated field outside
+the profile, a repetition where one value is admitted, an unhandled escape,
+free text, a non-synthetic identifier, or a value the observation contract
+rejects fails the whole message with a code and a location. GSP-5.3, the
+coding system of a GSP value, is read only as the code system of a specified
+gender identity value and rejects everywhere else rather than being dropped,
+so a pronouns or SPCU token asserted in a vendor coding system cannot convert
+as the bare token and pass its rule; OBX-11 is required.
+B-024 is not closed: the profile is reference-only and no interoperability,
+clinical, or community reviewer has confirmed the `D` name-type code, the
+LOINC concept-type codes, or the decision to read RSG and SPCU from GSP when
+v2.9.1 also defines GSR and GSC for them (both reject as segments outside the
+allowlist); the 12 hours of interoperability review the estimate names have
+not happened; presence states are read from the literal tokens `declined`,
+`unknown`, and `absent` rather than from HL7 null flavors, and table 0001
+values other than the RSG contract's set (`U`, `O`, `A`, `N`) reject until a
+mapping profile (B-026) binds them; the message cannot state a checkpoint, so
+the requested one is applied and the result says so; MSH-7 is checked for
+shape only and never carried; a gender identity presence state is emitted
+with the unbound code system, the same as the canonical JSON importer, and
+whether a presence state may name a coding system at all is a B-026
+mapping-profile decision this importer settles by rejecting; the mutation
+gate's declared targets (`tools/mutation_gate.py`, ADR 0009) do not include
+the importer, so its accept and reject decisions have branch-coverage
+evidence, which measures execution, and no mutation evidence, which would
+measure detection; and the property suites cover the machine-checkable
+invariants, not adapter acceptance against a partner's interface-engine
+output.
+
+Implementation note (2026-09-04, B-025): the identity half of the LIS
+export reader exists as `contextsafe import --format lis-csv` and
+`--format lis-json`, registered into the B-022 registry with no change to
+`cli.py`. Each reads only the identity columns of a laboratory result export
+(`patient_id`, cross-checked against the case; `name_to_use`; `pronouns`;
+`sex`, mapped only to recorded sex or gender in the fixed context
+`laboratory`) into observations at `lis_return`, one per distinct value per
+column, so a result export that repeats the identity per row is not
+ambiguous with itself and rows that disagree stay ambiguous. The result
+columns (`analyte`, `value`, `unit`, `range`, `flag`, `order`, `specimen`)
+are recognized, bounded, scanned, and counted and produce no observation;
+the source gets the closed warning `result_columns_not_observed`. The column
+set is the versioned profile constant `LIS_PROFILE` 0.1.0 with
+`profile_reviewed` false and a type that refuses true. An unknown column or
+key, a formula-leading cell, an empty identity cell, a non-synthetic
+identifier anywhere, free text in any cell, a malformed record, or a bound
+overrun rejects the whole file by position. CSV is an RFC 4180 subset read
+by a strict reader of its own; JSON is the published
+`contextsafe-lis-export-v0.1.schema.json`. Both read through
+`preflight.read_source`, the boundary's bounded no-follow first pass, and
+hold every cell to `preflight.scan_text`. The reference set gains
+`lis-export.csv` and `lis-export.json`; both imports are pinned in the
+determinism matrix; `lis.py` and `lis_csv.py` are safety modules; one
+fixture per rule sits under `tests/fixtures/lis/`.
+B-025 is not closed: the profile is reference-only and the 4h laboratory
+review the row budgets has not happened, so no reviewer has said this is
+the shape of any export; the laboratory half — result, range, flag, order,
+and specimen observations — does not exist, because the observation contract
+has no concept for them and A-025..A-030 wait on B-030 and the B-011
+fixtures; values are carried as tokens with no mapping profile (B-026) to
+bind them, so a pronoun token or a laboratory-context sex value reports
+`semantic_mismatch` against the case manifest rather than pass or fail on
+its merits; an empty identity cell rejects rather than reading as `absent`,
+because deciding what an LIS's empty cell means is a profile decision; and
+the result's counts and warnings stay in process.
+
+Implementation note (2026-09-04, B-026): the versioned mapping profile
+exists as `schemas/contextsafe-mapping-profile-v1.schema.json`, a closed
+document naming the importer format it applies to, a SemVer version, a
+review record whose only admissible status is `not_reviewed` (no reviewer,
+no date; anything else rejects), and a table from source token — the
+carrier the importer read it from and the verbatim token — to the canonical
+concept and value the observation should carry. `contextsafe mapping
+validate --profile P.json --output canonical.json` emits the canonical
+unsigned profile and its SHA-256 as
+`contextsafe-compiled-mapping-profile-v1` (`signature_status:
+not_verified`, `executable: false`); `contextsafe mapping sign` from
+Architecture section 7 is not built. `contextsafe import ... --mapping
+PROFILE.json` validates the profile, requires it to be for the same format,
+converts as before, and applies the profile after parsing; without
+`--mapping` every importer keeps emitting verbatim tokens, byte-identical.
+Every importer now records a `SourceToken` (concept, carrier, token) beside
+each observation, and the registry's carrier table (`Importer.carriers`) is
+what a profile is validated against, so `PID-8` can be read only as
+recorded sex or gender and the FHIR sex-parameter URL is not a carrier at
+all. Validation rejects a row whose target is SPCU from a GI or RSG carrier
+first and by name (`prohibited_spcu_mapping`, A-020, A-021), any other
+cross-concept row, two rows collapsing two source values into one target
+(both are retained as distinct observations, which the evaluator reports
+ambiguous), a duplicate source, a target outside the synthetic grammar
+(`CSYN-`/`fixture-` tokens, `urn:contextsafe:` systems, the RSG alphabet, a
+closed set of recording contexts, a lowercase pronoun-set shape), and a
+sex-parameter target with any field but `value`, so a profile cannot bind an
+order context or a supporting observation. Every observation an import
+emits with a profile applied carries `profile_sha256` and `profile_version`
+in its mapping block — the observation-set contract is widened for the pair,
+required together, without a version bump, the way B-023 widened it — so
+`evaluate`'s input hash binds the profile. Five reference profiles ship as
+package data (`mapping-<format>.json`, exported by `fixtures export`), one
+per registered importer, binding the reference fixtures' tokens to the
+reference case's values so that import then evaluate passes every rule at
+the imported checkpoint and reports `missing_evidence`, never
+`semantic_mismatch`, for the rest; seventeen negative profiles, one per
+prohibited row class and more, sit under `tests/fixtures/mapping/`, each
+pinned to its code and location and to the layer that refuses it.
+`mapping_profile.py` and `importers/mapping.py` are safety modules;
+`import --mapping` per format and `mapping validate` are in the
+determinism matrix with pinned digests; the reference-receipt digest and the
+verbatim import digests are unchanged.
+B-026 is not closed: the "fixture approval" in the row's deliverable has
+not happened and cannot happen here — no interoperability reviewer has
+examined any profile, and the schema admits no status by which one could say
+so, deliberately; the reference profiles are synthetic bindings for the
+reference fixtures and not the mapping of any real system, and the
+recording context a row binds (the HL7 `PID-8` value to the case's
+`government-id` record) is a declaration the profile makes that nothing has
+confirmed; HL7 null flavors, the FHIR `data-absent-reason` codes beyond the
+three the reader already admits, and an LIS's empty cell are still not
+bound to presence states, because a profile row names a token the importer
+emitted and those sources reject before emitting one; a token with no row
+passes through verbatim with a closed warning rather than rejecting the
+source, a fail-closed alternative the maintainer may prefer; the synthetic
+target grammar (in particular the pronoun-set shape, admitted because the
+reference case's own value is `they/them`) is a reference-only choice no
+community reviewer has confirmed; the `mapping sign` command, a signer key,
+a trust manifest, and the enrolled ContextSafe interoperability reviewer it
+needs all wait on B-035; and the sibling `contextsafe-observation-v1`
+contract, which no runtime parser reads, carries no profile binding.
+
 ## Phase 4 — review and receipts
 
 | ID | Trace | Deliverable and acceptance | Owner | Dependency | Estimate |
@@ -323,9 +548,11 @@ logging failure never changes the exit code of the command it logged.
 B-046 is not closed. RG-12 also expects governed cleanup at a design partner
 (B-047, B-049), and this cleanup enumerates a local workspace, not a partner's
 non-production environment. The bundle covers the surfaces that exist; a signing
-path (B-035), FHIR/HL7/LIS adapters (B-023–B-025), and a review surface
+path (B-035), HL7/LIS adapters (B-024, B-025), and a review surface
 (B-032) would each add sections, and each would need the same constructive
-treatment. No independent security review of the bundle contents has happened
+treatment; the FHIR reader (B-023) and the canonical importer (B-022) exist
+and add none, because neither the diagnostics nor the bundle enumerates the
+importer registry's formats. No independent security review of the bundle contents has happened
 (B-040).
 
 ## Phase 6 — pilot and v1

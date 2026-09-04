@@ -1,0 +1,76 @@
+{
+  "resourceType": "Patient",
+  "id": "CSYN-CTP-I01",
+  "identifier": [
+    {
+      "system": "urn:contextsafe:synthetic",
+      "value": "CSYN-CTP-I01"
+    }
+  ],
+  "name": [
+    {
+      "use": "usual",
+      "family": "ZZZTESTCONTEXTSAFE",
+      "given": [
+        "CSYN-ASTER"
+      ]
+    },
+    {
+      "use": "usual",
+      "family": "ZZZTESTCONTEXTSAFE",
+      "given": [
+        "CSYN-ASTER-ALSO"
+      ]
+    }
+  ],
+  "extension": [
+    {
+      "url": "http://hl7.org/fhir/StructureDefinition/individual-genderIdentity",
+      "extension": [
+        {
+          "url": "value",
+          "valueCodeableConcept": {
+            "coding": [
+              {
+                "system": "urn:contextsafe:fixture",
+                "code": "CSYN-GENDER-1"
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "url": "http://hl7.org/fhir/StructureDefinition/individual-genderIdentity",
+      "extension": [
+        {
+          "url": "value",
+          "valueCodeableConcept": {
+            "coding": [
+              {
+                "system": "urn:contextsafe:fixture",
+                "code": "CSYN-GENDER-2"
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "url": "http://hl7.org/fhir/StructureDefinition/individual-pronouns",
+      "extension": [
+        {
+          "url": "value",
+          "valueCodeableConcept": {
+            "coding": [
+              {
+                "system": "urn:contextsafe:fixture",
+                "code": "CSYN-PRONOUN-THEY-THEM"
+              }
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}

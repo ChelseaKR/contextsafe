@@ -7,7 +7,7 @@ receipt that states its own limits. The clinically and community-governed
 service that would run it against a real health system is a plan, not a
 product.**
 
-The tool is here now. Ten subcommands, no network access, committed synthetic
+The tool is here now. Twelve subcommands, no network access, committed synthetic
 fixtures that ship inside the package. With
 [`uv`](https://docs.astral.sh/uv/) installed, this returns a full receipt:
 
@@ -283,7 +283,208 @@ The same iteration adds the operator surface (the B-046 slice):
   (command, outcome, error code) to a local append-only log. Off unless asked,
   never enabled from the environment, no message field, and no clock reading.
 
-The durable primitive has no CLI import route. Every iteration-3 evidence record says
+### B-022: canonical JSON import and the importer registry
+
+`contextsafe import --format canonical-json --source FILE --case CASE.json
+--checkpoint ehr --output observations.json` is the read-only conversion step
+between a boundary envelope and the evaluator. It opens the source once
+through the same evidence boundary scan as `evidence preflight` and emits the
+observation-set document `evaluate --observations` accepts, one observation
+per record: `evidence.source_sha256` is the digest of the source bytes,
+`evidence.source_pointer` is the record's own pointer, `mapping.mapping_version`
+is the importer's version, and the case token and synthetic identifier are
+cross-checked against the case document. It never persists, copies, indexes,
+or logs the source. `src/contextsafe/importers/` is the boundary the adapters
+that follow register into: a shared result with a closed warning vocabulary
+and an `import_*` rejection family, and a registry `--format` reads, so a new
+format is one module and one entry.
+
+What it does not claim. The conversion is whole or nothing: a field code
+outside the closed five-concept mapping, an untyped value, an identifier
+outside the synthetic namespace, a gender-identity, name, or pronouns record
+whose value is a recorded-sex code or a laboratory status rather than a
+presence state or a `CSYN-` token, or any value the observation contract
+rejects fails the source with a code and a location and produces nothing, and
+nothing is normalized to the closest supported value (A-033). Values are the
+source's own tokens, carried verbatim — `CSYN-PRONOUN-THEY-THEM` stays that
+string, not `they/them`; a name's `use` is `usual` because the contract admits
+nothing else, not because the source said so — so evaluating the imported
+reference source against the
+reference `rules.json` reports `semantic_mismatch` for the pronouns rule and
+`missing_evidence` for the rest. That is correct: the tool has not been told
+the two are the same; a mapping profile passed with `--mapping` (B-026) is
+what says so, and every result records `profile_reviewed: false` either
+way. The mapping is reference-only and ungoverned. The source's `plan_id` is checked
+for shape and not against a plan, sex-parameter records reject rather than
+arrive without the supporting-observation link the concept needs, and the
+result's counts and warnings stay in process because the observation-set
+contract has no field for them.
+
+### B-023: FHIR R4 JSON reader
+
+`contextsafe import --format fhir-r4-json --source PATIENT.json --case CASE.json
+--checkpoint ehr --output observations.json` reads one FHIR R4 JSON
+`Patient` -- alone, or as the only entry of a `collection` or `searchset`
+`Bundle` -- through the same boundary scan as every other format and an exact
+element allowlist, and emits the observation-set document `evaluate` accepts.
+The HL7 Gender Harmony extensions map to the canonical concepts by name:
+`individual-genderIdentity` to gender identity, `individual-pronouns` to
+pronouns, `individual-recordedSexOrGender` to recorded sex or gender with its
+`type` sub-extension as the context, and the `HumanName` whose `use` is
+`usual` to name to use. Every observation carries the source digest, the
+profile version, and an RFC 6901 JSON Pointer to the element it was read from.
+Two gender-identity extensions, or two usual names, are two observations, and
+the evaluator reports them as ambiguous. The packaged reference set carries
+[`fhir-patient.json`](src/contextsafe/fixtures/reference/fhir-patient.json),
+the accepting synthetic Patient for CTP-I01; the accepted subset is published
+as the reference-only
+[FHIR R4 source profile](schemas/contextsafe-fhir-r4-source-v0.1.schema.json).
+
+What it does not claim. The conversion is whole or nothing, and nothing
+outside the allowlist is dropped: a narrative, a contained resource, any element outside the allowlist
+(`gender`, `meta`, `telecom`, `address`, `birthDate` included), any extension
+or sub-extension outside the profile (`comment`, `period`), a `display`, a
+reference, an identifier outside `urn:contextsafe:synthetic` / `CSYN-`, a
+coded value or name part outside the synthetic alphabet, a name with no part,
+a `data-absent-reason` coding on recorded sex or gender (the canonical
+concept has no presence state, so that system's `unknown` is never read as
+the recorded value `unknown`), a document over one MiB, or a Patient carrying
+none of the concepts rejects the whole source with a code and a location, and
+a fixture per class is committed under `tests/fixtures/fhir-r4-json/`. A
+recorded-sex-or-gender code outside the observation contract's closed
+alphabet, and any coding system or code over the contract's 96-character
+token bound, reject at their own location in the FHIR document, so no
+rejection names a path in the converted document. What the allowlist admits
+and the canonical model cannot hold is validated and not carried, and the
+list is closed: `Patient.id`, `Patient.active`, every `HumanName` whose
+`use` is not `usual`, `family` on the usual name, the pronouns coding's
+system, and the recorded-sex-or-gender value's system; each is a bounded
+token, a boolean, or a synthetic name part, but an emitted observation set is
+the five concepts and not the whole Patient. Values are the coding's own tokens, verbatim,
+so evaluating the reference Patient against the reference rules passes the
+name-to-use rule (the token is identical), reports `semantic_mismatch` for
+the unbound gender-identity and pronoun tokens, and leaves the two rules at
+other checkpoints indeterminate. Sex parameter for clinical use comes only
+from its own extension and this iteration does not carry it: no allowlisted
+resource carries an order context or a supporting observation, so the
+extension rejects. The reader's choices where the implementation guide is
+uncertain are one versioned profile constant whose `reviewed` field is false
+and cannot be set; no interoperability, clinical, or community reviewer has
+examined it, it is not a FHIR conformance profile, and it reads a file, never
+an endpoint.
+
+### B-024: HL7 v2 ER7 reader
+
+`contextsafe import --format hl7v2-er7 --source MESSAGE.hl7 --case CASE.json
+--checkpoint ehr --output observations.json` reads one ER7 message of at most
+one MiB through the same bounded, no-follow, descriptor-retaining first pass
+as the other boundary commands and converts it, whole or not at all, into the
+same observation-set document. Delimiters are the five characters MSH-1 and
+MSH-2 declare, exactly; segments end with the carriage return the standard
+fixes; only the five delimiter escapes are handled. The segment allowlist is
+MSH, PID, GSP, OBR, and OBX, and a Z-segment, a populated field the profile
+does not name, a repetition where the profile admits one value, an unhandled
+escape, free text, a control character, a PHI canary, a direct-identifier
+pattern, a production processing ID, or a patient identifier outside the
+synthetic namespace rejects the message with a code and a
+`SEG[n]-field.rep.comp` location, never the content. PID-8 Administrative
+Sex is read by exactly one function whose return type is
+`RecordedSexOrGender`, and an observation's concept is a function of the
+type of its value, so PID-8 arrives as `recorded_sex_or_gender` with the
+context `administrative` and can reach neither gender identity nor sex
+parameter for clinical use on any input; a property suite pins it. The
+packaged `hl7v2-er7-message.hl7` is an accepting synthetic message for
+CTP-I01, and `tests/fixtures/hl7v2/` holds three rejection messages.
+
+What it does not claim. Every decision is a constant in
+`HL7V2_ER7_PROFILE`, version 0.1.0, `profile_reviewed: false` and unsettable:
+the name-type code `D` for name to use, the LOINC concept-type codes GSP-4
+may carry, and the reading of recorded sex or gender and sex parameter for
+clinical use from GSP (v2.9.1 also defines GSR and GSC for them, and both
+reject as segments outside the allowlist) are choices no interoperability,
+clinical, or community reviewer has confirmed. Values are carried verbatim:
+`U` in PID-8 is not turned into `unknown`, it rejects, and presence states
+are read from the literal tokens `declined`, `unknown`, and `absent` rather
+than from HL7 null flavors, which a mapping profile (B-026) still cannot
+bind because the reader rejects them before emitting a token. A
+coding system in GSP-5.3 is read only as the `code_system` of a specified
+gender identity value; with pronouns, recorded sex or gender, sex parameter
+for clinical use, or a presence state it rejects the message rather than
+being dropped, so a token asserted in a vendor namespace is never carried as
+if it were the fixture's own. The message cannot state a checkpoint, so the
+requested one is applied to every observation and the in-process result
+says so.
+
+### B-025: LIS export identity columns as `lis-csv` and `lis-json`
+
+`contextsafe import --format lis-csv --source fixtures/reference/lis-export.csv
+--case fixtures/reference/case.json --checkpoint lis_return` (and `lis-json`
+over `lis-export.json`) reads the identity columns of a laboratory result
+export — the name, pronouns, and recorded sex a result-facing display would
+show (A-031) — into name-to-use, pronoun, and recorded-sex-or-gender
+observations at `lis_return`, one per distinct value per column, pointed at
+the first row that carries it. The column set is a versioned, reference-only
+profile with `profile_reviewed: false`: `patient_id` cross-checked against
+the case; `name_to_use`, `pronouns`, and `sex`, where `sex` becomes recorded
+sex or gender in the fixed context `laboratory` and never gender identity or
+sex parameter for clinical use; and `analyte`, `value`, `unit`, `range`,
+`flag`, `order`, `specimen`, which are recognized, scanned, and counted and
+produce no observation, because the laboratory result observation family is
+a later item. CSV is a strict RFC 4180 subset; JSON is the published
+[LIS export contract](schemas/contextsafe-lis-export-v0.1.schema.json). Both
+come through the evidence boundary's own read path, and any other column, a
+cell beginning with `=`, `+`, `-`, or `@`, an empty identity cell, an
+identifier outside the synthetic namespace anywhere, or a cell the boundary
+scan refuses rejects the whole file with a code and a position, never a
+value. Rows that disagree stay ambiguous and never pass. No laboratory,
+interoperability, clinical, or community reviewer has seen the profile; it
+is not the shape of any real system's export, and no result observation
+exists yet.
+
+### B-026: the versioned mapping profile
+
+`contextsafe import ... --mapping fixtures/reference/mapping-fhir-r4-json.json`
+applies a mapping profile after the conversion, and
+`contextsafe mapping validate --profile P.json --output canonical.json` emits
+a profile's canonical unsigned form with its SHA-256. A profile is a closed,
+versioned table for one importer format, from a source token — the carrier
+it was read from (a field code, an extension URL or `Patient.name`, `PID-5`,
+`PID-8`, or `GSP-5`, a column) and the verbatim token — to the canonical
+concept and value the observation should carry, published as the
+[mapping profile contract](schemas/contextsafe-mapping-profile-v1.schema.json)
+with its [compiled form](schemas/contextsafe-compiled-mapping-profile-v1.schema.json).
+Every importer now records the source token beside each observation, so a
+row matches on what the source said, not on the value the importer built.
+Every observation an import emits with a profile applied carries the
+profile's digest and version in its `mapping` block, so `evaluate`'s input
+hash binds them. Without `--mapping`, importers keep emitting verbatim
+tokens, byte for byte as before. Five reference profiles ship as package
+data, one per importer, binding each reference fixture's tokens to the
+reference case's values: with them, import followed by evaluate passes
+every rule at the imported checkpoint and reports `missing_evidence`,
+never `semantic_mismatch`, for the rest.
+
+What it does not claim. A profile's only admissible review status is
+`not_reviewed`, with no reviewer and no date, and any other declaration
+rejects it: a declared approval authorizes nothing, exactly as on a pack,
+and `contextsafe mapping sign` is not built. A row whose target is sex
+parameter for clinical use from a gender-identity or recorded-sex carrier
+rejects first and by name (`prohibited_spcu_mapping`, A-020 and A-021), any
+other cross-concept row rejects, two rows collapsing two source values into
+one target reject (both stay distinct observations, which evaluate as
+ambiguous), a target outside the synthetic grammar rejects, and a
+sex-parameter row binds the value token only — never an order context or a
+supporting observation. A token with no row stays verbatim and the result
+says so. The reference profiles are synthetic bindings for the reference
+fixtures, not the mapping of any real system; no interoperability,
+clinical, laboratory, or community reviewer has seen one; HL7 null flavors
+and an LIS's empty cell are still not bound to presence states; and the
+recording context a profile binds (a `PID-8` value to the `government-id`
+record, say) is a declaration the profile's author makes and nothing here
+has confirmed.
+
+The durable evidence store has no CLI import route; `contextsafe import` writes
+only an observation-set document and never an evidence record. Every iteration-3 evidence record says
 `authorization_status: not_verified_internal_test_only` and
 `usable_for_execution: false`; a future signature-verification layer may not relabel
 these records. The preflight scanner is a fallible boundary check, not proof that bytes
@@ -298,10 +499,11 @@ real clinical or community review occurred. The committed
 no approvals, and must fail compilation. Tests construct visibly test-only approval
 declarations in memory solely to exercise the state machine.
 
-These slices have no signatures, FHIR/HL7/LIS adapters, clinical oracle, HTML report,
+These slices have no signatures, HL7/LIS adapters, clinical oracle, HTML report,
 network access, authorized evidence-import command, hosted service, or approved
 patient-data pathway. Iteration 3 contains internal-test-only local persistence, but
-none of its records can authorize execution or support a receipt.
+none of its records can authorize execution or support a receipt. The FHIR R4
+reader converts one synthetic file and is not an adapter to any system.
 Patient data is prohibited, but bounded checks cannot prove an input is synthetic.
 Its fixture rules use invented tokens and are not medical guidance. It was built
 ahead of the plan's discovery and governance gates as internal risk-reduction work,
@@ -368,8 +570,8 @@ zones, locales, hash seeds, UTF-8 modes, working directories, and input
 directories and requires byte-identical results, and a CI matrix reproduces the
 pinned reference-receipt digest on Ubuntu, macOS, and Windows. That is
 byte-reproducibility evidence only; it is not packaging, fresh-install, or
-release evidence. `pack validate`, `plan validate`, and `evidence preflight`
-need descriptor-relative no-follow reads, so on a platform without them —
+release evidence. `pack validate`, `plan validate`, `evidence preflight`, and
+`import` need descriptor-relative no-follow reads, so on a platform without them —
 Windows included — they fail closed with `input_path_unsupported` rather than
 run with a weaker guarantee.
 
