@@ -89,7 +89,7 @@ class ImportErrorCode(StrEnum):
     """An extension or sub-extension name has no entry in the format's profile."""
 
     IDENTIFIER_NOT_SYNTHETIC = "import_identifier_not_synthetic"
-    """An identifier or resource id is outside the synthetic namespace."""
+    """An identifier, resource id, or identifier cell is outside the synthetic namespace."""
 
     VALUE_UNSUPPORTED = "import_value_unsupported"
     """A coded value or name part is outside the closed alphabet the profile admits."""
@@ -112,6 +112,27 @@ class ImportErrorCode(StrEnum):
     VALUE_NOT_IN_PROFILE = "import_value_not_in_profile"
     """A coded value, type, or shape is outside the profile's closed set."""
 
+    SOURCE_MALFORMED = "import_source_malformed"
+    """The source does not follow the grammar its format requires."""
+
+    BOUND_EXCEEDED = "import_bound_exceeded"
+    """A row, column, or cell count or length is outside the format's bounds."""
+
+    COLUMN_UNKNOWN = "import_column_unknown"
+    """A header or key is outside the format's closed column allowlist."""
+
+    COLUMN_DUPLICATE = "import_column_duplicate"
+    """A header or key appears more than once in the same table."""
+
+    COLUMN_MISSING = "import_column_missing"
+    """A column the format requires, or a column another row carries, is absent."""
+
+    FORMULA_CELL = "import_formula_cell"
+    """A cell begins with a character a spreadsheet would execute."""
+
+    CELL_FREE_TEXT = "import_cell_free_text"
+    """A cell is free text where a bounded token is required, which is everywhere."""
+
 
 class ImportWarningCode(StrEnum):
     """Everything an importer may say about a conversion beyond its output."""
@@ -127,6 +148,9 @@ class ImportWarningCode(StrEnum):
 
     CHECKPOINT_NOT_IN_SOURCE = "checkpoint_not_in_source"
     """The source cannot state a checkpoint; the requested one was applied."""
+
+    RESULT_COLUMNS_NOT_OBSERVED = "result_columns_not_observed"
+    """The source carries laboratory result columns that became no observation."""
 
 
 UNBOUND_CODE_SYSTEM = "urn:contextsafe:unbound-code-system"
@@ -161,6 +185,13 @@ class ImportResult:
     are the denominator a caller can check that against. ``warnings`` is the
     closed set of limits this conversion carries. ``profile_reviewed`` is
     always ``False`` here and is not a field a caller sets.
+
+    ``unobserved_cell_count`` is the number of cells the importer recognized
+    under a column its profile names and deliberately did not convert: the
+    laboratory result columns of an LIS export, whose observation family is
+    a later item. It counts what was read and not claimed, so a caller
+    holding the result can see that the source carried more than the
+    observations say. It is zero for a format with no such column.
     """
 
     format_name: str
@@ -171,6 +202,7 @@ class ImportResult:
     observations: tuple[Observation, ...]
     warnings: tuple[ImportWarningCode, ...]
     profile_reviewed: bool = False
+    unobserved_cell_count: int = 0
 
     def __post_init__(self) -> None:
         if self.profile_reviewed:
@@ -184,6 +216,12 @@ class ImportResult:
                 "import_count_mismatch",
                 "$.observations",
                 "every accepted record must become exactly one observation",
+            )
+        if self.unobserved_cell_count < 0:
+            raise contract_error(
+                "import_count_mismatch",
+                "$.unobserved_cell_count",
+                "a count of unobserved cells cannot be negative",
             )
 
     def observation_set(self) -> dict[str, JsonValue]:
@@ -217,6 +255,7 @@ class ImportResult:
             "record_count": self.record_count,
             "source_byte_count": self.source_byte_count,
             "source_sha256": self.source_sha256,
+            "unobserved_cell_count": self.unobserved_cell_count,
             "warnings": [item.value for item in self.warnings],
         }
 

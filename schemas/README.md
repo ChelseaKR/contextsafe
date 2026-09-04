@@ -5,7 +5,7 @@ document shape. They are the published half of the fail-closed boundary: the
 runtime has no dependencies and does not validate its own output at run time,
 so these files are what a consumer validates against, and
 `tests/test_contracts.py` and `tests/test_receipt_schema.py` are what keep them
-in agreement with the code. There are twelve contracts:
+in agreement with the code. There are 13 contracts:
 
 | Contract | Shape |
 | --- | --- |
@@ -21,6 +21,13 @@ in agreement with the code. There are twelve contracts:
 | `contextsafe-plan-v1.schema.json` | an execution plan |
 | `contextsafe-compiled-plan-v1.schema.json` | the unsigned compiled plan |
 | `contextsafe-receipt-v0.1.schema.json` | the receipt document: deterministic payload plus untrusted envelope |
+| `contextsafe-lis-export-v0.1.schema.json` | the synthetic LIS export identity profile `import --format lis-json` reads; reference-only, ungoverned, result columns recognized but not observed |
+
+That is 13 contracts. The LIS export profile is an *input* shape rather
+than an output one: it says what `contextsafe import --format lis-json` will
+read, and `tests/test_lis_export_schema.py` keeps it in agreement with the
+runtime's column allowlist and cell grammars. It is not a claim that any
+laboratory system exports this shape.
 
 ## Why every `$id` is under a domain that will never resolve
 

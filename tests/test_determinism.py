@@ -83,6 +83,19 @@ bytes on the way in. It moves only with the reference message, the case
 document, or the importer's mapping version.
 """
 
+LIS_OBSERVATIONS_SHA256: dict[str, str] = {
+    "lis-csv": "f05fccb363fc34fe65aa0b05b414206208b46e1ad025e6b690caab83704756c3",
+    "lis-json": "d76e4d08e02538ca6d8499de5c55893dca6d42b52feadd3027dd115e5138e395",
+}
+"""SHA-256 of ``import`` over each reference LIS export, terminal newline included.
+
+Two constants because the two exports are different bytes and every
+observation carries its source's digest; everything else in the two
+documents is identical, which ``tests/test_lis_import.py`` pins. They move
+only with the reference exports, the case document, or the LIS profile
+version.
+"""
+
 _ENVIRONMENTS: tuple[dict[str, str], ...] = (
     {
         "TZ": "UTC",
@@ -603,6 +616,78 @@ def test_fhir_import_rejection_is_deterministic(tmp_path: Path) -> None:
     _assert_canonical_line(runs[0].stderr)
     assert json.loads(runs[0].stderr.decode("utf-8"))["error"]["code"] == (
         "import_concept_not_convertible"
+    )
+
+
+@pytest.mark.skipif(os.name == "nt", reason=_WINDOWS_UNSUPPORTED)
+@pytest.mark.parametrize(
+    ("format_name", "source"),
+    [
+        ("lis-csv", "lis-export.csv"),
+        ("lis-json", "lis-export.json"),
+    ],
+)
+def test_lis_import_observation_set_is_deterministic_and_pinned(
+    tmp_path: Path, format_name: str, source: str
+) -> None:
+    """Both LIS readers are byte-stable, and each digest is one constant.
+
+    The CSV reader is a grammar of its own rather than the JSON parser, so
+    it gets its own pin: a locale-dependent decode, a platform line-ending
+    translation, or an ordering that depended on hash seed would show here.
+    """
+
+    runs = _three_runs(
+        tmp_path,
+        lambda reference: [
+            "import",
+            "--format",
+            format_name,
+            "--source",
+            str(reference / source),
+            "--case",
+            str(reference / "case.json"),
+            "--checkpoint",
+            "lis_return",
+        ],
+        with_output=True,
+    )
+    _assert_identical(runs)
+    assert runs[0].returncode == 0
+    assert runs[0].stdout == b""
+    assert runs[0].stderr == b""
+    artifact = runs[0].artifact
+    assert artifact is not None
+    _assert_canonical_line(artifact)
+    assert hashlib.sha256(artifact).hexdigest() == LIS_OBSERVATIONS_SHA256[format_name]
+    for fragment in (str(tmp_path), str(ROOT), "Kiritimati", "en_US", "inputs-b"):
+        assert fragment.encode("utf-8") not in artifact
+
+
+@pytest.mark.skipif(os.name == "nt", reason=_WINDOWS_UNSUPPORTED)
+def test_lis_import_rejection_is_deterministic(tmp_path: Path) -> None:
+    """A rejected LIS import is the same one-line error object on every run."""
+
+    runs = _three_runs(
+        tmp_path,
+        lambda reference: [
+            "import",
+            "--format",
+            "lis-csv",
+            "--source",
+            str(reference / "lis-export.csv"),
+            "--case",
+            str(reference / "case.json"),
+            "--checkpoint",
+            "ehr",
+        ],
+    )
+    _assert_identical(runs)
+    assert runs[0].returncode == 2
+    assert runs[0].stdout == b""
+    _assert_canonical_line(runs[0].stderr)
+    assert json.loads(runs[0].stderr.decode("utf-8"))["error"]["code"] == (
+        "import_checkpoint_mismatch"
     )
 
 

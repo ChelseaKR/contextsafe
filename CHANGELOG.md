@@ -318,6 +318,94 @@ rather than after it.
   GSR and GSC segments v2.9.1 also defines, and nothing it emits can
   authorize execution or relabel an unsigned artifact.
 
+- **`contextsafe import --format lis-csv` and `--format lis-json`: the
+  identity half of the LIS export reader (B-025).** A laboratory result
+  export carries the patient's identity beside the results, and that identity
+  is what a result-facing display shows (A-031). Two importers register into
+  the B-022 registry, with no change to `cli.py`, and read *only* the identity
+  columns of such an export into name-to-use, pronoun, and
+  recorded-sex-or-gender observations at `lis_return`. The column set is a
+  versioned profile constant, `LIS_PROFILE` 0.1.0, whose `profile_reviewed`
+  is `false` and whose type refuses `true`: `patient_id` on every row,
+  cross-checked against the case document; `name_to_use`, `pronouns`, and
+  `sex`, which are read, with `sex` mapping only to recorded sex or gender in
+  the fixed context `laboratory` and never to gender identity or sex
+  parameter for clinical use; and `analyte`, `value`, `unit`, `range`,
+  `flag`, `order`, and `specimen`, which are recognized, bounded, scanned,
+  and counted and produce no observation, because the laboratory result
+  observation family is a later item (B-030) and the observation contract
+  has no concept for a result. A source that carries them gets the new closed
+  warning `result_columns_not_observed` and `ImportResult` gains
+  `unobserved_cell_count`, the number of cells read and not claimed.
+
+  The conversion is whole or nothing. A column or key outside the allowlist
+  (a `gender_identity` or `sex_parameter_for_clinical_use` column included),
+  a duplicate column, a missing `patient_id`, a table with no identity
+  column, a row count outside 1 to 2,000, a cell over 128 characters, a cell
+  beginning with `=`, `+`, `-`, or `@`, an empty identity cell, a cell that
+  says `specified` without a value, a name or pronoun cell that is neither a
+  presence state nor a `CSYN-` token, a `sex` value the observation contract
+  does not admit (`f` is not read as `F`), an `order` or `specimen` cell
+  outside the synthetic namespace, a result cell with whitespace in it, a
+  `patient_id` that is not a synthetic case token or names another case, and
+  any cell the evidence boundary scan refuses (boundary whitespace, a control
+  or format character, a PHI canary, a direct-identifier pattern) each reject
+  the whole file with a code and a position — a header index, a row and
+  column name from the profile, or a record and field index — and never a
+  cell or a key. Seven codes join the `import_*` family for this:
+  `import_source_malformed`, `import_bound_exceeded`,
+  `import_column_unknown`, `import_column_duplicate`,
+  `import_column_missing`, `import_formula_cell`,
+  `import_identifier_not_synthetic`, and `import_cell_free_text`. Any
+  checkpoint but `lis_return` rejects before the file is opened.
+
+  CSV is an RFC 4180 subset read by a strict reader of its own in
+  `importers/lis_csv.py` (UTF-8, no byte-order mark, CRLF or LF, a header
+  row, quoted fields with doubled quotes, no embedded line break, no bare
+  CR, no bare quote, every record the header's width), because the standard
+  `csv` module carries a line break inside a quoted field and a boundary
+  reader must mean one thing. JSON is the new published contract
+  `schemas/contextsafe-lis-export-v0.1.schema.json`, an input shape whose
+  rows are objects over the same allowlist and must all carry the same key
+  set; `tests/test_lis_export_schema.py` keeps it in agreement with the
+  runtime's allowlist and grammars and records which rejections the schema
+  alone catches. Both formats come through the evidence boundary's own open
+  path: `preflight.read_source` is the bounded, no-follow, one MiB,
+  metadata-unchanged first pass stopped before the JSON parse, and
+  `preflight.scan_text` is the per-string half of the boundary scan made
+  public so a CSV cell is held to exactly the rule an envelope string is;
+  the LIS column names join the closed set of keys a rejection path may
+  name. A result export repeats the identity on every row, so one
+  observation is emitted per distinct value per identity column, pointed at
+  the first row that carries it; rows that disagree produce one observation
+  each and evaluate as ambiguous rather than pass. Nothing is chosen between
+  them, and an empty identity cell is not read as `absent`.
+
+  The packaged reference set gains `lis-export.csv` and `lis-export.json`
+  (invented tokens; not the shape of any real system's export), so
+  `fixtures export` now writes seven files. Both LIS imports are in the
+  three-run determinism matrix with pinned artifact digests, and `lis.py`
+  and `lis_csv.py` are declared safety modules. One fixture per rule sits
+  under `tests/fixtures/lis/`, accepting and rejecting, and Hypothesis
+  suites pin that both readers agree on any table, that any unknown column
+  or foreign case identifier rejects the whole table with a fixed error
+  object, and that a formula prefix in any cell does the same.
+
+  What it does not claim. The profile is reference-only and ungoverned: no
+  laboratory, interoperability, clinical, or community reviewer has approved
+  it as the shape of any export, and the 4h laboratory review the backlog
+  row budgets has not happened. Values are carried as tokens with no mapping
+  profile to bind them, so evaluating the reference export against a
+  `lis_return` rule passes the name (the same `CSYN-ASTER` on both sides)
+  and reports `semantic_mismatch` for the pronoun token and the
+  laboratory-context sex value, and against the shipped `rules.json`, which
+  names no `lis_return` checkpoint, everything stays `missing_evidence`. No
+  laboratory result observation exists yet; the result columns are counted
+  and nothing more. `ImportResult.to_dict` gains a key, but that report has
+  no schema and no command emits it. No existing contract version moved, the
+  pinned reference-receipt and canonical-import digests are unchanged, and
+  no runtime dependency was added.
+
 ## [0.1.0] - 2026-09-02
 
 ### Fixed

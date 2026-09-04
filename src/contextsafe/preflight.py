@@ -40,6 +40,7 @@ __all__ = [
     "open_preflighted_source",
     "read_source",
     "scan_source",
+    "scan_text",
 ]
 
 MAX_EVIDENCE_BYTES = 1_048_576
@@ -76,21 +77,40 @@ _PROHIBITED_KEYS = frozenset(
 )
 _SAFE_PATH_KEYS = frozenset(
     {
+        "analyte",
         "case_token",
         "checkpoint",
         "context_code",
         "field_code",
+        "flag",
+        "name_to_use",
+        "order",
+        "patient_id",
         "plan_id",
+        "pronouns",
+        "range",
         "records",
+        "rows",
         "schema_version",
+        "sex",
         "source_pointer",
         "source_type",
+        "specimen",
         "synthetic_identifier",
         "system",
+        "unit",
         "value",
         "value_code",
     }
 )
+"""Keys a rejection path may name.
+
+Every one is a fixed field name from a published contract: the canonical
+evidence envelope's, and the LIS export profile's (``rows`` and its column
+allowlist). A key outside this set is never written into a path, so a source
+whose keys are themselves free text cannot put that text on stderr by way of
+the location of the defect.
+"""
 
 
 @dataclass(frozen=True, slots=True)
@@ -370,7 +390,17 @@ def _read_first_pass(file_descriptor: int) -> tuple[bytes, str]:
     return b"".join(chunks), digest.hexdigest()
 
 
-def _reject_unsafe_string(value: str, path: str) -> None:
+def scan_text(value: str, path: str) -> None:
+    """Reject one string the boundary would not carry, naming ``path`` only.
+
+    Boundary whitespace, a control or format character, a configured PHI
+    canary, or a direct-identifier pattern each reject with a fixed code.
+    This is the per-string half of the boundary scan, public so a format
+    whose cells are not JSON strings (the LIS CSV export) can hold every
+    cell to exactly the rule the canonical envelope's strings are held to.
+    The value never enters the error.
+    """
+
     if value != value.strip():
         raise ContextSafeError(
             "unapproved_free_text",
@@ -409,7 +439,7 @@ def _boundary_scan(value: object, profile: BoundaryProfile) -> None:
         item, path = pending.pop()
         if isinstance(item, dict):
             for key, child in item.items():
-                _reject_unsafe_string(key, path)
+                scan_text(key, path)
                 if _normalized_key(key) in prohibited:
                     raise ContextSafeError(
                         "prohibited_field",
@@ -425,7 +455,7 @@ def _boundary_scan(value: object, profile: BoundaryProfile) -> None:
         elif isinstance(item, str) and item not in profile.published_constants:
             # The exemption is by exact equality at any position, by design: a
             # published identifier is not content wherever the format puts it.
-            _reject_unsafe_string(item, path)
+            scan_text(item, path)
 
 
 def _read_open_descriptor(

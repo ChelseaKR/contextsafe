@@ -24,6 +24,7 @@ from contextsafe.importers.base import (
 from contextsafe.importers.canonical_json import CANONICAL_JSON_IMPORTER
 from contextsafe.importers.fhir_r4_json import FHIR_R4_JSON_IMPORTER
 from contextsafe.importers.hl7v2_er7 import HL7V2_ER7_IMPORTER
+from contextsafe.importers.lis import LIS_CSV_IMPORTER, LIS_JSON_IMPORTER
 from contextsafe.models import Checkpoint, SyntheticCase
 
 __all__ = [
@@ -43,9 +44,16 @@ REGISTRY: Mapping[str, Importer] = MappingProxyType(
         CANONICAL_JSON_IMPORTER.format_name: CANONICAL_JSON_IMPORTER,
         FHIR_R4_JSON_IMPORTER.format_name: FHIR_R4_JSON_IMPORTER,
         HL7V2_ER7_IMPORTER.format_name: HL7V2_ER7_IMPORTER,
+        LIS_CSV_IMPORTER.format_name: LIS_CSV_IMPORTER,
+        LIS_JSON_IMPORTER.format_name: LIS_JSON_IMPORTER,
     }
 )
-"""Every registered format, by the name ``--format`` selects it with."""
+"""Every registered format, by the name ``--format`` selects it with.
+
+``lis-csv`` and ``lis-json`` (B-025) read the identity columns of a
+laboratory result export at ``lis_return`` and nothing else; the result
+columns wait for the laboratory observation family.
+"""
 
 
 def available_formats() -> tuple[str, ...]:

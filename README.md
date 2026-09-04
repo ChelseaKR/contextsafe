@@ -414,6 +414,32 @@ if it were the fixture's own. The message cannot state a checkpoint, so the
 requested one is applied to every observation and the in-process result
 says so.
 
+### B-025: LIS export identity columns as `lis-csv` and `lis-json`
+
+`contextsafe import --format lis-csv --source fixtures/reference/lis-export.csv
+--case fixtures/reference/case.json --checkpoint lis_return` (and `lis-json`
+over `lis-export.json`) reads the identity columns of a laboratory result
+export — the name, pronouns, and recorded sex a result-facing display would
+show (A-031) — into name-to-use, pronoun, and recorded-sex-or-gender
+observations at `lis_return`, one per distinct value per column, pointed at
+the first row that carries it. The column set is a versioned, reference-only
+profile with `profile_reviewed: false`: `patient_id` cross-checked against
+the case; `name_to_use`, `pronouns`, and `sex`, where `sex` becomes recorded
+sex or gender in the fixed context `laboratory` and never gender identity or
+sex parameter for clinical use; and `analyte`, `value`, `unit`, `range`,
+`flag`, `order`, `specimen`, which are recognized, scanned, and counted and
+produce no observation, because the laboratory result observation family is
+a later item. CSV is a strict RFC 4180 subset; JSON is the published
+[LIS export contract](schemas/contextsafe-lis-export-v0.1.schema.json). Both
+come through the evidence boundary's own read path, and any other column, a
+cell beginning with `=`, `+`, `-`, or `@`, an empty identity cell, an
+identifier outside the synthetic namespace anywhere, or a cell the boundary
+scan refuses rejects the whole file with a code and a position, never a
+value. Rows that disagree stay ambiguous and never pass. No laboratory,
+interoperability, clinical, or community reviewer has seen the profile; it
+is not the shape of any real system's export, and no result observation
+exists yet.
+
 The durable evidence store has no CLI import route; `contextsafe import` writes
 only an observation-set document and never an evidence record. Every iteration-3 evidence record says
 `authorization_status: not_verified_internal_test_only` and

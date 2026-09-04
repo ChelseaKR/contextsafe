@@ -1,6 +1,6 @@
 """The packaged synthetic reference fixtures, and the command that exports them.
 
-The six reference inputs under ``fixtures/reference`` beside this module are
+The nine reference inputs under ``fixtures/reference`` beside this module are
 package data, so an installed wheel carries them exactly as a checkout does.
 Every documented quickstart names them by the relative path
 ``fixtures/reference/<name>``; ``contextsafe fixtures export`` writes them to
@@ -34,6 +34,8 @@ REFERENCE_FILES: tuple[str, ...] = (
     "evidence-source.json",
     "fhir-patient.json",
     "hl7v2-er7-message.hl7",
+    "lis-export.csv",
+    "lis-export.json",
     "observations.json",
     "pack-draft.json",
     "rules.json",
@@ -41,7 +43,10 @@ REFERENCE_FILES: tuple[str, ...] = (
 """The complete reference set, named rather than globbed.
 
 A glob over an incomplete install would export a shorter list and call it
-done. Naming the files makes a missing one a failure instead.
+done. Naming the files makes a missing one a failure instead. The two
+``lis-export`` files are the synthetic laboratory export the ``lis-csv`` and
+``lis-json`` importers read (B-025); their tokens are invented and they are
+not the shape of any real system's export.
 """
 
 DEFAULT_EXPORT_DIRECTORY = Path("fixtures") / "reference"

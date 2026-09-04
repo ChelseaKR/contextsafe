@@ -1,0 +1,31 @@
+{
+  "schema_version": "contextsafe.lis-export/0.1.0",
+  "rows": [
+    {
+      "patient_id": "CSYN-CTP-I01",
+      "name_to_use": "CSYN-ASTER",
+      "pronouns": "CSYN-PRONOUN-THEY-THEM",
+      "sex": "X",
+      "analyte": "CSYN-ANALYTE-K",
+      "value": "4.1",
+      "unit": "mmol/L",
+      "range": "3.5-5.5",
+      "flag": "N",
+      "order": "ORDER-CSYN-I01-A",
+      "specimen": "CSYN-SPECIMEN-I01-A"
+    },
+    {
+      "patient_id": "CSYN-CTP-I01",
+      "name_to_use": "CSYN-ASTER",
+      "pronouns": "CSYN-PRONOUN-THEY-THEM",
+      "sex": "X",
+      "analyte": "CSYN-ANALYTE-NA",
+      "value": "140",
+      "unit": "mmol/L",
+      "range": "",
+      "flag": "",
+      "order": "ORDER-CSYN-I01-A",
+      "specimen": "CSYN-SPECIMEN-I01-A"
+    }
+  ]
+}

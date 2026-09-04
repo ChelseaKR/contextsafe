@@ -272,6 +272,42 @@ measure detection; and the property suites cover the machine-checkable
 invariants, not adapter acceptance against a partner's interface-engine
 output.
 
+Implementation note (2026-09-04, B-025): the identity half of the LIS
+export reader exists as `contextsafe import --format lis-csv` and
+`--format lis-json`, registered into the B-022 registry with no change to
+`cli.py`. Each reads only the identity columns of a laboratory result export
+(`patient_id`, cross-checked against the case; `name_to_use`; `pronouns`;
+`sex`, mapped only to recorded sex or gender in the fixed context
+`laboratory`) into observations at `lis_return`, one per distinct value per
+column, so a result export that repeats the identity per row is not
+ambiguous with itself and rows that disagree stay ambiguous. The result
+columns (`analyte`, `value`, `unit`, `range`, `flag`, `order`, `specimen`)
+are recognized, bounded, scanned, and counted and produce no observation;
+the source gets the closed warning `result_columns_not_observed`. The column
+set is the versioned profile constant `LIS_PROFILE` 0.1.0 with
+`profile_reviewed` false and a type that refuses true. An unknown column or
+key, a formula-leading cell, an empty identity cell, a non-synthetic
+identifier anywhere, free text in any cell, a malformed record, or a bound
+overrun rejects the whole file by position. CSV is an RFC 4180 subset read
+by a strict reader of its own; JSON is the published
+`contextsafe-lis-export-v0.1.schema.json`. Both read through
+`preflight.read_source`, the boundary's bounded no-follow first pass, and
+hold every cell to `preflight.scan_text`. The reference set gains
+`lis-export.csv` and `lis-export.json`; both imports are pinned in the
+determinism matrix; `lis.py` and `lis_csv.py` are safety modules; one
+fixture per rule sits under `tests/fixtures/lis/`.
+B-025 is not closed: the profile is reference-only and the 4h laboratory
+review the row budgets has not happened, so no reviewer has said this is
+the shape of any export; the laboratory half — result, range, flag, order,
+and specimen observations — does not exist, because the observation contract
+has no concept for them and A-025..A-030 wait on B-030 and the B-011
+fixtures; values are carried as tokens with no mapping profile (B-026) to
+bind them, so a pronoun token or a laboratory-context sex value reports
+`semantic_mismatch` against the case manifest rather than pass or fail on
+its merits; an empty identity cell rejects rather than reading as `absent`,
+because deciding what an LIS's empty cell means is a profile decision; and
+the result's counts and warnings stay in process.
+
 ## Phase 4 — review and receipts
 
 | ID | Trace | Deliverable and acceptance | Owner | Dependency | Estimate |

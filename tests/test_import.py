@@ -814,7 +814,13 @@ def test_cli_reports_output_failure(
 
 
 def test_registry_is_read_only_and_names_the_command_line_choices() -> None:
-    assert available_formats() == (CANONICAL_JSON_FORMAT, FHIR_R4_FORMAT, "hl7v2-er7")
+    assert available_formats() == (
+        CANONICAL_JSON_FORMAT,
+        FHIR_R4_FORMAT,
+        "hl7v2-er7",
+        "lis-csv",
+        "lis-json",
+    )
     importer = importer_for(CANONICAL_JSON_FORMAT)
     assert importer is REGISTRY[CANONICAL_JSON_FORMAT]
     assert importer.format_name == CANONICAL_JSON_FORMAT
@@ -870,6 +876,12 @@ def test_a_result_cannot_claim_a_reviewed_profile_or_a_partial_count(
     with pytest.raises(ContextSafeError) as raised:
         ImportResult(**fields, record_count=2)
     assert raised.value.code == "import_count_mismatch"
+    with pytest.raises(ContextSafeError) as raised:
+        ImportResult(**fields, record_count=1, unobserved_cell_count=-1)
+    assert raised.value.code == "import_count_mismatch"
+    assert raised.value.path == "$.unobserved_cell_count"
+    assert result.unobserved_cell_count == 0
+    assert result.to_dict()["unobserved_cell_count"] == 0
     with pytest.raises((AttributeError, TypeError)):
         result.profile_reviewed = True  # type: ignore[misc]
 

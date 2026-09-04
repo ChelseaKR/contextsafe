@@ -20,7 +20,18 @@ from contextsafe.reference_fixtures import (
 DIGEST = re.compile(r"[0-9a-f]{64}")
 ROOT = Path(__file__).resolve().parents[1]
 AUDIT = ROOT / "docs" / "PUBLICATION-READINESS.md"
-NUMBER_WORDS = ("zero", "one", "two", "three", "four", "five", "six", "seven")
+NUMBER_WORDS = (
+    "zero",
+    "one",
+    "two",
+    "three",
+    "four",
+    "five",
+    "six",
+    "seven",
+    "eight",
+    "nine",
+)
 
 
 def test_the_packaged_set_is_exactly_the_named_set() -> None:

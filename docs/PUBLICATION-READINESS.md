@@ -145,7 +145,7 @@ because it was the finding.*
 | Published today | Not published today |
 |---|---|
 | JSON Schemas, a deterministic evaluator, an unsigned pack/plan compiler, a read-only evidence boundary check | Any governed case pack (B-009) or approved assertion (B-010) — none exists |
-| Seven synthetic fixtures using invented tokens (`CSYN-`, `fixture-gender-1`) | Any real system, vendor, version, customer, or partner name — none exists |
+| Nine synthetic fixtures using invented tokens (`CSYN-`, `fixture-gender-1`) | Any real system, vendor, version, customer, or partner name — none exists |
 | The concept separation itself: GI ≠ RSG ≠ SPCU ≠ NtU ≠ pronouns, and why conflating them harms patients | Any receipt about any real installed workflow — none has ever been produced |
 | The four-checkpoint model and the seeded-fault taxonomy | Reviewer identities — the governance roster is unrecruited |
 
@@ -386,7 +386,7 @@ history for a section number is not worth the cost, and the fact is unremarkable
 
 `src/contextsafe/fixtures/reference/` (until 2026-09-02 `fixtures/reference/`;
 moved by `git mv` so the wheel ships it, bytes unchanged, and `git log --follow`
-carries each file's history across the move) holds exactly seven files, 10,340
+carries each file's history across the move) holds exactly nine files, 11,416
 bytes total, and **no fixture path has ever been deleted** — when this section
 was written the 89-path full-history file list contained no other fixture, and
 the only fixture directories added since are the two named below.
@@ -413,6 +413,8 @@ them against the tree. The same day, B-024 added a seventh packaged file,
 | `pack-draft.json` | `PACK-SYNTHETIC-REFERENCE-DRAFT`, limitations `synthetic-reference-only`, `not-clinically-reviewed`, `not-community-approved` |
 | `rules.json` | expectations mirror the values above |
 | `hl7v2-er7-message.hl7` | added 2026-09-04 by B-024; `CSYN-SENDER`/`CSYN-FACILITY`/`CSYN-RECEIVER`/`CSYN-LAB` in MSH; PID-3 `CSYN-CTP-I01` under `urn:contextsafe:synthetic`; family name `ZZZTESTCONTEXTSAFE` with given names `CSYN-ASTER` and `CSYN-LEGAL-I01`; processing ID `T`; GSP, OBR, and OBX values are `fixture-`, `ORDER-CSYN-`, and `SUP-CSYN-` tokens; MSH-7 is a fixed message timestamp, checked for shape and never carried |
+| `lis-export.csv` | added 2026-09-04 by B-025; two rows for `CSYN-CTP-I01` with `CSYN-ASTER`, `CSYN-PRONOUN-THEY-THEM`, and sex `X`; analytes `CSYN-ANALYTE-K` and `CSYN-ANALYTE-NA` with numeric values, `mmol/L`, an `N` flag, `ORDER-CSYN-I01-A`, and `CSYN-SPECIMEN-I01-A`; the result columns are counted and never carried |
+| `lis-export.json` | added 2026-09-04 by B-025; the same two rows as `lis-export.csv` under `schema_version` `contextsafe.lis-export/0.1.0`, so the two readers' observation sets differ only in the source digest |
 
 No name, MRN, date of birth, address, phone number, SSN, or NPI appears in any
 packaged fixture or in any accepting fixture, and none of them carries a
