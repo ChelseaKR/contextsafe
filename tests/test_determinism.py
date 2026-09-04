@@ -896,6 +896,95 @@ def test_render_page_is_byte_identical_across_runs_environments_and_paths(
     assert str(tmp_path).encode("utf-8") not in artifact
 
 
+RECEIPT_DELTA_SHA256 = (
+    "a8e60a47368c286c6e3c30fba6707fb9c56de2c6ca6995e77564934490565d01"
+)
+"""SHA-256 of ``receipt diff`` over the reference receipt against itself.
+
+Pinned for the same reason as ``RECEIPT_DOCUMENT_SHA256`` and changing under
+the same conditions: it moves when the receipt payload, the delta contract, or
+the runner version moves, and at no other time.
+"""
+
+
+def _receipt_diff_scenario(tmp_path: Path) -> tuple[Path, Path]:
+    """Write the two receipts the diff scenarios read, in process."""
+
+    before = tmp_path / "before-receipt.json"
+    assert main([*_evaluate_argv(REFERENCE), "--output", str(before)]) == 0
+    observations = json.loads(
+        (REFERENCE / "observations.json").read_text(encoding="utf-8")
+    )
+    observations["observations"][4]["value"]["value"] = "ze/hir"
+    contradicted = tmp_path / "contradicted-observations.json"
+    contradicted.write_text(json.dumps(observations), encoding="utf-8")
+    after = tmp_path / "after-receipt.json"
+    argv = _evaluate_argv(REFERENCE)
+    argv[4] = str(contradicted)
+    assert main([*argv, "--output", str(after)]) == 0
+    return before, after
+
+
+def test_receipt_diff_artifact_is_byte_identical_and_matches_stdout(
+    tmp_path: Path,
+) -> None:
+    """The delta is an artifact too: same bytes in every environment."""
+
+    before, after = _receipt_diff_scenario(tmp_path)
+    argv = ["receipt", "diff", "--before", str(before), "--after", str(after)]
+    runs = _three_runs(tmp_path, lambda _reference: argv, with_output=True)
+    _assert_identical(runs)
+    artifact = runs[0].artifact
+    assert artifact is not None
+    assert runs[0].returncode == 0
+    assert runs[0].stdout == b""
+    assert runs[0].stderr == b""
+    _assert_canonical_line(artifact)
+    delta = json.loads(artifact.decode("utf-8"))
+    assert delta["summary"]["regressed"] == 1
+    for fragment in (str(tmp_path), str(ROOT), "Kiritimati", "en_US", "ze/hir"):
+        assert fragment.encode("utf-8") not in artifact
+
+    printed = _three_runs(tmp_path / "printed", lambda _reference: argv)
+    _assert_identical(printed)
+    assert printed[0].stdout == artifact
+
+
+def test_receipt_diff_digest_is_pinned_on_every_platform(tmp_path: Path) -> None:
+    """One constant digest for the self-delta of the reference receipt."""
+
+    before, _ = _receipt_diff_scenario(tmp_path)
+    argv = ["receipt", "diff", "--before", str(before), "--after", str(before)]
+    runs = _three_runs(tmp_path, lambda _reference: argv, with_output=True)
+    _assert_identical(runs)
+    artifact = runs[0].artifact
+    assert artifact is not None
+    assert hashlib.sha256(artifact).hexdigest() == RECEIPT_DELTA_SHA256
+
+
+def test_incompatible_receipts_rejection_is_deterministic(tmp_path: Path) -> None:
+    """A compatibility rejection names a field class, identically, every run."""
+
+    before, after = _receipt_diff_scenario(tmp_path)
+    document = json.loads(after.read_text(encoding="utf-8"))
+    document["payload"]["case_id"] = "CTP-I02"
+    document["payload_sha256"] = hashlib.sha256(
+        json.dumps(document["payload"], sort_keys=True, separators=(",", ":")).encode(
+            "utf-8"
+        )
+    ).hexdigest()
+    after.write_text(json.dumps(document), encoding="utf-8")
+    argv = ["receipt", "diff", "--before", str(before), "--after", str(after)]
+    runs = _three_runs(tmp_path, lambda _reference: argv)
+    _assert_identical(runs)
+    assert runs[0].returncode == 2
+    assert runs[0].stdout == b""
+    _assert_canonical_line(runs[0].stderr)
+    error = json.loads(runs[0].stderr.decode("utf-8"))["error"]
+    assert error["code"] == "incompatible_receipts"
+    assert b"CTP-I0" not in runs[0].stderr
+
+
 def test_platforms_without_descriptor_relative_open_fail_closed(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

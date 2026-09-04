@@ -402,6 +402,8 @@ def test_usage_errors_exit_with_dedicated_code(
         ["import", "--format", "canonical-json"],
         ["mapping"],
         ["mapping", "validate"],
+        ["receipt"],
+        ["receipt", "diff", "--before", "a.json"],
     ]
     for argv in usage_errors:
         with pytest.raises(SystemExit) as raised:

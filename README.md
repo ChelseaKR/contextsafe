@@ -8,6 +8,8 @@ service that would run it against a real health system is a plan, not a
 product.**
 
 The tool is here now. Twelve subcommands, no network access, committed synthetic
+
+The tool is here now. Eleven subcommands, no network access, committed synthetic
 fixtures that ship inside the package. With
 [`uv`](https://docs.astral.sh/uv/) installed, this returns a full receipt:
 
@@ -780,6 +782,32 @@ and the markup, not from a browser that printed the page, so the print-preview
 task in [Accessibility §7](docs/08-ACCESSIBILITY-I18N.md) remains B-044's. No
 locale was added; the pseudolocale is never shipped to a reader, and `es-US`
 remains an unreviewed machine translation (B-042).
+
+### B-037: the receipt delta
+
+`contextsafe receipt diff --before A.json --after B.json --output delta.json`
+compares two receipt documents rule by rule and emits a deterministic,
+envelope-free delta
+([contract](schemas/contextsafe-receipt-delta-v0.1.schema.json)): per rule,
+the status and reason in each receipt, whether the outcome changed, whether
+the evidence hashes changed, and a closed change code; counts of regressed
+(pass to fail, indeterminate, or blocked), improved, unchanged, and
+changed_other; and the payload hash of each receipt. Compatibility is
+fail-closed — identical case, rule-set hash, schema versions, concept and
+checkpoint sets, and rule bindings, or exit 2 with an `incompatible_receipts`
+error that names the field class and never a value — and each receipt is first
+parsed strictly against the published shape, with its `payload_sha256`
+required to cover its payload. `render` stays a top-level command for now and
+may move under `receipt` later.
+
+Its limits, which the delta states in its own limitations: both receipts are
+unsigned and carry no trusted time, so `before` and `after` are the caller's
+labels and **a delta over unsigned receipts proves nothing about which run
+came first**; swapping the inputs mirrors the delta exactly. Payload-hash
+agreement is an internal-consistency check, not verification — no signature,
+approval, or evidence is verified (B-036). The contract is reference-only and
+ungoverned, and a regression it reports is a finding for a reviewer, not a
+verdict.
 
 The durable evidence store has no CLI import route; `contextsafe import` writes
 only an observation-set document and never an evidence record. Every iteration-3 evidence record says
