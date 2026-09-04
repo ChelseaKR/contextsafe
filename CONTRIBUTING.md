@@ -89,6 +89,17 @@ minutes rather than a second:
 | Mutation evidence | `make mutants` | changes one operator or constant in a declared safety module and requires the suite to fail. Branch coverage says a line ran; this says a change to it would be noticed. Stdlib only, writes nothing into the working tree, and takes about two minutes, which is why it is not in `verify`. Exit 1 on a survivor, exit 2 when it produced no evidence. See [ADR 0009](docs/adr/0009-mutation-evidence-over-declared-safety-modules.md). |
 | Full-history secret scan | `make secret-scan` | gitleaks over every ref, every object in the object database (including unreachable ones and every commit message), and the working tree. Needs gitleaks 8.30.1 on `PATH` (`brew install gitleaks`); CI and the release pipeline run this same target. Exit 1 on a finding; exit 2 when gitleaks is absent, is not the pinned version, cannot read an object it enumerated, or enumerated zero blobs. Its three states are covered by `tests/test_gate_exit_contract.py`, which drives it with a stand-in scanner and therefore runs without gitleaks installed. |
 
+`make package` is not a gate: it builds the sdist and wheel, exports the
+CycloneDX SBOM from the locked graph, and lists the wheel's contents. The
+judgment over that output is `tools/fresh_install_gate.py`, which
+`.github/workflows/package.yml` runs on Ubuntu, macOS and Windows and which a
+maintainer runs with `uv run python tools/fresh_install_gate.py --dist dist`:
+`pip install --no-index` into an empty venv, the README Quickstart from outside
+the checkout, and the receipt document against the digest
+`tests/test_determinism.py` pins. Exit 1 on a finding; exit 2 when the wheel was
+not examined. `tests/test_wheel_quickstart.py` drives its real path on every
+`make verify`.
+
 ## Design constraints that reviews enforce
 
 - **Fail closed.** Missing or ambiguous evidence is indeterminate, never pass.
