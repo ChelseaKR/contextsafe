@@ -50,23 +50,32 @@ Checks
     colour from the page must lose no information.
 
 ``print``
-    A ``@media print`` block must exist, must hide nothing but the skip link,
-    and must not leave text on a background it cannot be read against. A rule
-    that hides by any of the techniques ``HIDING_TECHNIQUES`` names
-    (``display: none``, ``visibility: hidden``, zero opacity, zero font size,
-    a clip, a collapsed box with its overflow hidden, or a box positioned off
-    the page) is a finding unless every selector it applies to is in
-    ``PRINT_MAY_HIDE``: the check does not know which selectors cover a
-    mandated disclosure, so it does not try to. It must also keep the
-    page readable across page breaks (B-038): every table has a ``<thead>``
-    and the print rules declare it a repeating header group; a result row, a
-    limitation, the translation notice, and a source-locale original are each
-    kept on one page; and a heading or caption is kept with what follows it,
-    so no finding is orphaned from its reason and no table body from its
-    headers.
+    Print rules must exist, must hide nothing but the skip link, and must not
+    leave text on a background it cannot be read against. Every ``@media``
+    block whose query reaches the printer (``print``, ``print and (...)``,
+    ``screen, print``, ``all``, or no medium at all) is read as print rules,
+    brace-balanced, and a block whose medium the gate cannot classify is a
+    finding rather than a block it did not read. A rule that hides by any of
+    the techniques ``HIDING_TECHNIQUES`` names (``display: none``,
+    ``visibility: hidden`` or ``collapse``, zero opacity, a font below a
+    pixel, a clip, a collapsed box with its overflow cut off, a positioned box
+    pushed off the sheet, ``content-visibility: hidden``, a transform that
+    scales to nothing or translates off the sheet, or a negative indent or
+    margin past the edge) is a finding unless every selector it applies to is
+    in ``PRINT_MAY_HIDE``: the check does not know which selectors cover a
+    mandated disclosure, so it does not try to. Property names and values are
+    read the way CSS reads them, case-insensitively and with ``!important``
+    set aside. It must also keep the page readable across page breaks
+    (B-038): every table has a ``<thead>`` and the print rules declare it a
+    repeating header group; a result row, a limitation, the translation
+    notice, and a source-locale original are each kept on one page; a heading
+    or caption is kept with what follows it; and no print rule on any
+    selector sets a break property, or a ``thead``'s display, to anything
+    else, so a later rule cannot undo a keep-together rule it never names.
 
 ``minimization``
-    Every run of reader-visible text is either a message from the page's
+    Every run of reader-visible text, the text of a ``title``, ``aria-label``
+    or ``alt`` attribute included, is either a message from the page's
     catalog or the source catalog, or one of the values the page is allowed
     to present from the receipt: case id, the four hashes, the mandated
     limitations, rule ids, the outcome counts, runner and contract versions,
@@ -168,40 +177,131 @@ markup changes. Anything hidden that is not the skip link is a finding.
 """
 
 _ZERO = re.compile(r"^-?(?:0+\.?0*|\.0+)(?:px|pt|em|rem|%|vh|vw|cm|mm|in)?$")
-_OFF_PAGE = re.compile(r"^-\d*\.?\d+(?:px|pt|em|rem|%|vh|vw|cm|mm|in)$")
+_LENGTH = re.compile(r"^(-?\d*\.?\d+)(px|pt|em|rem|%|vh|vw|cm|mm|in)?$")
+
+_PIXELS_PER_UNIT: Mapping[str, float] = {
+    "": 1.0,
+    "px": 1.0,
+    "pt": 4 / 3,
+    "em": 16.0,
+    "rem": 16.0,
+    "cm": 96 / 2.54,
+    "mm": 96 / 25.4,
+    "in": 96.0,
+    "%": 1.0,
+    "vh": 1.0,
+    "vw": 1.0,
+}
+"""CSS pixels per unit, at the 16px root size every browser prints with.
+
+The relative units are counted one to one: 100 of ``%``, ``vh`` or ``vw`` is
+the whole containing box or viewport, so the same threshold reads the same
+distance in them as in pixels. The earlier check compared the bare number
+against 100 whatever the unit, so ``left: -50em`` (800 pixels off the sheet)
+was accepted.
+"""
+
+OFF_PAGE_PIXELS = 100.0
+"""An offset at least this far past an edge prints nothing of what it moves."""
+
+READABLE_PIXELS = 1.0
+"""A font smaller than this is a zero to any reader, whatever the number."""
 
 
 def _is_zero(value: str | None) -> bool:
     return value is not None and _ZERO.fullmatch(value.strip()) is not None
 
 
+def _pixels(value: str | None, *, percent: float = 1.0) -> float | None:
+    """Return ``value`` in CSS pixels, or ``None`` when it is not a length."""
+
+    match = _LENGTH.fullmatch((value or "").strip())
+    if match is None:
+        return None
+    number, unit = float(match.group(1)), match.group(2) or ""
+    return number * (percent if unit == "%" else _PIXELS_PER_UNIT[unit])
+
+
+def _past_edge(value: str | None) -> bool:
+    pixels = _pixels(value)
+    return pixels is not None and pixels <= -OFF_PAGE_PIXELS
+
+
+def _unreadable(declarations: Mapping[str, str]) -> bool:
+    """A zero font size, or one below a pixel, spelled in any unit."""
+
+    value = declarations.get("font-size")
+    if _is_zero(value):
+        return True
+    pixels = _pixels(value, percent=0.16)
+    return pixels is not None and pixels < READABLE_PIXELS
+
+
 def _collapsed(declarations: Mapping[str, str]) -> bool:
     """A box with no height or width and its overflow cut off shows nothing."""
 
-    return declarations.get("overflow") == "hidden" and any(
+    return declarations.get("overflow") in ("hidden", "clip") and any(
         _is_zero(declarations.get(name))
         for name in ("height", "max-height", "width", "max-width")
     )
 
 
 def _off_page(declarations: Mapping[str, str]) -> bool:
-    """A box taken out of flow and pushed past an edge is printed nowhere."""
+    """A positioned box pushed past an edge is printed nowhere.
 
-    return declarations.get("position") in ("absolute", "fixed") and any(
-        _OFF_PAGE.fullmatch(declarations.get(edge, "").strip()) is not None
-        and float(re.sub(r"[a-z%]+$", "", declarations[edge].strip())) <= -100
-        for edge in ("left", "top", "right", "bottom")
+    Any ``position`` but ``static`` honours the edge offsets: a relatively
+    positioned box offset 9999px left leaves its gap in the flow and puts its
+    text off the sheet exactly as an absolutely positioned one does. The
+    earlier check counted only ``absolute`` and ``fixed``.
+    """
+
+    position = declarations.get("position")
+    return (
+        position is not None
+        and position != "static"
+        and any(
+            _past_edge(declarations.get(edge))
+            for edge in ("left", "top", "right", "bottom")
+        )
     )
+
+
+def _pushed_off(declarations: Mapping[str, str]) -> bool:
+    """A negative indent or margin moves text off the sheet without positioning."""
+
+    return any(
+        _past_edge(declarations.get(name))
+        for name in ("text-indent", "margin-left", "margin-top")
+    )
+
+
+def _transformed_away(declarations: Mapping[str, str]) -> bool:
+    """A transform that scales to nothing or translates off the sheet."""
+
+    transform = declarations.get("transform", "")
+    for name, arguments in re.findall(r"([a-z0-9]+)\(([^)]*)\)", transform):
+        values = [part.strip() for part in arguments.split(",")]
+        if name.startswith("scale") and any(_is_zero(value) for value in values):
+            return True
+        if name.startswith("translate") and any(
+            (pixels := _pixels(value)) is not None and abs(pixels) >= OFF_PAGE_PIXELS
+            for value in values
+        ):
+            return True
+    return False
 
 
 HIDING_TECHNIQUES: tuple[tuple[str, Callable[[Mapping[str, str]], bool]], ...] = (
     ("display", lambda d: d.get("display") == "none"),
-    ("visibility", lambda d: d.get("visibility") == "hidden"),
+    ("visibility", lambda d: d.get("visibility") in ("hidden", "collapse")),
     ("opacity", lambda d: _is_zero(d.get("opacity"))),
-    ("font-size", lambda d: _is_zero(d.get("font-size"))),
+    ("font-size", _unreadable),
     ("clip", lambda d: "clip" in d or "clip-path" in d),
     ("overflow", _collapsed),
     ("position", _off_page),
+    ("content-visibility", lambda d: d.get("content-visibility") == "hidden"),
+    ("transform", _transformed_away),
+    ("offset", _pushed_off),
 )
 """Every way a print rule can make an element disappear, each named.
 
@@ -210,7 +310,10 @@ A check that knew only ``display`` and ``visibility`` was a check that a
 legitimate reason to use any of these on anything but the skip link, so each
 is a finding rather than a judgement call. ``clip`` and ``clip-path`` are refused
 whatever their value: a clip that shows the whole element is a clip nobody
-needed to write.
+needed to write. ``visibility: collapse`` is ``hidden`` for a table row or a
+list item, which is where the results and the limitations live. Declarations
+reach these predicates lower-cased and with ``!important`` removed, so
+``DISPLAY: NONE !important`` is the same finding as ``display: none``.
 """
 
 _IGNORED_RUNS = frozenset({"✔", "✖", "▣", "—", "?"})
@@ -405,8 +508,12 @@ def parse_document(html: str) -> _Document:
     return document
 
 
+_ANNOUNCED_ATTRIBUTES = ("title", "aria-label", "alt")
+"""Attributes a screen reader announces, so their text is text on the page."""
+
+
 class _VisibleRuns(HTMLParser):
-    """Collect every run of text a reader would see on the page."""
+    """Collect every run of text a reader would see or hear on the page."""
 
     def __init__(self) -> None:
         super().__init__(convert_charrefs=True)
@@ -414,10 +521,17 @@ class _VisibleRuns(HTMLParser):
         self._suppress = 0
 
     def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
-        """Start suppressing inside an element a reader never sees."""
+        """Record announced attribute text; suppress inside an unseen element."""
 
         if tag in ("head", "script", "style", "title"):
             self._suppress += 1
+        if self._suppress:
+            return
+        attributes = dict(attrs)
+        for name in _ANNOUNCED_ATTRIBUTES:
+            text = (attributes.get(name) or "").strip()
+            if text:
+                self.runs.append(text)
 
     def handle_endtag(self, tag: str) -> None:
         """Stop suppressing at the close of that element."""
@@ -468,23 +582,107 @@ def _stylesheet(html: str) -> str:
     return match.group(1) if match else ""
 
 
-def _split_media(style: str) -> tuple[str, str]:
-    """Return the screen rules and the print rules separately."""
+@dataclass(frozen=True, slots=True)
+class _Stylesheet:
+    """The stylesheet split by the medium each rule reaches."""
 
-    match = re.search(r"@media print \{(.*?)\n\}", style, flags=re.S)
-    if match is None:
-        return style, ""
-    return style[: match.start()] + style[match.end() :], match.group(1)
+    screen: str
+    printed: str
+    unclassified: tuple[str, ...]
+    """Media queries the gate could not place, each of which is a finding."""
+
+
+_MEDIA = re.compile(r"@media\b([^{]*)\{")
+
+
+def _media_blocks(style: str) -> tuple[str, list[tuple[str, str]]]:
+    """Return the rules outside any ``@media`` block, and each block's query and body.
+
+    Brace-balanced, so a block closes where a browser closes it and not at
+    the first ``\\n}`` in the text. The earlier form matched one block spelled
+    exactly ``@media print {`` and folded every other print block, including a
+    second one, into the screen rules, where nothing looked for hiding.
+    """
+
+    outside: list[str] = []
+    blocks: list[tuple[str, str]] = []
+    position = 0
+    while (match := _MEDIA.search(style, position)) is not None:
+        outside.append(style[position : match.start()])
+        depth, index = 1, match.end()
+        while depth and index < len(style):
+            depth += {"{": 1, "}": -1}.get(style[index], 0)
+            index += 1
+        end = index - 1 if depth == 0 else index
+        blocks.append((match.group(1).strip(), style[match.end() : end]))
+        position = index
+    outside.append(style[position:])
+    return "".join(outside), blocks
+
+
+def _media_scopes(query: str) -> frozenset[str] | None:
+    """Return the media a query reaches, or ``None`` when the gate cannot tell.
+
+    ``print``, ``print and (...)``, ``screen, print``, ``all`` and a query with
+    no medium at all (``(min-width: 0)``, which every medium honours) reach
+    the printer. ``screen`` alone does not. Anything else, ``not print``
+    included, is left unclassified rather than guessed at.
+    """
+
+    scopes: set[str] = set()
+    for alternative in query.lower().split(","):
+        words = alternative.replace("(", " ( ").split()
+        if words and words[0] == "only":
+            words = words[1:]
+        first = words[0] if words else ""
+        if first in ("all", "("):
+            scopes.update(("screen", "print"))
+        elif first in ("screen", "print"):
+            scopes.add(first)
+        else:
+            return None
+    return frozenset(scopes)
+
+
+def _split_media(style: str) -> _Stylesheet:
+    """Return the screen rules and the print rules, every block accounted for."""
+
+    outside, blocks = _media_blocks(style)
+    screen, printed, unclassified = [outside], [], []
+    for query, body in blocks:
+        scopes = _media_scopes(query)
+        if scopes is None:
+            unclassified.append(query)
+            continue
+        if "screen" in scopes:
+            screen.append(body)
+        if "print" in scopes:
+            printed.append(body)
+    return _Stylesheet("\n".join(screen), "\n".join(printed), tuple(unclassified))
+
+
+_IMPORTANT = re.compile(r"\s*!\s*important$", flags=re.I)
 
 
 def _rules(css: str) -> Iterator[tuple[str, dict[str, str]]]:
+    """Yield each rule's selector and its declarations, normalised.
+
+    Property names and values are lower-cased and a trailing ``!important``
+    is dropped, because CSS reads them that way and a predicate comparing the
+    verbatim text did not: ``DISPLAY: NONE`` and ``display: none !important``
+    each produced no finding. Selectors keep their case; a class selector is
+    case-sensitive, so ``.SKIP-LINK`` is not the allowlisted ``.skip-link``.
+    """
+
     for selector, block in re.findall(r"([^{}]+)\{([^{}]*)\}", css):
         declarations = {}
         for declaration in block.split(";"):
             if ":" not in declaration:
                 continue
             name, _, value = declaration.partition(":")
-            declarations[name.strip()] = value.strip()
+            declarations[name.strip().lower()] = _IMPORTANT.sub(
+                "", value.strip()
+            ).lower()
         yield selector.strip(), declarations
 
 
@@ -492,8 +690,8 @@ def check_contrast(subject: Subject) -> CheckResult:
     """Compute the contrast of every declared foreground/background pair."""
 
     result = CheckResult("contrast")
-    screen, printed = _split_media(_stylesheet(subject.html))
-    for scope, css in (("screen", screen), ("print", printed)):
+    sheet = _split_media(_stylesheet(subject.html))
+    for scope, css in (("screen", sheet.screen), ("print", sheet.printed)):
         for selector, declarations in _rules(css):
             foreground = declarations.get("color")
             background = declarations.get("background-color")
@@ -626,6 +824,51 @@ def _page_break_findings(
             )
 
 
+PRINT_BREAK_PROPERTIES: Mapping[str, str] = {
+    "break-inside": "avoid",
+    "page-break-inside": "avoid",
+    "break-after": "avoid",
+    "page-break-after": "avoid",
+}
+"""Break properties a print rule may declare, and the only value each may take.
+
+The keep-together rules above are satisfied by the simple selectors they name
+and say nothing about a later rule that undoes them: ``tbody tr {
+break-inside: auto; }`` wins the cascade over ``tr`` and splits a result row,
+and the legacy ``page-break-inside`` alias is still honoured by every
+browser. So any break declaration in print with another value, on any
+selector, is a finding.
+"""
+
+
+def _override_findings(subject: Subject, printed: str) -> Iterator[Finding]:
+    """No print rule may set a break property or a thead display to anything else."""
+
+    for selector, declarations in _rules(printed):
+        for name, required in PRINT_BREAK_PROPERTIES.items():
+            value = declarations.get(name)
+            if value is not None and value != required:
+                yield Finding(
+                    "print",
+                    subject.name,
+                    f"print rule {selector!r} sets {name} to something other "
+                    f"than {required!r}, which would let a page break split "
+                    "or separate what must stay together",
+                )
+        header, prop, required = PRINT_REPEATED_HEADER
+        if (
+            re.search(rf"\b{header}\b", selector)
+            and prop in declarations
+            and declarations[prop] != required
+        ):
+            yield Finding(
+                "print",
+                subject.name,
+                f"print rule {selector!r} sets {header!r} to something other "
+                f"than {required!r}, so table headers would not repeat",
+            )
+
+
 def _table_header_findings(subject: Subject) -> Iterator[Finding]:
     for tag, _, raw in parse_document(subject.html).raw_by_element:
         if tag == "table" and "<thead" not in raw:
@@ -640,7 +883,20 @@ def check_print(subject: Subject) -> CheckResult:
     """The page has to print, disclosures included, across page breaks."""
 
     result = CheckResult("print")
-    _, printed = _split_media(_stylesheet(subject.html))
+    sheet = _split_media(_stylesheet(subject.html))
+    printed = sheet.printed
+    # A block the gate cannot place is a block whose rules it has not read for
+    # hiding, which is the defect a second `@media print` block used to be.
+    result.examined += len(sheet.unclassified)
+    result.findings.extend(
+        Finding(
+            "print",
+            subject.name,
+            f"@media {query!r} names a medium the gate cannot classify, so "
+            "its rules were not checked against the print requirements",
+        )
+        for query in sheet.unclassified
+    )
     if not printed.strip():
         result.findings.append(
             Finding("print", subject.name, "the page has no @media print rules")
@@ -652,6 +908,7 @@ def check_print(subject: Subject) -> CheckResult:
     result.examined += subject.html.count("<table")
     result.findings.extend(_hiding_findings(subject, printed))
     result.findings.extend(_page_break_findings(subject, declared))
+    result.findings.extend(_override_findings(subject, printed))
     result.findings.extend(_table_header_findings(subject))
     return result
 

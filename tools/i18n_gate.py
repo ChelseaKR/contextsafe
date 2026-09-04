@@ -52,7 +52,9 @@ would only find in front of a reader.
 ``pseudolocale-fidelity``
     The generated pseudolocale is what the rule above sees through, so it is
     measured rather than trusted: every message must grow by at least
-    ``PSEUDO_MINIMUM_EXPANSION`` over its source, must leave no letter the
+    ``PSEUDO_MINIMUM_EXPANSION`` over its source with the two brackets set
+    aside, so a short label cannot meet the floor on its brackets alone; must
+    leave no letter the
     transform accents unaccented outside a placeholder, and must keep the
     source's ``{placeholder}`` set exactly. A pseudolocale that stopped
     expanding would hide every layout defect it exists to expose, and one
@@ -83,6 +85,7 @@ from contextsafe.html_receipt import render_receipt_page  # noqa: E402
 from contextsafe.i18n import (  # noqa: E402
     PSEUDO_ACCENTABLE,
     PSEUDO_ACCENTED,
+    PSEUDO_BRACKETS,
     PSEUDO_LOCALE,
     PSEUDO_MINIMUM_EXPANSION,
     SOURCE_LOCALE,
@@ -102,6 +105,7 @@ REFERENCE = REFERENCE_ROOT
 _IGNORED_TEXT = frozenset({"✔", "✖", "▣", "—", "?"})
 
 _VOID_TAGS = frozenset({"br", "col", "hr", "img", "input", "link", "meta", "wbr"})
+_UNRENDERED_TAGS = frozenset({"style", "script", "head", "title"})
 
 
 @dataclass(frozen=True, slots=True)
@@ -137,28 +141,41 @@ class _VisibleText(HTMLParser):
     def __init__(self) -> None:
         super().__init__(convert_charrefs=True)
         self.runs: list[VisibleRun] = []
+        self.stray: list[str] = []
+        """End tags that closed nothing. Recorded, and they move no language."""
         self._suppress = 0
-        self._langs: list[str | None] = [None]
+        self._frames: list[tuple[str, str | None]] = [("", None)]
 
     def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
-        """Push the language in force and start suppressing unrendered text."""
+        """Push the element with its language and start suppressing unrendered text."""
 
         if tag in _VOID_TAGS:
             return
         lang = dict(attrs).get("lang")
-        self._langs.append(lang if lang else self._langs[-1])
-        if tag in ("style", "script", "head", "title"):
+        self._frames.append((tag, lang if lang else self._frames[-1][1]))
+        if tag in _UNRENDERED_TAGS:
             self._suppress += 1
 
     def handle_endtag(self, tag: str) -> None:
-        """Pop the language and stop suppressing at the close of the element."""
+        """Pop the element by name, closing anything left open inside it.
+
+        Popping whatever was on top, whatever the end tag said, let a stray
+        end tag shift the language every following run was judged under,
+        and the accepting bucket is the source locale. Matching by name, a
+        stray end tag closes nothing.
+        """
 
         if tag in _VOID_TAGS:
             return
-        if len(self._langs) > 1:
-            self._langs.pop()
-        if tag in ("style", "script", "head", "title") and self._suppress:
-            self._suppress -= 1
+        if all(frame[0] != tag for frame in self._frames[1:]):
+            self.stray.append(tag)
+            return
+        while True:
+            closed, _ = self._frames.pop()
+            if closed in _UNRENDERED_TAGS:
+                self._suppress -= 1
+            if closed == tag:
+                return
 
     def handle_data(self, data: str) -> None:
         """Record one run of visible text."""
@@ -167,7 +184,7 @@ class _VisibleText(HTMLParser):
             return
         text = data.strip()
         if text:
-            self.runs.append(VisibleRun(text=text, lang=self._langs[-1]))
+            self.runs.append(VisibleRun(text=text, lang=self._frames[-1][1]))
 
 
 def visible_text(html: str) -> list[VisibleRun]:
@@ -428,12 +445,18 @@ def check_pseudolocale(catalog: Catalog) -> Iterator[Finding]:
     Three properties, each with a way to fail: expansion below
     ``PSEUDO_MINIMUM_EXPANSION``, an accentable letter left plain anywhere
     outside a placeholder, and a placeholder set that differs from the
-    source. The catalog is a parameter so a negative control can hand in a
-    weakened one. An empty source message is ``message-quality``'s finding,
-    so it is skipped here rather than divided by.
+    source. Expansion is measured on the body with the two brackets set
+    aside, the measure the transform pads to and the property test uses:
+    counted, the brackets alone were 40 percent of a four-letter status
+    word, so a transform that stopped padding passed the floor on exactly
+    the short labels where expansion matters. The catalog is a parameter so
+    a negative control can hand in a weakened one. An empty source message
+    is ``message-quality``'s finding, so it is skipped here rather than
+    divided by.
     """
 
     source = source_catalog()
+    opening, closing = PSEUDO_BRACKETS
     for key in sorted(source.keys() - catalog.keys()):
         yield Finding("pseudolocale-fidelity", catalog.locale, f"missing key {key}")
     for key in sorted(source.keys() & catalog.keys()):
@@ -441,7 +464,8 @@ def check_pseudolocale(catalog: Catalog) -> Iterator[Finding]:
         generated = catalog.message(key).text
         if not original:
             continue
-        growth = (len(generated) - len(original)) / len(original)
+        body = generated.removeprefix(opening).removesuffix(closing)
+        growth = (len(body) - len(original)) / len(original)
         if growth < PSEUDO_MINIMUM_EXPANSION:
             yield Finding(
                 "pseudolocale-fidelity",
