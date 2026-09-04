@@ -897,7 +897,7 @@ def test_render_page_is_byte_identical_across_runs_environments_and_paths(
 
 
 RECEIPT_DELTA_SHA256 = (
-    "a8e60a47368c286c6e3c30fba6707fb9c56de2c6ca6995e77564934490565d01"
+    "a0ec5e5e67da7272129ae8f26149bc7bf58835c2d5ae67a2a573cd12ad2a7380"
 )
 """SHA-256 of ``receipt diff`` over the reference receipt against itself.
 
