@@ -693,6 +693,29 @@ sensitivity estimate over faults the library does not contain, and not a
 population claim of any kind. Nothing here is governed content, and no
 clinical, laboratory, or community review has looked at any fixture.
 
+### B-035 and B-036: the signing layer is designed, not built
+
+[ADR 0010](docs/adr/0010-signing-layer-dependency-and-trust-model.md) writes
+the signing layer down before any of it exists, and stops at the decision only
+the maintainer can make: the standard library has no Ed25519, so the first
+`sign` command is the first runtime dependency of a project whose
+`dependencies = []` is a supply-chain claim. The record lays out
+`cryptography`, `PyNaCl`, an optional `contextsafe[signing]` extra whose
+commands fail closed with `signing_unavailable` when the backend is absent, and
+a pure-Python implementation that is rejected outright, with the `pip-audit`,
+per-platform wheel and Windows consequences of each as read on 2026-09-04; it
+recommends the extra backed by `PyNaCl` and says why. It then fixes what B-035
+and B-036 must implement under any option: detached-signature and
+trust-manifest shapes as draft fragments inside the ADR and not in `schemas/`,
+subject hashes as the signed thing, rotation with a bounded overlap, 31-day
+revocation freshness measured against a caller-declared `--as-of` and never a
+clock, compromise recovery, the per-purpose thresholds from Architecture §6.6,
+and what a verified result would and would not prove without RFC 3161 time.
+Its status is proposed. Nothing in the tool changes: no command signs or
+verifies, no schema is published, no key or dependency is added, no security
+review of the trust model has happened, and every artifact still says
+`not_signed` or `not_verified`, which the design commits to never relabeling.
+
 The durable evidence store has no CLI import route; `contextsafe import` writes
 only an observation-set document and never an evidence record. Every iteration-3 evidence record says
 `authorization_status: not_verified_internal_test_only` and
@@ -883,6 +906,7 @@ A successful v1 allows one design partner to:
 - [ADR 0007: every analysis declares the tree it examines](docs/adr/0007-declared-analysis-scope.md)
 - [ADR 0008: one exit-code contract for every gate](docs/adr/0008-one-exit-code-contract-for-every-gate.md)
 - [ADR 0009: mutation evidence over the declared safety modules](docs/adr/0009-mutation-evidence-over-declared-safety-modules.md)
+- [ADR 0010: the signing layer, its first dependency and its trust model (proposed, decision pending)](docs/adr/0010-signing-layer-dependency-and-trust-model.md)
 
 ## Working principles
 

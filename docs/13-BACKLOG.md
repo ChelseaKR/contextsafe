@@ -509,6 +509,30 @@ independent security review of the receipt contract has happened, and structural
 validity is not verification — hash, approval, and signature checking remain
 B-036.
 
+Implementation note (2026-09-04, B-035 and B-036): the design is recorded in
+[ADR 0010](adr/0010-signing-layer-dependency-and-trust-model.md), status
+proposed. It names the decision that gates both items and that only the
+maintainer can make — the standard library has no Ed25519, so the first `sign`
+command is the first runtime dependency or the first optional extra — sets out
+`cryptography`, `PyNaCl`, a fail-closed `contextsafe[signing]` extra and a
+rejected pure-Python implementation with their supply-chain consequences as
+read from PyPI and OSV on 2026-09-04, recommends the extra backed by `PyNaCl`
+with the reason and the counterweight, and fixes the option-independent
+design: draft detached-signature and trust-manifest fragments held in the ADR
+and not in `schemas/`, subject hashes as the signed thing, rotation overlap
+bounded at 90 days, 31-day revocation freshness against a caller-declared
+`--as-of`, compromise recovery, per-purpose thresholds with holder and
+organization distinctness, a closed error-category set for `sign` and
+`verify`, and what verification does not prove without RFC 3161 time. B-035
+and B-036 are not closed and have not started: the maintainer has not chosen
+the dependency, no module, command, schema, fixture, key or test exists, the
+security/privacy design review of the trust model (B-040) has not happened,
+the four departures from [Architecture §6.6](04-ARCHITECTURE.md) that the ADR
+flags — opaque holder and organization tokens in place of names, customer keys
+confined to plan enrolment, the 90-day overlap bound, and the rejection of an
+all-purpose key — await the maintainer's confirmation, and every artifact the
+tool emits still says `not_signed` or `not_verified`.
+
 ## Phase 5 — trust and operations
 
 | ID | Trace | Deliverable and acceptance | Owner | Dependency | Estimate |
