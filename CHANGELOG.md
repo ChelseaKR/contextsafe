@@ -915,6 +915,70 @@ rather than after it.
   secret scan, `make verify` at the tag and the CHANGELOG heading, and there is
   still no publish step. Nothing here has fired: no tag exists.
 
+- **B-038 and B-041, audited on 2026-09-04 and completed where they fell
+  short.** The audit found the pseudolocale expanding text by 30 percent
+  against the 35 the accessibility document requires, with nothing measuring
+  it; `hardcoded-string` and `undisclosed-machine-translation` with no negative
+  control despite `docs/I18N.md` saying every rule had one; a print block with
+  no repeated-header or keep-together rule and a gate that checked only
+  `display: none`; a renderer that trusted the document's own `payload_sha256`
+  and rendered around any field it did not know; and nothing proving the page
+  carries only what it needs (A-036, F-027). Now:
+  - `qps-ploc` grows every message by at least `PSEUDO_MINIMUM_EXPANSION`
+    (35 percent), and `make i18n` gains `pseudolocale-fidelity`: the floor,
+    no accentable letter outside a placeholder left plain, and placeholder
+    parity, measured on the generated catalog rather than assumed of the
+    transform. A Hypothesis property pins the same three facts for arbitrary
+    source text, and a negative control accents one letter per message, the
+    transform that "some diacritic somewhere" could not tell from a real one.
+    An empty source message is `message-quality`'s finding and is no longer
+    divided by. The pseudolocale is still never shipped to a reader.
+  - `hardcoded-string` now judges each visible run under the `lang` in force
+    for it: source-locale wording is accepted only where the page marks it as
+    a source-locale original, so an unmarked copy of a catalog sentence is a
+    finding, reported by position and length rather than quoted. Both it and
+    `undisclosed-machine-translation` have negative controls that were watched
+    to fail.
+  - The print stylesheet declares `thead` a repeating header group, keeps a
+    result row, a limitation with its source original, the translation notice
+    and a source-text block on one page, and keeps headings and captions with
+    what follows them. `make a11y`'s `print` check fails when any of those
+    declarations is absent, when a table has no `<thead>`, or when any print
+    rule but the skip link's hides by any of the techniques `HIDING_TECHNIQUES`
+    names: `display`, `visibility`, zero opacity, zero font size, a clip, a
+    collapsed box with its overflow hidden, or a box positioned off the page,
+    each with a negative control. The hiding rule is an allowlist of what may
+    be hidden rather than a list of selectors to protect, because a protected
+    list let `li { display: none; }` through, and that hides every
+    limitation.
+  - `render_receipt_page` recomputes the payload hash and refuses a document
+    whose `payload_sha256` does not cover its payload
+    (`receipt_payload_hash_mismatch`), and refuses any object carrying a field
+    the receipt contract does not publish (`invalid_receipt_document`, naming
+    the location and never the field or its value). A result's expected,
+    observed and evidence hashes and its rule version stay in the JSON and off
+    the page, and a test pins that against the schema's closed objects.
+  - `make a11y` gains `minimization`: every visible run of text is catalog text
+    or one of the receipt values the page is allowed to present, named by
+    pointer; a catalog message with a placeholder counts only when the
+    placeholder holds one of those values or a locale tag, so no message is a
+    prefix that free text can hide behind. Anything else is a finding that
+    reports position and length, never content. The gate derives the hash
+    each page must carry from the payload rather than reading the document's
+    field, so a tampered document cannot be audited by agreeing with itself;
+    the negative control forges the field and a page that carries it, so it
+    fails under a gate that reads the field and passes only under one that
+    recomputes. `src/contextsafe/html_receipt.py` joins the Makefile's
+    `SAFETY_MODULES` now that it validates a document rather than only
+    rendering one.
+
+  Existing tests that edit a payload after it is built now re-seal it first.
+  Neither item is closed: the print checks are computed from the stylesheet
+  and the markup, not from a browser that printed the page, so the
+  print-preview task in Accessibility §7 stays with B-044; no locale was
+  added and es-US remains an unreviewed machine translation (B-042). No
+  contract version moved and the pinned reference-receipt digest is unchanged.
+
 ## [0.1.0] - 2026-09-02
 
 ### Fixed
