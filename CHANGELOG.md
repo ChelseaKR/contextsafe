@@ -1098,7 +1098,13 @@ rather than after it.
   rather than `$.log[i].<field>`. The log is opened with `O_NONBLOCK`, so a
   `--log` that names a FIFO is refused as `input_path_unsafe` instead of
   blocking. `review.py` joins the mutation gate's `DECLARED_TARGETS` and
-  `tests/test_review.py` its screening set. Stated as a limit rather than
+  `tests/test_review.py` its screening set; running the gate against it
+  found the log's read loop bounded by end of file alone, so that one
+  mutant held the suite open indefinitely, and it is now bounded by a count
+  of reads as well, with the remaining survivors -- the exact size limit,
+  the identifier length bounds, the immutability of every record type, and a
+  distinctness flag the code never read -- each pinned by a test rather than
+  exempted. Stated as a limit rather than
   fixed: the chain cannot detect a record removed from the end of the log,
   and only an external record of `log_head_sha256` can; a `remediated`
   decision binds no rerun receipt, so `remediation_verified_by_rerun` is a

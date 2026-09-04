@@ -111,9 +111,21 @@ STATE_LIMITATIONS: tuple[str, ...] = (
 )
 """Pinned, closed, and in order, the way the compiled-pack limitations are."""
 
-_CLOEXEC = getattr(os, "O_CLOEXEC", 0)
-_NOFOLLOW = getattr(os, "O_NOFOLLOW", 0)
-_NONBLOCK = getattr(os, "O_NONBLOCK", 0)
+
+def _optional_flag(name: str) -> int:
+    """The bits of an ``os.open`` flag, or no bits where the platform lacks it.
+
+    ``_NOFOLLOW`` is the one whose absence matters, and ``_open_log`` refuses
+    on it rather than opening without it.
+    """
+
+    bits: int = getattr(os, name, 0)
+    return bits
+
+
+_CLOEXEC = _optional_flag("O_CLOEXEC")
+_NOFOLLOW = _optional_flag("O_NOFOLLOW")
+_NONBLOCK = _optional_flag("O_NONBLOCK")
 """Without it, opening a FIFO read-only blocks until a writer appears, so a
 ``--log`` that names one would hang instead of being refused as not a regular
 file. Harmless on the regular file the descriptor is then required to be, and
@@ -122,6 +134,12 @@ platform does with ``O_RDWR`` on a FIFO."""
 _APPEND_FLAGS = os.O_RDWR | os.O_APPEND | os.O_CREAT | _NOFOLLOW | _NONBLOCK | _CLOEXEC
 _READ_FLAGS = os.O_RDONLY | _NOFOLLOW | _NONBLOCK | _CLOEXEC
 _CHUNK_BYTES = 65_536
+_MAX_CHUNKS = MAX_LOG_BYTES // _CHUNK_BYTES
+"""How many full reads a log at the size limit takes, before the read that
+sees end of file. The read loop is bounded by this rather than by end of file
+alone, so a descriptor that never reports end of file cannot hold the command
+open; the fstat and running-count checks bound the bytes, this bounds the
+reads."""
 _RULE_ID_PATTERN = re.compile(r"^[A-Z][A-Z0-9-]{2,63}$")
 _CASE_ID_PATTERN = re.compile(r"^CTP-[A-Z0-9]{3,16}$")
 FINDING_STATUSES = frozenset(
@@ -651,15 +669,16 @@ def _check_decision_shape(event: ReviewEvent) -> None:
 
 
 def _check_signer_threshold(event: ReviewEvent, rule: DecisionRule) -> None:
-    if not rule.required_signer_roles:
-        return
-    roles = frozenset(item.role for item in event.signers)
-    if roles != rule.required_signer_roles:
-        raise contract_error(
-            "signer_threshold_unmet",
-            "$.signers",
-            "this decision requires exactly the mandated declared signer roles",
-        )
+    """Each half of the rule is checked on its own, so neither is dead data."""
+
+    if rule.required_signer_roles:
+        roles = frozenset(item.role for item in event.signers)
+        if roles != rule.required_signer_roles:
+            raise contract_error(
+                "signer_threshold_unmet",
+                "$.signers",
+                "this decision requires exactly the mandated declared signer roles",
+            )
     organizations = {item.organization_id for item in event.signers}
     if rule.distinct_organizations and len(organizations) != len(event.signers):
         raise contract_error(
@@ -953,10 +972,10 @@ def _read_log(descriptor: int) -> bytes:
     chunks: list[bytes] = []
     count = 0
     try:
-        while True:
+        while len(chunks) <= _MAX_CHUNKS:
             chunk = os.read(descriptor, _CHUNK_BYTES)
             if not chunk:
-                break
+                return b"".join(chunks)
             count += len(chunk)
             if count > MAX_LOG_BYTES:
                 raise ContextSafeError(
@@ -965,7 +984,9 @@ def _read_log(descriptor: int) -> bytes:
             chunks.append(chunk)
     except OSError as exc:
         raise _log_io_error() from exc
-    return b"".join(chunks)
+    raise ContextSafeError(
+        "log_io_error", "$", "the review log did not end within its read bound"
+    )
 
 
 def derive_review_state(log_path: Path) -> ReviewLogState:

@@ -13,6 +13,7 @@ anywhere in the file is refused, and no command ever rewrites a line.
 """
 
 import copy
+import dataclasses
 import itertools
 import json
 import os
@@ -26,11 +27,13 @@ from hypothesis import strategies as st
 
 import contextsafe.review as review_module
 from contextsafe.canonical import canonical_json, sha256_json
+from contextsafe.contract_validation import SHA256_PATTERN
 from contextsafe.errors import ContextSafeError
 from contextsafe.review import (
     DECISION_RULES,
     EMPTY_LOG_STATE,
     GENESIS_SHA256,
+    MAX_LOG_BYTES,
     SIGNATURE_STATUS,
     TRANSITIONS,
     Decision,
@@ -1179,6 +1182,19 @@ def test_a_replayed_transition_refusal_points_inside_the_record_event(
     )
 
 
+def test_the_state_document_orders_findings_by_key_not_by_arrival(
+    review_event: EventBuilder,
+) -> None:
+    """Two findings reviewed in either order print in one order: the key's."""
+
+    later = review_event("confirmed")
+    later["outcome"] = {**FINDING_OUTCOME, "rule_id": "A-I06"}
+    document = replay_log(_chained((later, review_event("confirmed")))).to_dict()
+    findings = document["findings"]
+    assert isinstance(findings, list)
+    assert [item["outcome"]["rule_id"] for item in findings] == ["A-I05", "A-I06"]  # type: ignore[index]
+
+
 def test_tail_truncation_replays_cleanly_and_only_the_head_hash_records_it(
     tmp_path: Path, finding_receipt: dict[str, Any], review_event: EventBuilder
 ) -> None:
@@ -1216,3 +1232,158 @@ def test_a_fifo_log_is_refused_without_blocking(
         path="$",
     )
     assert fifo.is_fifo()
+
+
+# --- what the mutation gate asked for ------------------------------------------
+#
+# ``review.py`` is a declared mutation target. Each test below pins a value or
+# a bound that a mechanically changed operator or constant would otherwise
+# leave unobserved: a boundary at the exact limit, a table flag with no rule
+# behind it, a constant on a line nothing else compared.
+
+
+def test_a_flag_the_platform_lacks_contributes_no_bits() -> None:
+    assert review_module._optional_flag("O_CONTEXTSAFE_ABSENT_FOR_TEST") == 0
+    assert review_module._optional_flag("O_RDONLY") == os.O_RDONLY
+
+
+def test_the_genesis_hash_is_a_well_formed_digest() -> None:
+    """The first record chains to a digest-shaped constant, not to a sentinel."""
+
+    assert SHA256_PATTERN.fullmatch(GENESIS_SHA256)
+
+
+@pytest.mark.parametrize(
+    "cls",
+    sorted(
+        (
+            member
+            for member in vars(review_module).values()
+            if isinstance(member, type)
+            and dataclasses.is_dataclass(member)
+            and member.__module__ == review_module.__name__
+        ),
+        key=lambda member: member.__name__,
+    ),
+    ids=lambda member: str(member.__name__),
+)
+def test_every_review_record_is_frozen_and_slotted(cls: type) -> None:
+    """A value that is hashed, or that a hash was derived from, cannot be changed after."""
+
+    assert cls.__dataclass_params__.frozen  # type: ignore[attr-defined]
+    assert "__slots__" in vars(cls)
+
+
+def test_a_decision_without_a_distinctness_rule_accepts_one_organization_twice(
+    review_event: EventBuilder,
+) -> None:
+    """``DECISION_RULES`` says where distinct organizations are demanded; nowhere else is it imposed."""
+
+    technical = {**CUSTOMER_SIGNER, "role": "customer_technical_owner"}
+    checked = 0
+    for decision, rule in DECISION_RULES.items():
+        if rule.distinct_organizations:
+            continue
+        event = parse_review_event(
+            review_event(decision.value, signers=[CUSTOMER_SIGNER, technical])
+        )
+        assert {signer.organization_id for signer in event.signers} == {
+            "ORG-CUSTOMER-TEST"
+        }
+        checked += 1
+    assert checked == len(DECISION_RULES) - 1
+
+
+@pytest.mark.parametrize(
+    ("field", "value", "code"),
+    [
+        ("rule_id", "A-" + "X" * 62, None),
+        ("rule_id", "A-" + "X" * 63, "invalid_string"),
+        ("case_id", "CTP-" + "A" * 16, None),
+        ("case_id", "CTP-" + "A" * 17, "invalid_string"),
+    ],
+)
+def test_outcome_identifiers_are_bounded_by_length_before_the_pattern(
+    review_event: EventBuilder, field: str, value: str, code: str | None
+) -> None:
+    """At the published length the value is accepted; one over is a length refusal."""
+
+    event = review_event("confirmed")
+    event["outcome"][field] = value
+    if code is None:
+        assert getattr(parse_review_event(event).outcome, field) == value
+    else:
+        _assert_code(lambda: parse_review_event(event), code, path=f"$.outcome.{field}")
+
+
+def test_a_receipt_hash_one_character_too_long_is_a_length_refusal(
+    review_event: EventBuilder,
+) -> None:
+    event = review_event("confirmed")
+    event["receipt"]["payload_sha256"] = "a" * 65
+    _assert_code(
+        lambda: parse_review_event(event),
+        "invalid_string",
+        path="$.receipt.payload_sha256",
+    )
+
+
+def test_a_log_exactly_at_the_size_limit_is_read_whole(tmp_path: Path) -> None:
+    """The limit is inclusive: a log of exactly one MiB is read, and refused for
+    its content rather than its size; one byte more is refused for its size."""
+
+    log = tmp_path / "review.jsonl"
+    log.write_bytes(b"\n" * MAX_LOG_BYTES)
+    descriptor = os.open(log, os.O_RDONLY)
+    try:
+        assert review_module._read_log(descriptor) == b"\n" * MAX_LOG_BYTES
+    finally:
+        os.close(descriptor)
+    _assert_code(lambda: derive_review_state(log), "invalid_json", path="$.log[0]")
+    log.write_bytes(b"\n" * (MAX_LOG_BYTES + 1))
+    _assert_code(lambda: derive_review_state(log), "input_too_large", path="$")
+
+
+def test_a_descriptor_that_never_ends_is_refused_at_the_read_bound(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The read loop is bounded by a count of reads, not only by end of file."""
+
+    log = tmp_path / "review.jsonl"
+    log.write_bytes(b"x" * 64)
+    monkeypatch.setattr(review_module, "_CHUNK_BYTES", 1)
+    descriptor = os.open(log, os.O_RDONLY)
+    try:
+        _assert_code(lambda: review_module._read_log(descriptor), "log_io_error")
+    finally:
+        os.close(descriptor)
+
+
+def test_an_append_that_lands_exactly_on_the_limit_is_accepted(
+    tmp_path: Path,
+    finding_receipt: dict[str, Any],
+    review_event: EventBuilder,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    log = tmp_path / "review.jsonl"
+    _append(log, finding_receipt, review_event, PATH_TO[Disposition.CONFIRMED])
+    size = log.stat().st_size
+    head = derive_review_state(log).head_sha256
+    event = parse_review_event(review_event("owner_assigned"))
+    line = review_module.LogRecord(
+        sequence=1,
+        previous_record_sha256=head,
+        event_sha256=sha256_json(event.to_dict()),
+        event=event,
+    ).line()
+    monkeypatch.setattr(review_module, "MAX_LOG_BYTES", size + len(line) - 1)
+    _assert_code(
+        lambda: append_review_event(
+            log, review_event("owner_assigned"), finding_receipt
+        ),
+        "log_full",
+    )
+    assert log.stat().st_size == size
+    monkeypatch.setattr(review_module, "MAX_LOG_BYTES", size + len(line))
+    append_review_event(log, review_event("owner_assigned"), finding_receipt)
+    assert log.stat().st_size == size + len(line)
