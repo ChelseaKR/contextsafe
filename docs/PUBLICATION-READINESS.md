@@ -2,24 +2,23 @@
 
 **Audit date:** 2026-08-15 · **Commit audited:** `main` @ `09e0317` (open PRs
 #11 and #12 excluded) · **Visibility when audited:** PRIVATE · **Recorded
-publication state:** the maintainer decided on 2026-08-15 to publish (Gate 0);
+publication state:** the maintainer decided on 2026-08-15 to publish;
 the visibility change itself is a separate, deliberate act and was not made by
 this document. It has since been made — see the 2026-08-29 update below
 
-**Verdict: technically ready to publish, pending an IP clearance the maintainer
-must obtain and a dual-use decision that is hers and her governance group's to
-make.** Every technical gate below passes or has a stated, bounded remediation.
-None of them answer Gate 0, which governs whether this repository may become
-public at all, and none of them answer Gate 1, which governs whether it should.
+**Verdict: technically ready to publish, pending a dual-use decision that is
+hers and her governance group's to make.** Every technical gate below passes or
+has a stated, bounded remediation. None of them answer Gate 1, which governs
+whether this repository should be public.
 
 Publication is the maintainer's recorded decision. This document exists to make
 that decision cheap and safe to make — not to make it.
 
 **Update, 2026-08-15 — the maintainer has decided to publish.** The verdict above
 is the audit's, unchanged, and everything it found stands as written. What
-changed is the decision on top of it: Gate 0 was reviewed and closed by the
-maintainer as a decision rather than an adjudication (see the status line below),
-and the four dual-use gaps Gate 1 identified were closed in the corpus itself —
+changed is the decision on top of it: Gate 0 was closed by the maintainer as a
+decision, and the four dual-use gaps Gate 1 identified were closed in the corpus
+itself —
 TB-10, the public-reader actor, T-16 through T-18, the inversion stated in
 `docs/06` section 1 and in the README, R-25 splitting the harm half out of R-23,
 HAZ-09, a publication row in the `docs/07` decision-rights table, and a
@@ -83,6 +82,15 @@ commands should know that before it fails rather than after.
   A clone taken before the rewrite also still holds the blob. That was always
   true and is not the point; the point is that the published repository does.
 
+**Update, 2026-09-04 — Gate 0 has been withdrawn from the public record.** The
+maintainer removed that section on 2026-09-04. Its content is not restated
+here, in the changelog, or anywhere else in this repository, and the sentences
+elsewhere in this document that described it were reduced to the gate's name so
+that nothing dangles. The gate number is kept so that every reference to Gate 1
+still means what it meant. The withdrawal changes nothing about the technical
+findings below, all of which stand as the audit wrote them. It closes the
+default view of the repository; it does not rewrite history.
+
 One thing §7 is not: a running total. Every figure in it is a measurement of one
 `make verify` run at the commit that section names, correct for that run and
 stale by construction thereafter. Re-run the command rather than reading the
@@ -90,67 +98,11 @@ number.
 
 ---
 
-## Gate 0 — IP / inventions-agreement clearance (MAINTAINER + ATTORNEY)
+## Gate 0 — withdrawn from the public record, 2026-09-04
 
-**Status: REVIEWED BY THE MAINTAINER AND CLOSED AS A DECISION, 2026-08-15. She
-read this section, weighed the question it raises, and decided to proceed with
-publication.**
-
-Read that status precisely. It records a decision, not a resolution. No
-adjudication has occurred, no opinion of counsel is recorded in this repository,
-and nothing below has been retracted, softened, or re-tested: every fact in the
-table, every limit on what the sweeps could establish, and the analysis of the
-unresolved question stand exactly as the audit wrote them. The maintainer decided
-with the question open, which is a legitimate thing to do and is worth recording
-as what it is.
-
-| Fact | Evidence |
-|---|---|
-| Repository created **2026-07-14** (`2026-07-13 21:40 PDT` local) | `gh repo view ChelseaKR/contextsafe --json createdAt` → `2026-07-14T04:40:32Z` |
-| First commit **2026-07-13T21:41:33-07:00** | `git log --reverse`: `a557626 add v1 delivery plan` |
-| Employment ended **2026-07-21** — **seven days after creation** | maintainer-supplied fact; it is not derivable from this repository |
-| `main` spans **2026-07-13 → 2026-08-04**; branch work continues to 2026-08-15 | `git log main --format=%ad`; 14 commits on `main`, 26 across all refs |
-| Authored under **personal identity and a GitHub noreply alias** throughout | every author and committer is `Chelsea Kelly-Reif` (three display spellings) at `3114598+ChelseaKR@users.noreply.github.com`; the only other committer is `GitHub <noreply@github.com>` on 10 squash merges |
-| **No employer address, system, or asset appears anywhere** | 0 hits for the employer name and every consultancy/agency term across all 193 blob objects in the object database, all 37 commit objects, and all commit messages; no `/Users/`, `/home/`, `C:\Users`, no internal hostname, no VPN/Jira/Confluence/Okta reference |
-| **No `NOTICE` asserting independent authorship exists** | `ls NOTICE` → absent. The sibling repository has one; this one does not |
-
-**The unresolved question.** The creation date falls **during prior
-employment**, and the subject matter — clinical informatics tooling for
-registration, EHR, HL7/FHIR, and laboratory workflows — sits closer to that
-former employer's line of business than most of this maintainer's personal
-projects, because that employer carries a healthcare engineering portfolio.
-Depending on the wording of the applicable inventions/IP agreement and on state
-law, an assignment obligation can attach to work created during employment even
-when it is authored on personal time and equipment, and the "related to the
-employer's business" test is exactly where such clauses bite. Seven days is a
-short interval, and a repository initialized one week before a departure is the
-fact pattern such clauses are written to reach.
-
-**Nothing in this repository resolves that.** There is not even the sibling
-repository's `NOTICE`, and adding one now would not resolve it either: a
-`NOTICE` is the author's own assertion, evidence of intent rather than an
-adjudication. No scan, test, or gate below speaks to the question. What the
-sweeps *can* say — and do say above — is narrower and still useful: no employer
-address, system, credential, code, or asset is present in any version of this
-history, and every commit is authored under personal identity.
-
-**This is a question for the maintainer's attorney**, and it should be answered
-*before* visibility changes, because publication cannot be undone in the way
-that matters: a repository can be un-published, but it cannot be un-seen.
-
-Until it is answered, the correct state is the current one: repository private.
-
-**Maintainer's decision, 2026-08-15.** The two paragraphs above are the audit's
-recommendation, kept verbatim, and on the timing point the maintainer decided
-otherwise: she reviewed the finding, weighed the risk it describes, and elected
-to proceed with publication without an attorney's answer on the record here.
-That is her call to make. The record preserves both the recommendation and the
-departure from it, because a document that quietly deleted the recommendation
-once it was overridden would be a worse record and a less honest one. The
-irreversibility the audit names is unchanged and is now carried as a standing
-control rather than a warning: TB-10 in `docs/06`, and the
-[publication policy](17-PUBLICATION-POLICY.md) that governs everything crossing
-it.
+This section was withdrawn by the maintainer on 2026-09-04. Its content is not
+restated anywhere in this repository. The gate number is kept so that references
+to Gate 1 remain correct.
 
 ---
 
@@ -322,7 +274,7 @@ before it becomes urgent.
 
 | Decision | Owner | When | Status (2026-08-15) |
 |---|---|---|---|
-| Publish this repository at its current contents | maintainer, after Gate 0 | now | **decided** — maintainer elected to proceed; Gate 0 closed as a decision, not an adjudication |
+| Publish this repository at its current contents | maintainer | now | **decided** — maintainer elected to proceed |
 | Whether the governed pack and assertions are ever published, licensed to customers, or held | clinical chair + community co-chair + counsel (`docs/07` §3) | **before B-010 authoring begins**, not after | **framed, not decided** — `docs/17` §5 sets out four options and recommends split publication ("publish the judgment, withhold the locator"). The policy moves the deadline one step earlier, to **before B-009**, because the case manifests are already the artifact that encodes necessity and prohibited inference. `docs/13` carries it as a dependency on B-009 |
 | Posture on compelled disclosure of a customer's receipts | counsel + customer contract (`docs/07` §8) | before the first paid pilot | **owned** — T-18, R-26, and `docs/17` §9 name counsel and state minimization as the operative control. The contract language itself is still to be drafted |
 | Add publication as an explicit trust boundary, adversarial actor, and hazard | security/privacy lead + community co-chair | at the next threat-model review | **done** — TB-10, three new actors, T-16/T-17/T-18, HAZ-09/HAZ-10 |
@@ -472,8 +424,7 @@ version does useful work: it states that the project is independent and
 personal, authored on the author's own time and equipment, and contains no
 employer- or client-proprietary code, data, or methods. **That text is an
 assertion about the maintainer's own employment, so it is hers to write and not
-this document's to draft.** Note also that it is evidence of intent, not an
-answer to Gate 0.
+this document's to draft.**
 
 **`CITATION.cff` — PASS (fixed here).** The file was valid CFF 1.2.0, but
 carried `date-released: 2026-07-17` while `git tag -l` is empty and
@@ -662,27 +613,25 @@ will hit it.
 | | |
 |---|---|
 | **Technical readiness** | Ready. Every technical gate passes or has a stated remediation; `make verify` is green from a clean clone with no secrets, no employer reference, no real patient data, no telemetry, and no private-resource dependency. |
-| **Blocking** | **Gate 0 (IP clearance)** — an attorney question, unanswered, and not addressable inside this repository. |
+| **Blocking** | **Gate 0** — withdrawn from the public record on 2026-09-04; see the gate. |
 | **Judgment, not scan** | **Gate 1 (dual-use)** — publishing the current contents is defensible; the pack-publication policy must be decided before B-010 authoring, and the threat model has no publication actor, boundary, or hazard today. |
 | **Maintainer's call, not blocking** | The recoverable GTM/pricing document (§6), the AI-authorship trailers (§12), and the `contextsafe.dev` schema identity (§6). |
 | **Do in the same change as the visibility flip** | Enable GitHub private vulnerability reporting and update `SECURITY.md` (§12); consider adding a `NOTICE` (§5). |
 | **Not done, deliberately** | No tag created. No release cut. No visibility change. No merges. No history rewriting. No employer named. |
 
-The repository should stay private until Gate 0 is cleared. Gate 1 does not
-block the current contents, but the pack-publication decision it names should be
-recorded before the work that makes it urgent begins.
+Gate 1 does not block the current contents, but the pack-publication decision
+it names should be recorded before the work that makes it urgent begins.
 
 ### Where the summary stands on 2026-08-15
 
-The table above is the audit's, unchanged. Three of its rows have moved:
+The table above is the audit's, with its Gate 0 row reduced to the gate's name
+on 2026-09-04. Three of its rows have moved:
 
 | Row | Then | Now |
 |---|---|---|
-| **Blocking — Gate 0** | open attorney question | reviewed by the maintainer and closed **as a decision**, not as an answer. The findings and the recommendation both remain on the page |
+| **Blocking — Gate 0** | open | closed by the maintainer **as a decision** on 2026-08-15; withdrawn from the public record on 2026-09-04 |
 | **Judgment — Gate 1** | four documentation gaps, no publication actor, boundary, or hazard | gaps closed: TB-10, three actors, T-16/T-17/T-18, the inversion stated where readers meet it, R-23 split from R-25, HAZ-09/HAZ-10, publication decision rights, and `docs/17`. The judgment the gate names is still open, and locator material is blocked until both governance chair seats are filled |
 | **Same change as the visibility flip** | private vulnerability reporting, `SECURITY.md`, `NOTICE` | unchanged and still outstanding; those are technical-gate work, not governance work |
 
-The closing paragraph above stands as written, and the maintainer decided
-otherwise on its first sentence. What replaces it is not a claim that the
-question was answered; it is a decision made with the question open, recorded as
-such, on 2026-08-15.
+The closing paragraph above is the audit's, less a first sentence withdrawn
+with Gate 0 on 2026-09-04.

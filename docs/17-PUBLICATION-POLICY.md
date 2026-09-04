@@ -280,8 +280,7 @@ environment where that carries risk.
 - Consent is revocable going forward. Say plainly that revocation cannot reach
   archives, forks, or history, so that the choice is made with that known.
 
-The maintainer accepted her own exposure knowingly on 2026-08-15, with the open
-question in [Gate 0](PUBLICATION-READINESS.md) in front of her. That is her
+The maintainer accepted her own exposure knowingly on 2026-08-15. That is her
 decision about her own name, and it is not a precedent anyone else is asked to
 follow.
 
@@ -327,4 +326,4 @@ correct state until something is published under this policy.
 | [docs/07 §3, §4, §7, §14](07-GOVERNANCE-LEGAL-SAFETY.md) | publication decision rights and the RACI row, HAZ-09 and HAZ-10, and the governance statement pointing here |
 | [docs/14 R-23, R-25, R-26](14-RISK-REGISTER.md) | the demand half, the harm half, and compelled disclosure, separated |
 | [docs/13 B-009](13-BACKLOG.md) | the dependency that keeps this decision ahead of the work |
-| [docs/PUBLICATION-READINESS.md](PUBLICATION-READINESS.md) | the audit that identified the gap, and the maintainer's Gate 0 decision |
+| [docs/PUBLICATION-READINESS.md](PUBLICATION-READINESS.md) | the audit that identified the gap, and the maintainer's decision to publish |
