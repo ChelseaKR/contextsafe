@@ -15,10 +15,16 @@ decision, a severity from the rubric labels, an owner as a role plus the
 SHA-256 of an opaque handle, a rationale *code*, an optional external
 reference under the provenance grammar of ADR 0006, and declared signers as a
 role plus an organization label. There is no message, note, comment, or name
-field, so a patient name, a reviewer name, or a sentence of clinical judgement
-has nowhere to go -- the same argument ``contextsafe.safe_value`` makes for
-the support bundle. The two operator-supplied labels are held to the ADR 0006
-grammars and then scanned, exactly as evidence provenance is.
+field, so a sentence of clinical judgement has nowhere to go -- the same
+argument ``contextsafe.safe_value`` makes for the support bundle. The two
+operator-supplied labels are held to the ADR 0006 grammars and then scanned,
+exactly as evidence provenance is, and that is the residual: a name-shaped
+token still fits those grammars (``Jordan.Rivera`` is a well-formed
+provenance label, ``JORDAN-RIVERA`` a well-formed system label), and only the
+configured canaries and direct-identifier shapes are scanned for. ADR 0006
+records that a grammar cannot see ordinary letters; the closed shape removes
+the field a name would be typed into, not the possibility of typing one into a
+label.
 
 **Signers are declared, not verified.** Every event and every signer carries
 ``signature_status: not_verified`` and the parser refuses any other value. A
@@ -68,6 +74,7 @@ from __future__ import annotations
 import os
 import re
 import stat
+import unicodedata
 from collections.abc import Mapping
 from dataclasses import dataclass
 from enum import StrEnum
@@ -995,6 +1002,74 @@ def _read_log(descriptor: int) -> bytes:
     raise ContextSafeError(
         "log_io_error", "$", "the review log did not end within its read bound"
     )
+
+
+def refuse_output_over_log(output: Path | None, log: Path) -> None:
+    """Refuse an ``--output`` that names the review log, however it is spelled.
+
+    ``contextsafe.cli.main`` writes ``--output`` with a plain truncating write
+    after the command has run. For every other command that is harmless; for
+    ``finding`` it would replace an append-only log with the state document
+    derived from it, after ``finding review`` had already appended, and exit
+    0. Two comparisons, each catching a spelling the other cannot. Device and
+    inode see a symlink or a hard link to a log that exists, anywhere in the
+    tree. For a log that does not exist yet, the two parent directories are
+    compared by device and inode (they exist, or the log could not be
+    created) and the two leaf names folded for case and Unicode
+    normalization, which is what a case-insensitive filesystem does to them.
+    That fold is applied on every filesystem rather than asking which kind
+    the log is on, so it is deliberately an over-refusal on a case-sensitive
+    one, where the two names are different files: the state document can be
+    written under any other name. Path text is compared through the
+    filesystem, never as strings, so ``/tmp`` and ``/private/tmp`` and a
+    symlinked parent chain resolve before the comparison, and ``..`` is
+    collapsed lexically before the parent is looked up.
+
+    ``contextsafe.cli`` runs this before the log is opened, so a refusal
+    leaves the log exactly as it was, and once more after ``finding review``
+    has appended and the log exists, so a spelling the first pass could not
+    resolve, such as a platform short name, is still refused before the
+    write; a refusal there has recorded the event and not written the state.
+    The two paths are named by category only; the rejection carries neither.
+    """
+
+    if output is None:
+        return
+    if _names_the_review_log(Path(output), Path(log)):
+        raise ContextSafeError(
+            "output_path_unsafe", "$", "output must not name the review log"
+        )
+
+
+def _names_the_review_log(output: Path, log: Path) -> bool:
+    return _same_existing_file(output, log) or (
+        _same_existing_file(_parent(output), _parent(log))
+        and _folded(output.name) == _folded(log.name)
+    )
+
+
+def _parent(path: Path) -> Path:
+    """The directory a path names, with ``..`` collapsed lexically first, so a
+    parent that only a lexical reading reaches is still compared."""
+
+    return Path(os.path.dirname(os.path.abspath(path)))
+
+
+def _same_existing_file(left: Path, right: Path) -> bool:
+    """Device and inode, or ``False`` when either path cannot be stat-ed."""
+
+    try:
+        return os.path.samefile(left, right)
+    except OSError:
+        return False
+
+
+def _folded(name: str) -> str:
+    """A leaf name as a case-insensitive, normalization-insensitive filesystem
+    would compare it: NFC before and after the case fold, because the fold of
+    a composed character is not always composed."""
+
+    return unicodedata.normalize("NFC", unicodedata.normalize("NFC", name).casefold())
 
 
 def derive_review_state(log_path: Path) -> ReviewLogState:
