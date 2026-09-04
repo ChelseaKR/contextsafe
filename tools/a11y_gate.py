@@ -50,8 +50,33 @@ Checks
     colour from the page must lose no information.
 
 ``print``
-    A ``@media print`` block must exist, must not hide a mandated disclosure,
-    and must not leave text on a background it cannot be read against.
+    A ``@media print`` block must exist, must hide nothing but the skip link,
+    and must not leave text on a background it cannot be read against. A rule
+    that hides by any of the techniques ``HIDING_TECHNIQUES`` names
+    (``display: none``, ``visibility: hidden``, zero opacity, zero font size,
+    a clip, a collapsed box with its overflow hidden, or a box positioned off
+    the page) is a finding unless every selector it applies to is in
+    ``PRINT_MAY_HIDE``: the check does not know which selectors cover a
+    mandated disclosure, so it does not try to. It must also keep the
+    page readable across page breaks (B-038): every table has a ``<thead>``
+    and the print rules declare it a repeating header group; a result row, a
+    limitation, the translation notice, and a source-locale original are each
+    kept on one page; and a heading or caption is kept with what follows it,
+    so no finding is orphaned from its reason and no table body from its
+    headers.
+
+``minimization``
+    Every run of reader-visible text is either a message from the page's
+    catalog or the source catalog, or one of the values the page is allowed
+    to present from the receipt: case id, the four hashes, the mandated
+    limitations, rule ids, the outcome counts, runner and contract versions,
+    and the caller-declared time. A catalog message with a placeholder counts
+    only when the placeholder holds one of those values or a locale tag, so a
+    message is never a wildcard prefix that free text can hide behind.
+    Anything else is a value the page did not need to substantiate an outcome
+    (A-036, F-027). The expected hash the gate compares the page against is
+    recomputed from the payload, never read from the document's own
+    ``payload_sha256`` field.
 
 ``axe``
     axe-core in a headless DOM. Violations fail. Undetermined rules are
@@ -83,7 +108,7 @@ import re
 import shutil
 import subprocess
 import sys
-from collections.abc import Iterable, Iterator, Sequence
+from collections.abc import Callable, Iterable, Iterator, Mapping, Sequence
 from dataclasses import dataclass, field
 from html.parser import HTMLParser
 from pathlib import Path
@@ -92,10 +117,11 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 if str(REPO_ROOT / "src") not in sys.path:  # pragma: no cover - import shim
     sys.path.insert(0, str(REPO_ROOT / "src"))
 
+from contextsafe.canonical import JsonValue, sha256_json  # noqa: E402
 from contextsafe.errors import ContextSafeError  # noqa: E402
 from contextsafe.evaluator import evaluate  # noqa: E402
 from contextsafe.html_receipt import PAGE_KIND, render_receipt_page  # noqa: E402
-from contextsafe.i18n import load_catalog  # noqa: E402
+from contextsafe.i18n import SOURCE_LOCALE, load_catalog, source_catalog  # noqa: E402
 from contextsafe.receipt import build_receipt_document  # noqa: E402
 from contextsafe.reference_fixtures import REFERENCE_ROOT  # noqa: E402
 from contextsafe.validation import parse_bundle  # noqa: E402
@@ -114,7 +140,82 @@ HARNESS_MODULES = REPO_ROOT / "tools" / "a11y" / "node_modules"
 MINIMUM_CONTRAST = 4.5
 """WCAG 2.2 AA for body text. Applied to every pair, including large text."""
 
-BUILTIN_CHECKS = ("html-validity", "contrast", "color-only", "print")
+BUILTIN_CHECKS = ("html-validity", "contrast", "color-only", "print", "minimization")
+
+PRINT_KEEP_TOGETHER = ("tr", "li", ".notice", ".source-text")
+"""Selectors whose print rule must declare ``break-inside: avoid``.
+
+A result row is a finding and its reason; a list item is a limitation and,
+when the translation is unreviewed, its source-locale original; the notice is
+the disclosure that the translation is unreviewed. Splitting any of them
+across a page break orphans a finding from the sentence that explains it.
+"""
+
+PRINT_KEEP_WITH_NEXT = ("h1", "h2", "h3", "caption")
+"""Selectors whose print rule must declare ``break-after: avoid``."""
+
+PRINT_REPEATED_HEADER = ("thead", "display", "table-header-group")
+"""The declaration that makes a table's headers repeat on every printed page."""
+
+PRINT_MAY_HIDE = (".skip-link",)
+"""The only selectors a print rule may hide.
+
+An allowlist, not a list of protected selectors. The earlier form named five
+selectors the disclosures live under and let ``li { display: none; }`` walk
+past, which hides every limitation on the page; a check that has to know
+which selectors cover a disclosure is a check that is wrong the day the
+markup changes. Anything hidden that is not the skip link is a finding.
+"""
+
+_ZERO = re.compile(r"^-?(?:0+\.?0*|\.0+)(?:px|pt|em|rem|%|vh|vw|cm|mm|in)?$")
+_OFF_PAGE = re.compile(r"^-\d*\.?\d+(?:px|pt|em|rem|%|vh|vw|cm|mm|in)$")
+
+
+def _is_zero(value: str | None) -> bool:
+    return value is not None and _ZERO.fullmatch(value.strip()) is not None
+
+
+def _collapsed(declarations: Mapping[str, str]) -> bool:
+    """A box with no height or width and its overflow cut off shows nothing."""
+
+    return declarations.get("overflow") == "hidden" and any(
+        _is_zero(declarations.get(name))
+        for name in ("height", "max-height", "width", "max-width")
+    )
+
+
+def _off_page(declarations: Mapping[str, str]) -> bool:
+    """A box taken out of flow and pushed past an edge is printed nowhere."""
+
+    return declarations.get("position") in ("absolute", "fixed") and any(
+        _OFF_PAGE.fullmatch(declarations.get(edge, "").strip()) is not None
+        and float(re.sub(r"[a-z%]+$", "", declarations[edge].strip())) <= -100
+        for edge in ("left", "top", "right", "bottom")
+    )
+
+
+HIDING_TECHNIQUES: tuple[tuple[str, Callable[[Mapping[str, str]], bool]], ...] = (
+    ("display", lambda d: d.get("display") == "none"),
+    ("visibility", lambda d: d.get("visibility") == "hidden"),
+    ("opacity", lambda d: _is_zero(d.get("opacity"))),
+    ("font-size", lambda d: _is_zero(d.get("font-size"))),
+    ("clip", lambda d: "clip" in d or "clip-path" in d),
+    ("overflow", _collapsed),
+    ("position", _off_page),
+)
+"""Every way a print rule can make an element disappear, each named.
+
+A check that knew only ``display`` and ``visibility`` was a check that a
+``.notice { opacity: 0 }`` walked straight past; the print stylesheet has no
+legitimate reason to use any of these on anything but the skip link, so each
+is a finding rather than a judgement call. ``clip`` and ``clip-path`` are refused
+whatever their value: a clip that shows the whole element is a clip nobody
+needed to write.
+"""
+
+_IGNORED_RUNS = frozenset({"✔", "✖", "▣", "—", "?"})
+"""Status symbols. ``color-only`` checks that each sits beside its word."""
+
 ENGINES = ("builtin", "axe")
 
 UNDETERMINED_COVERAGE = {
@@ -177,6 +278,8 @@ class Subject:
     payload_sha256: str
     case_id: str
     required_text: tuple[str, ...]
+    presentable: frozenset[str] = frozenset()
+    """Every receipt value the page may show as a run of text on its own."""
 
 
 @dataclass(slots=True)
@@ -302,6 +405,43 @@ def parse_document(html: str) -> _Document:
     return document
 
 
+class _VisibleRuns(HTMLParser):
+    """Collect every run of text a reader would see on the page."""
+
+    def __init__(self) -> None:
+        super().__init__(convert_charrefs=True)
+        self.runs: list[str] = []
+        self._suppress = 0
+
+    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        """Start suppressing inside an element a reader never sees."""
+
+        if tag in ("head", "script", "style", "title"):
+            self._suppress += 1
+
+    def handle_endtag(self, tag: str) -> None:
+        """Stop suppressing at the close of that element."""
+
+        if tag in ("head", "script", "style", "title") and self._suppress:
+            self._suppress -= 1
+
+    def handle_data(self, data: str) -> None:
+        """Record one non-blank run."""
+
+        text = data.strip()
+        if text and not self._suppress:
+            self.runs.append(text)
+
+
+def visible_runs(html: str) -> list[str]:
+    """Return every run of reader-visible text on ``html``, in page order."""
+
+    parser = _VisibleRuns()
+    parser.feed(html)
+    parser.close()
+    return parser.runs
+
+
 def _luminance(hex_colour: str) -> float:
     value = hex_colour.lstrip("#")
     if len(value) == 3:
@@ -421,8 +561,83 @@ def check_color_only(subject: Subject) -> CheckResult:
     return result
 
 
+def _print_declarations(printed: str) -> dict[str, dict[str, str]]:
+    """Return the print declarations in force for each simple selector.
+
+    A rule written ``section, table, tr { ... }`` counts for each of the three,
+    which is how the stylesheet writes them and how a browser reads them.
+    """
+
+    declared: dict[str, dict[str, str]] = {}
+    for selector, declarations in _rules(printed):
+        for part in selector.split(","):
+            declared.setdefault(part.strip(), {}).update(declarations)
+    return declared
+
+
+def _hiding_findings(subject: Subject, printed: str) -> Iterator[Finding]:
+    """A rule that hides is a finding unless it hides only the skip link.
+
+    Judged per selector list: ``.skip-link, .notice { display: none; }`` hides
+    the notice, so the whole rule is a finding, not the allowlisted half.
+    """
+
+    for selector, declarations in _rules(printed):
+        if {part.strip() for part in selector.split(",")} <= set(PRINT_MAY_HIDE):
+            continue
+        for technique, hides in HIDING_TECHNIQUES:
+            if hides(declarations):
+                yield Finding(
+                    "print",
+                    subject.name,
+                    f"print rule {selector!r} hides content the page must "
+                    f"keep when printed (by {technique})",
+                )
+
+
+def _page_break_findings(
+    subject: Subject, declared: Mapping[str, Mapping[str, str]]
+) -> Iterator[Finding]:
+    """Headers repeat, and nothing that belongs together is split (B-038)."""
+
+    header, prop, value = PRINT_REPEATED_HEADER
+    if declared.get(header, {}).get(prop) != value:
+        yield Finding(
+            "print",
+            subject.name,
+            f"print rules do not declare {header!r} as {value!r}, so table "
+            "headers would not repeat on every printed page",
+        )
+    for selector in PRINT_KEEP_TOGETHER:
+        if declared.get(selector, {}).get("break-inside") != "avoid":
+            yield Finding(
+                "print",
+                subject.name,
+                f"print rules do not keep {selector!r} on one page, so a "
+                "finding could be orphaned from its reason or a limitation "
+                "from its original",
+            )
+    for selector in PRINT_KEEP_WITH_NEXT:
+        if declared.get(selector, {}).get("break-after") != "avoid":
+            yield Finding(
+                "print",
+                subject.name,
+                f"print rules do not keep {selector!r} with what follows it",
+            )
+
+
+def _table_header_findings(subject: Subject) -> Iterator[Finding]:
+    for tag, _, raw in parse_document(subject.html).raw_by_element:
+        if tag == "table" and "<thead" not in raw:
+            yield Finding(
+                "print",
+                subject.name,
+                "a table has no <thead>, so its headers cannot repeat in print",
+            )
+
+
 def check_print(subject: Subject) -> CheckResult:
-    """The page has to print, disclosures included."""
+    """The page has to print, disclosures included, across page breaks."""
 
     result = CheckResult("print")
     _, printed = _split_media(_stylesheet(subject.html))
@@ -431,20 +646,42 @@ def check_print(subject: Subject) -> CheckResult:
             Finding("print", subject.name, "the page has no @media print rules")
         )
         return result
-    protected = (".notice", ".source-text", "main", "section", "table")
-    for selector, declarations in _rules(printed):
+    declared = _print_declarations(printed)
+    result.examined += len(list(_rules(printed)))
+    result.examined += 1 + len(PRINT_KEEP_TOGETHER) + len(PRINT_KEEP_WITH_NEXT)
+    result.examined += subject.html.count("<table")
+    result.findings.extend(_hiding_findings(subject, printed))
+    result.findings.extend(_page_break_findings(subject, declared))
+    result.findings.extend(_table_header_findings(subject))
+    return result
+
+
+def check_minimization(subject: Subject) -> CheckResult:
+    """Nothing on the page but catalog text and the values it may present."""
+
+    result = CheckResult("minimization")
+    catalogs = (load_catalog(subject.locale), source_catalog())
+    # A placeholder may hold only a value the page may present or the locale
+    # tags the footer and the source-original label name. Without this, every
+    # message with a placeholder is a prefix any free text can follow.
+    fillers = subject.presentable | {subject.locale, SOURCE_LOCALE}
+    for index, run in enumerate(visible_runs(subject.html)):
         result.examined += 1
-        if declarations.get("display") != "none":
+        if run in subject.presentable or run in _IGNORED_RUNS:
             continue
-        if any(name in selector for name in protected):
-            result.findings.append(
-                Finding(
-                    "print",
-                    subject.name,
-                    f"print rule {selector!r} hides content the page must "
-                    "keep when printed",
-                )
+        if any(catalog.accounts_for(run, fillers) for catalog in catalogs):
+            continue
+        # The run is named by position and size, never quoted: on a real
+        # receipt the thing this check catches is exactly the value that must
+        # not be copied into a report.
+        result.findings.append(
+            Finding(
+                "minimization",
+                subject.name,
+                f"visible text run {index} ({len(run)} characters) is neither "
+                "catalog text nor a value the page may present",
             )
+        )
     return result
 
 
@@ -604,8 +841,8 @@ def assert_subject(subject: Subject) -> list[Finding]:
     return findings
 
 
-def build_subjects(locales: Sequence[str]) -> tuple[Subject, ...]:
-    """Render one page per locale from the bundled reference fixture."""
+def reference_document() -> dict[str, JsonValue]:
+    """Build the bundled reference receipt document, in process."""
 
     def read(name: str) -> object:
         return json.loads((REFERENCE / name).read_text(encoding="utf-8"))
@@ -617,7 +854,52 @@ def build_subjects(locales: Sequence[str]) -> tuple[Subject, ...]:
     bundle = parse_bundle(
         read("case.json"), read("observations.json"), read("rules.json")
     )
-    document = build_receipt_document(bundle, evaluate(bundle))
+    return build_receipt_document(bundle, evaluate(bundle))
+
+
+def presentable_values(document: Mapping[str, JsonValue]) -> frozenset[str]:
+    """Return the receipt values the page may show as a run of text.
+
+    Named by pointer rather than by walking the document, so a value the
+    receipt carries and the page does not need — an expected or observed hash,
+    a rule version, or a field a later contract adds — is not on the list by
+    accident. This is the A-036 allowlist.
+    """
+
+    payload = document["payload"]
+    envelope = document["envelope"]
+    if not isinstance(payload, dict) or not isinstance(envelope, dict):
+        raise TypeError("receipt payload and envelope must be objects")
+    hashes, summary = payload["hashes"], payload["summary"]
+    limitations, results = payload["limitations"], payload["results"]
+    if not isinstance(hashes, dict) or not isinstance(summary, dict):
+        raise TypeError("receipt hashes and summary must be objects")
+    if not isinstance(limitations, list) or not isinstance(results, list):
+        raise TypeError("receipt limitations and results must be arrays")
+    values: list[object] = [
+        payload["case_id"],
+        payload["runner_version"],
+        document["schema_version"],
+        sha256_json(payload),
+        envelope["claimed_generated_at"],
+        *hashes.values(),
+        *summary.values(),
+        *limitations,
+        *(item["rule_id"] for item in results if isinstance(item, dict)),
+    ]
+    return frozenset(str(value) for value in values if value is not None)
+
+
+def build_subjects(locales: Sequence[str]) -> tuple[Subject, ...]:
+    """Render one page per locale from the bundled reference fixture.
+
+    The hash each page must carry is recomputed from the payload here rather
+    than copied from the document's own ``payload_sha256`` field, so a page
+    rendered from a document whose field was edited cannot satisfy the gate by
+    agreeing with the field.
+    """
+
+    document = reference_document()
     payload = document["payload"]
     if not isinstance(payload, dict):  # pragma: no cover - build_receipt_document
         raise TypeError("receipt payload is not an object")
@@ -625,14 +907,16 @@ def build_subjects(locales: Sequence[str]) -> tuple[Subject, ...]:
     if not isinstance(limitations, list):  # pragma: no cover - schema-pinned
         raise TypeError("receipt limitations are not a list")
     case_id = str(payload["case_id"])
+    presentable = presentable_values(document)
     return tuple(
         Subject(
             name=f"receipt.{locale}.html",
             locale=locale,
             html=render_receipt_page(document, locale=locale),
-            payload_sha256=str(document["payload_sha256"]),
+            payload_sha256=sha256_json(payload),
             case_id=case_id,
             required_text=tuple(str(item) for item in limitations),
+            presentable=presentable,
         )
         for locale in locales
     )
@@ -726,6 +1010,7 @@ _CHECKS = {
     "contrast": check_contrast,
     "color-only": check_color_only,
     "print": check_print,
+    "minimization": check_minimization,
 }
 
 
@@ -891,6 +1176,7 @@ DEFECT_RULES: frozenset[str] = frozenset(
         "color-only",
         "contrast",
         "html-validity",
+        "minimization",
         "print",
         "wrong-subject",
     }

@@ -172,8 +172,20 @@ not earn:
 Built-in checks: structural HTML validity (landmarks, heading order, duplicate
 ids, table captions and header scope, resolvable `aria-labelledby` and in-page
 links, no script, no external resource), WCAG 2.2 contrast computed from the
-stylesheet for both screen and print rules, no colour-only status encoding, and
-a print block that does not hide a mandated disclosure.
+stylesheet for both screen and print rules, no colour-only status encoding, a
+print block that hides nothing but the skip link, by any technique the gate
+names and under any selector, and that keeps the page
+readable across page breaks (B-038, added 2026-09-04: every table has a
+`<thead>` declared as a repeating header group, a result row, a limitation
+with its original, and the translation notice are each kept on one page, and
+headings and captions stay with what follows them), and evidence minimization
+(A-036, same date: every visible run of text is catalog text or a receipt
+value the page is allowed to present, and the payload hash the gate expects is
+recomputed from the payload rather than read from the document). The print
+checks are computed from the stylesheet and the markup; no browser has printed
+the page under test, so the print-preview row of section 7 remains manual.
+The pseudolocale requirement of section 6 — at least 35% expansion, diacritics,
+placeholder parity — is measured by `make i18n` on the generated catalog.
 
 **Not automated, and not claimed.** pa11y is not wired in: its engine,
 HTML_CodeSniffer, loads rulesets by injecting script tags and does not complete
