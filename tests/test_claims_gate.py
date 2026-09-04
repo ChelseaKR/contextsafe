@@ -358,8 +358,6 @@ def test_a_new_contract_missing_from_the_schema_readme_is_a_finding(repo: Path) 
     findings = gate.run_gate(repo)
     assert _checks(findings) == {"schema-contracts"}
     assert any(f"{stated} contracts" in f.detail for f in findings)
-
-    assert any("thirteen contracts" in f.detail for f in findings)
     assert any("contextsafe-later-v1.schema.json" in f.detail for f in findings)
 
 
@@ -375,7 +373,9 @@ def test_a_count_beyond_the_number_words_is_reported_in_digits(repo: Path) -> No
     findings = [f for f in gate.run_gate(repo) if "contracts'" in f.detail]
     assert findings and f"'{count} contracts'" in findings[0].detail
 
-    assert findings and "'15 contracts'" in findings[0].detail
+    (repo / "schemas" / "README.md").write_text("no count stated\n", encoding="utf-8")
+    findings = [f for f in gate.run_gate(repo) if "contracts'" in f.detail]
+    assert findings and f"'{count} contracts'" in findings[0].detail
 
 
 def test_an_empty_schemas_directory_cannot_be_examined(repo: Path) -> None:
