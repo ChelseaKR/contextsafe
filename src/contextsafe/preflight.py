@@ -11,6 +11,7 @@ from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
 
+from contextsafe.canonical import JsonValue
 from contextsafe.errors import ContextSafeError
 from contextsafe.evidence import (
     EvidenceScope,
@@ -29,7 +30,13 @@ from contextsafe.jsonio import parse_json_bytes
 # layer can reach one definition of them without importing this one and creating
 # a cycle. `identifier_hits` is re-exported here because that is the documented
 # extension point and where every caller already imports it from.
-__all__ = ["MAX_EVIDENCE_BYTES", "identifier_hits", "open_preflighted_source"]
+__all__ = [
+    "MAX_EVIDENCE_BYTES",
+    "ScannedSource",
+    "identifier_hits",
+    "open_preflighted_source",
+    "scan_source",
+]
 
 MAX_EVIDENCE_BYTES = 1_048_576
 _CHUNK_BYTES = 65_536
@@ -90,6 +97,25 @@ class _DescriptorMetadata:
     size: int
     modified_ns: int
     changed_ns: int
+
+
+@dataclass(frozen=True, slots=True)
+class ScannedSource:
+    """One complete, read-only first pass over a caller-owned source.
+
+    What the pass established and nothing more: the digest and length of the
+    bytes it read, and the parsed value after the boundary scan accepted it.
+    The scan is the profile-independent half of a preflight — size, regular
+    file, no final link, strict JSON, prohibited fields, Unicode controls,
+    canaries, and direct-identifier patterns — and it binds the value to no
+    plan, case, or checkpoint. A caller that needs that binding runs
+    :func:`open_preflighted_source`; a caller that reads the envelope against
+    something other than an execution plan starts here.
+    """
+
+    raw_sha256: str
+    raw_byte_count: int
+    value: JsonValue
 
 
 @dataclass(slots=True)
@@ -330,6 +356,43 @@ def _boundary_scan(value: object) -> None:
             _reject_unsafe_string(item, path)
 
 
+def _scan_open_descriptor(
+    file_descriptor: int,
+) -> tuple[_DescriptorMetadata, ScannedSource]:
+    """Read, hash, parse, and boundary-scan one already-open descriptor."""
+
+    initial = _descriptor_metadata(file_descriptor)
+    raw, raw_sha256 = _read_first_pass(file_descriptor)
+    _assert_unchanged(file_descriptor, initial)
+    parsed = parse_json_bytes(raw)
+    _boundary_scan(parsed)
+    return initial, ScannedSource(
+        raw_sha256=raw_sha256, raw_byte_count=len(raw), value=parsed
+    )
+
+
+def scan_source(path: Path) -> ScannedSource:
+    """Run the complete read-only boundary scan and close the descriptor.
+
+    Opens the path once with the same no-follow, regular-file, and one MiB
+    rules as a preflight, reads the whole first pass, and returns only what
+    that pass established. It creates no workspace, copy, index, or log, and
+    it does not bind the value to a plan scope: that is the caller's check,
+    made against whatever contract the caller is authorized to hold.
+    """
+
+    file_descriptor = _open_source(path)
+    primary_error: BaseException | None = None
+    try:
+        _initial, scanned = _scan_open_descriptor(file_descriptor)
+        return scanned
+    except BaseException as exc:
+        primary_error = exc
+        raise
+    finally:
+        _close_source_descriptor(file_descriptor, primary_error=primary_error)
+
+
 @contextmanager
 def open_preflighted_source(
     path: Path, scope: EvidenceScope
@@ -339,19 +402,15 @@ def open_preflighted_source(
     file_descriptor = _open_source(path)
     primary_error: BaseException | None = None
     try:
-        initial = _descriptor_metadata(file_descriptor)
-        raw, raw_sha256 = _read_first_pass(file_descriptor)
-        _assert_unchanged(file_descriptor, initial)
-        parsed = parse_json_bytes(raw)
-        _boundary_scan(parsed)
-        parse_evidence_source(parsed, scope=scope)
+        initial, scanned = _scan_open_descriptor(file_descriptor)
+        parse_evidence_source(scanned.value, scope=scope)
         yield PreflightedSource(
             file_descriptor=file_descriptor,
             initial_metadata=initial,
             result=PreflightResult(
                 scope=scope,
-                raw_sha256=raw_sha256,
-                raw_byte_count=len(raw),
+                raw_sha256=scanned.raw_sha256,
+                raw_byte_count=scanned.raw_byte_count,
             ),
         )
     except BaseException as exc:

@@ -146,6 +146,30 @@ still depends on B-010/B-019/B-026, and invariants 2, 5, 6, 7, and 8 need
 pack-lifecycle execution blocking, review signatures, HTML rendering, and
 signature verification that do not exist yet.
 
+Implementation note (2026-09-04, B-022): `contextsafe import --format
+canonical-json` now exists as the read-only conversion step: it runs the
+iteration-3 evidence boundary scan on one canonical JSON envelope and converts
+it, whole or not at all, into the observation-set document `evaluate` accepts,
+with the source digest and record pointer on every observation, the importer's
+version as the mapping version, and the case token cross-checked against the
+case document. `src/contextsafe/importers/` is the boundary the FHIR, HL7, and
+LIS adapters (B-023–B-025) will register into: a shared `ImportResult`, a
+closed warning vocabulary, an `import_*` rejection family, and a registry the
+command line reads, so a new format is one module and one entry. Values are
+carried as the source's own tokens, so evaluating an imported observation
+against the reference rule set reports `semantic_mismatch` until a mapping
+profile binds the token, and `profile_reviewed` is `false` on every result.
+B-022 is not closed: the field-code mapping is reference-only and no
+interoperability, clinical, or community reviewer has approved it; the source's
+`plan_id` is checked for shape and not against a plan, because the plan-bound,
+persisting `evidence import` still depends on B-035; sex-parameter records
+reject rather than convert, because the envelope cannot carry the
+supporting-observation link and no profile (B-026) exists to bind one; the
+result's counts and warnings stay in process because the observation-set
+contract has no field for them; and the property suites cover the
+machine-checkable invariants only, not adapter acceptance against a partner
+export.
+
 ## Phase 4 — review and receipts
 
 | ID | Trace | Deliverable and acceptance | Owner | Dependency | Estimate |

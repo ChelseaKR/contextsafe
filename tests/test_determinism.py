@@ -50,6 +50,17 @@ RECEIPT_DOCUMENT_SHA256 = (
 )
 """SHA-256 of the reference ``evaluate`` document, terminal newline included."""
 
+IMPORTED_OBSERVATIONS_SHA256 = (
+    "9d7e92c2b771d5aafd00e21bd81debf8c306dde7ed6adff8eafd79b5ae8d9f74"
+)
+"""SHA-256 of ``import`` over the reference source, terminal newline included.
+
+Pinned for the same reason as the receipt digest: the observation set an
+import produces is the input to a receipt, so a platform that changed one
+byte of it would change every receipt downstream. It moves only with the
+reference source, the case document, or the importer's mapping version.
+"""
+
 _ENVIRONMENTS: tuple[dict[str, str], ...] = (
     {
         "TZ": "UTC",
@@ -366,6 +377,69 @@ def test_evidence_preflight_result_is_deterministic(tmp_path: Path) -> None:
     assert artifact is not None
     _assert_canonical_line(artifact)
     assert json.loads(artifact.decode("utf-8"))["persisted"] is False
+
+
+@pytest.mark.skipif(os.name == "nt", reason=_WINDOWS_UNSUPPORTED)
+def test_import_observation_set_is_deterministic_and_pinned(tmp_path: Path) -> None:
+    """The conversion step is byte-stable, and its digest is one constant.
+
+    The source digest on every observation is the digest of the reference
+    bytes, which are identical in every copied input directory, so the
+    artifact cannot depend on where the source was read from.
+    """
+
+    runs = _three_runs(
+        tmp_path,
+        lambda reference: [
+            "import",
+            "--format",
+            "canonical-json",
+            "--source",
+            str(reference / "evidence-source.json"),
+            "--case",
+            str(reference / "case.json"),
+            "--checkpoint",
+            "ehr",
+        ],
+        with_output=True,
+    )
+    _assert_identical(runs)
+    assert runs[0].returncode == 0
+    assert runs[0].stdout == b""
+    assert runs[0].stderr == b""
+    artifact = runs[0].artifact
+    assert artifact is not None
+    _assert_canonical_line(artifact)
+    assert hashlib.sha256(artifact).hexdigest() == IMPORTED_OBSERVATIONS_SHA256
+    for fragment in (str(tmp_path), str(ROOT), "Kiritimati", "en_US", "inputs-b"):
+        assert fragment.encode("utf-8") not in artifact
+
+
+@pytest.mark.skipif(os.name == "nt", reason=_WINDOWS_UNSUPPORTED)
+def test_import_rejection_is_deterministic(tmp_path: Path) -> None:
+    """A rejected import is the same one-line error object on every run."""
+
+    runs = _three_runs(
+        tmp_path,
+        lambda reference: [
+            "import",
+            "--format",
+            "canonical-json",
+            "--source",
+            str(reference / "evidence-source.json"),
+            "--case",
+            str(reference / "case.json"),
+            "--checkpoint",
+            "interface",
+        ],
+    )
+    _assert_identical(runs)
+    assert runs[0].returncode == 2
+    assert runs[0].stdout == b""
+    _assert_canonical_line(runs[0].stderr)
+    assert json.loads(runs[0].stderr.decode("utf-8"))["error"]["code"] == (
+        "import_checkpoint_mismatch"
+    )
 
 
 def test_platforms_without_descriptor_relative_open_fail_closed(

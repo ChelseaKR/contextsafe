@@ -20,6 +20,74 @@ rather than after it.
   findings and Gate 1 are unchanged. This closes the default view of the
   repository; it does not rewrite history.
 
+### Added
+
+- **`contextsafe import`, the read-only conversion step, and the importer
+  registry the adapters that follow will share (B-022).**
+  `contextsafe import --format canonical-json --source FILE --case CASE.json
+  --checkpoint ehr --output observations.json` opens one caller-owned
+  canonical JSON boundary envelope through the same evidence boundary scan as
+  `evidence preflight` (one descriptor, no-follow, one MiB, prohibited fields,
+  Unicode controls, PHI canaries, direct-identifier patterns) and converts it
+  into the observation-set document `evaluate --observations` accepts: one
+  observation per record, `evidence.source_sha256` the digest of the source
+  bytes, `evidence.source_pointer` the record's own pointer,
+  `mapping.mapping_version` the importer's version, the case token and
+  synthetic identifier cross-checked against the case document, and the
+  emitted document re-validated by the observation contract before it is
+  written. It persists, copies, indexes, and logs nothing; the plan-bound
+  `evidence import` in Architecture §7 is a different command and still does
+  not exist. The source's `plan_id` is checked for shape only, and the
+  in-process result says so with a closed-vocabulary warning.
+
+  The conversion is whole or nothing. A `field_code` outside the closed
+  five-concept mapping (the envelope's laboratory codes included), a record
+  with no value, a record that says `specified` and carries no value, a
+  recorded-sex-or-gender record without a context, an identifier outside the
+  synthetic namespace, a checkpoint other than the one requested, or any
+  value the observation contract rejects (a non-synthetic name, an
+  unsupported RSG value, an over-long context) rejects the source with a code
+  and a location and produces nothing. Nothing is dropped, and nothing is
+  normalized to the closest supported value (A-033). A sex-parameter record
+  rejects too: the envelope cannot carry the supporting-observation link the
+  concept needs in one record, and an SPCU observation without it is not
+  emitted.
+
+  Values are the source's own tokens, verbatim. `CSYN-PRONOUN-THEY-THEM` is
+  carried as that string, not as `they/them`; gender identity's `code_system`
+  and RSG's `source`, which the envelope does not carry, are filled with a
+  fixed `urn:contextsafe:unbound-...` token rather than a value guessed from
+  the case or the checkpoint. So evaluating the reference source against the
+  reference `rules.json` reports `semantic_mismatch` for the pronouns rule
+  and `missing_evidence` for the other four, and that is the correct result:
+  the tool has not been told the token and the expected value are the same,
+  because the mapping profile that would say so (B-026) does not exist. Every
+  result carries `profile_reviewed: false`, and the result type refuses to be
+  constructed otherwise. The field-code mapping is an identity over concept
+  names, so no importer path can derive one concept from another.
+
+  The module boundary is `src/contextsafe/importers/`: `base.py` holds the
+  shared `ImportResult`, the closed `ImportWarningCode` vocabulary, the
+  `import_*` rejection family, and the `Importer` protocol;
+  `canonical_json.py` is the one registered format; `__init__.py` is the
+  registry `--format` reads its choices from, so adding a format is one new
+  module and one registry entry with no change to `cli.py`. All three are
+  declared safety modules. `preflight.scan_source` and
+  `evidence.parse_evidence_envelope` are the plan-free halves of the existing
+  preflight, factored out so the importer runs the same scan the preflight
+  runs; `evidence preflight` itself is unchanged. `import` honours `--quiet`,
+  `--no-color`, `--output`, and `--log-dir` (the log's closed command
+  vocabulary now includes `import`), is in the three-run determinism matrix
+  with a pinned artifact digest, and fails closed with
+  `input_path_unsupported` where descriptor-relative no-follow reads do not
+  exist, as the other boundary commands do. Hypothesis suites pin that import
+  followed by evaluate is deterministic and that any unknown field code or
+  non-synthetic identifier rejects the whole source. No published contract
+  changed, no schema version moved, and the pinned reference-receipt digest is
+  unchanged. The mapping is reference-only and ungoverned: no clinical,
+  laboratory, interoperability, or community reviewer has approved it, and
+  nothing it emits can authorize execution or relabel an unsigned artifact.
+
 ## [0.1.0] - 2026-09-02
 
 ### Fixed

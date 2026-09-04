@@ -36,6 +36,10 @@
       "review": "source",
       "text": "Check one synthetic source against the plan boundary without persisting it."
     },
+    "cli.command.import": {
+      "review": "source",
+      "text": "Convert one boundary-checked synthetic source into an observation-set document without persisting it."
+    },
     "cli.command.pack": {
       "review": "source",
       "text": "Compile and validate an unsigned governed pack."
@@ -75,6 +79,10 @@
     "cli.flag.fail_on": {
       "review": "source",
       "text": "evaluate gate threshold: 'finding' exits 1 when the generated receipt contains at least one fail outcome; the receipt itself is still emitted unchanged. 'nothing' keeps the default behaviour of exiting 0 whenever a receipt is produced"
+    },
+    "cli.flag.format": {
+      "review": "source",
+      "text": "the registered source format to convert; the source is read once through the evidence boundary check and never copied, indexed, or logged"
     },
     "cli.flag.lang": {
       "review": "source",

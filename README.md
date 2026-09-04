@@ -7,7 +7,7 @@ receipt that states its own limits. The clinically and community-governed
 service that would run it against a real health system is a plan, not a
 product.**
 
-The tool is here now. Ten subcommands, no network access, committed synthetic
+The tool is here now. Eleven subcommands, no network access, committed synthetic
 fixtures that ship inside the package. With
 [`uv`](https://docs.astral.sh/uv/) installed, this returns a full receipt:
 
@@ -283,6 +283,39 @@ The same iteration adds the operator surface (the B-046 slice):
   (command, outcome, error code) to a local append-only log. Off unless asked,
   never enabled from the environment, no message field, and no clock reading.
 
+### B-022: canonical JSON import and the importer registry
+
+`contextsafe import --format canonical-json --source FILE --case CASE.json
+--checkpoint ehr --output observations.json` is the read-only conversion step
+between a boundary envelope and the evaluator. It opens the source once
+through the same evidence boundary scan as `evidence preflight` and emits the
+observation-set document `evaluate --observations` accepts, one observation
+per record: `evidence.source_sha256` is the digest of the source bytes,
+`evidence.source_pointer` is the record's own pointer, `mapping.mapping_version`
+is the importer's version, and the case token and synthetic identifier are
+cross-checked against the case document. It never persists, copies, indexes,
+or logs the source. `src/contextsafe/importers/` is the boundary the adapters
+that follow register into: a shared result with a closed warning vocabulary
+and an `import_*` rejection family, and a registry `--format` reads, so a new
+format is one module and one entry.
+
+What it does not claim. The conversion is whole or nothing: a field code
+outside the closed five-concept mapping, an untyped value, an identifier
+outside the synthetic namespace, or any value the observation contract rejects
+fails the source with a code and a location and produces nothing, and nothing
+is normalized to the closest supported value (A-033). Values are the source's
+own tokens, carried verbatim — `CSYN-PRONOUN-THEY-THEM` stays that string, not
+`they/them` — so evaluating the imported reference source against the
+reference `rules.json` reports `semantic_mismatch` for the pronouns rule and
+`missing_evidence` for the rest. That is correct: the tool has not been told
+the two are the same, and the mapping profile that would say so (B-026) does
+not exist, which every result records as `profile_reviewed: false`. The
+mapping is reference-only and ungoverned. The source's `plan_id` is checked
+for shape and not against a plan, sex-parameter records reject rather than
+arrive without the supporting-observation link the concept needs, and the
+result's counts and warnings stay in process because the observation-set
+contract has no field for them.
+
 The durable primitive has no CLI import route. Every iteration-3 evidence record says
 `authorization_status: not_verified_internal_test_only` and
 `usable_for_execution: false`; a future signature-verification layer may not relabel
@@ -368,8 +401,8 @@ zones, locales, hash seeds, UTF-8 modes, working directories, and input
 directories and requires byte-identical results, and a CI matrix reproduces the
 pinned reference-receipt digest on Ubuntu, macOS, and Windows. That is
 byte-reproducibility evidence only; it is not packaging, fresh-install, or
-release evidence. `pack validate`, `plan validate`, and `evidence preflight`
-need descriptor-relative no-follow reads, so on a platform without them —
+release evidence. `pack validate`, `plan validate`, `evidence preflight`, and
+`import` need descriptor-relative no-follow reads, so on a platform without them —
 Windows included — they fail closed with `input_path_unsupported` rather than
 run with a weaker guarantee.
 

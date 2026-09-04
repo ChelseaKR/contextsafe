@@ -36,6 +36,10 @@
       "review": "machine",
       "text": "Comprueba una fuente sintética contra el límite del plan sin guardarla."
     },
+    "cli.command.import": {
+      "review": "machine",
+      "text": "Convierte una fuente sintética comprobada en el límite en un documento de conjunto de observaciones sin guardarla."
+    },
     "cli.command.pack": {
       "review": "machine",
       "text": "Compila y valida un paquete gobernado sin firmar."
@@ -75,6 +79,10 @@
     "cli.flag.fail_on": {
       "review": "machine",
       "text": "umbral de evaluación para evaluate: 'finding' sale con 1 cuando el recibo generado contiene al menos un resultado fail; el recibo en sí se emite sin cambios. 'nothing' mantiene el comportamiento predeterminado de salir con 0 siempre que se produzca un recibo"
+    },
+    "cli.flag.format": {
+      "review": "machine",
+      "text": "el formato de fuente registrado que se va a convertir; la fuente se lee una sola vez a través de la comprobación de límite de evidencia y nunca se copia, indexa ni registra"
     },
     "cli.flag.lang": {
       "review": "machine",
