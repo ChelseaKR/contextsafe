@@ -869,6 +869,33 @@ def test_mapping_validate_rejection_is_deterministic(tmp_path: Path) -> None:
     }
 
 
+def test_render_page_is_byte_identical_across_runs_environments_and_paths(
+    tmp_path: Path,
+) -> None:
+    """The rendered page joins the matrix: same receipt, same locale, same bytes.
+
+    ``tests/test_html_receipt.py`` already spreads the render across three
+    environments; this row adds the working-directory and input-path spread
+    the other commands get, so a path or locale leak into the page fails
+    here with the rest.
+    """
+
+    receipt = tmp_path / "receipt.json"
+    assert main([*_evaluate_argv(REFERENCE), "--quiet", "--output", str(receipt)]) == 0
+    runs = _three_runs(
+        tmp_path,
+        lambda reference: ["render", "--receipt", str(receipt), "--lang", "es-US"],
+        with_output=True,
+    )
+    _assert_identical(runs)
+    assert runs[0].returncode == 0
+    artifact = runs[0].artifact
+    assert artifact is not None
+    assert artifact.startswith(b"<!DOCTYPE html>")
+    assert b'lang="es-US"' in artifact
+    assert str(tmp_path).encode("utf-8") not in artifact
+
+
 def test_platforms_without_descriptor_relative_open_fail_closed(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

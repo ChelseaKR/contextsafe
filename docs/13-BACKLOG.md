@@ -664,7 +664,22 @@ declares `thead` a repeating header group, keeps `tr`, `li`, `.notice` and
 print rule but the skip link's that hides by any technique `HIDING_TECHNIQUES`
 names, not only `display` and `visibility` and not only under five named
 selectors, since `li { display: none; }` had walked past those
-(`test_hiding_a_disclosure_in_print_is_caught`);
+(`test_hiding_a_disclosure_in_print_is_caught`). Review of that check found
+three more ways past it, fixed the same day with a control each: it read one
+block spelled exactly `@media print {` and filed every other print block under
+screen (`test_a_print_block_spelled_another_way_is_still_read`; every block
+whose query reaches the printer is print now, and one the gate cannot classify
+is a finding); it compared declarations verbatim, so `DISPLAY: NONE` and
+`display: none !important` were not findings and `visibility: collapse` was
+not `hidden`; and it counted only `absolute` and `fixed` as positioned and
+`-50em` as the number 50, so `position: relative; left: -9999px` sat in the
+accepting test. It also now refuses any print rule that sets a break property
+or a `thead` display to another value on any selector
+(`test_a_print_rule_that_undoes_a_keep_together_rule_is_caught`), reads
+`title`, `aria-label` and `alt` as text for `minimization`, and `make i18n`
+measures expansion on the body without the brackets, which a four-letter label
+had met on its brackets alone
+(`test_the_expansion_floor_is_measured_without_the_brackets`);
 `html_receipt.render_receipt_page` recomputes the payload hash
 (`receipt_payload_hash_mismatch`) and refuses unknown fields at every level
 (`test_a_field_the_contract_does_not_publish_is_refused`, pinned against the

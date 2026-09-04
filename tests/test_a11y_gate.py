@@ -256,6 +256,29 @@ def test_a_missing_print_stylesheet_is_caught(
         ("p { visibility: hidden; }", "visibility"),
         ("body { font-size: 0; }", "font-size"),
         (".skip-link, .notice { display: none; }", "display"),
+        (".notice { display: none !important; }", "display"),
+        (".notice { display: none ! IMPORTANT; }", "display"),
+        (".notice { DISPLAY: NONE; }", "display"),
+        (".notice { visibility: HIDDEN; }", "visibility"),
+        ("tr { visibility: collapse; }", "visibility"),
+        ("li { visibility: collapse; }", "visibility"),
+        (".notice { position: relative; left: -9999px; }", "position"),
+        (".notice { position: sticky; top: -9999px; }", "position"),
+        (".notice { position: absolute; left: -50em; }", "position"),
+        (".notice { position: absolute; top: -2in; }", "position"),
+        (".notice { position: absolute; left: -100%; }", "position"),
+        (".notice { font-size: 0.01px; }", "font-size"),
+        (".notice { font-size: 0.05em; }", "font-size"),
+        (".notice { font-size: 5%; }", "font-size"),
+        (".notice { height: 0; overflow: clip; }", "overflow"),
+        (".notice { content-visibility: hidden; }", "content-visibility"),
+        (".notice { transform: scale(0); }", "transform"),
+        (".notice { transform: scale3d(1, 0, 1); }", "transform"),
+        (".notice { transform: translateX(-9999px); }", "transform"),
+        (".notice { transform: translate(0, 200vh); }", "transform"),
+        (".notice { text-indent: -9999px; }", "offset"),
+        (".notice { margin-left: -100in; }", "offset"),
+        (".notice { margin-top: -10cm; }", "offset"),
     ],
 )
 def test_hiding_a_disclosure_in_print_is_caught(
@@ -264,11 +287,16 @@ def test_hiding_a_disclosure_in_print_is_caught(
     """Printing must not be a way to lose the safety notice, by any technique.
 
     Until 2026-09-04 only ``display`` and ``visibility`` counted, and an
-    ``opacity: 0`` on the notice produced no finding at all. The last six
-    rules are the selector half of the same gap: a check that protected five
+    ``opacity: 0`` on the notice produced no finding at all. The selector
+    rows are the selector half of the same gap: a check that protected five
     named selectors let ``li { display: none; }`` through, and that rule hides
-    every limitation on the page. Hiding anything but the skip link is a
-    finding now, whatever the selector says.
+    every limitation on the page. The rows from ``!important`` on are the
+    spelling half, found by review of the first fix: the predicates compared
+    the verbatim declaration, so ``DISPLAY: NONE``, ``display: none
+    !important`` and ``visibility: HIDDEN`` were not findings, ``collapse``
+    was not ``hidden`` although it removes a row or a list item, a relatively
+    positioned box offset off the sheet did not count as positioned, and
+    ``left: -50em`` was compared as the number 50 against 100 pixels.
     """
 
     subject = subjects[1]
@@ -292,8 +320,16 @@ def test_hiding_a_disclosure_in_print_is_caught(
         ".notice { height: 0; }",
         ".notice { overflow: hidden; }",
         ".notice { position: absolute; left: -1px; }",
-        ".notice { position: relative; left: -9999px; }",
+        ".notice { position: absolute; left: -2em; }",
         ".notice { position: absolute; left: 0; }",
+        ".notice { position: static; left: -9999px; }",
+        ".notice { left: -9999px; }",
+        ".notice { font-size: 1px; }",
+        ".notice { font-size: 0.85rem; }",
+        ".notice { overflow: clip; }",
+        ".notice { content-visibility: auto; }",
+        ".notice { transform: translateY(2px) scale(1); }",
+        ".notice { text-indent: 1em; margin-left: -1rem; }",
         ".notice { opacity: ; }",
     ],
 )
@@ -301,7 +337,12 @@ def test_a_print_rule_that_hides_nothing_is_not_a_finding(
     subjects: tuple[object, ...], tmp_path: Path, rule: str
 ) -> None:
     """The accepting half: a rule on the skip link, or one that leaves an
-    element visible, must not be reported as hiding it."""
+    element visible, must not be reported as hiding it.
+
+    ``position: relative; left: -9999px`` sat in this list until the review
+    of 2026-09-04 pointed out that it hides the notice; it is a catching row
+    now. An offset with no ``position``, or with ``static``, does nothing.
+    """
 
     subject = subjects[1]
     html = subject.html.replace(  # type: ignore[attr-defined]
@@ -310,6 +351,173 @@ def test_a_print_rule_that_hides_nothing_is_not_a_finding(
     )
     report = _audit((_replace(subject, html),), tmp_path)
     assert not any("hides content" in f.detail for f in report.findings)  # type: ignore[attr-defined]
+
+
+@pytest.mark.parametrize(
+    "block",
+    [
+        "@media print {\n  .notice { display: none; }\n}\n",
+        "@media print{.notice{display:none}}\n",
+        "@media print and (min-width: 0) {\n  .notice { display: none; }\n}\n",
+        "@media only print {\n  .notice { display: none; }\n}\n",
+        "@media screen, print {\n  .notice { display: none; }\n}\n",
+        "@media all {\n  .notice { display: none; }\n}\n",
+        "@media (min-width: 0) {\n  .notice { display: none; }\n}\n",
+        "@media print {\n  @page { margin: 1cm; }\n  .notice { display: none; }\n}\n",
+        "@media print {\n  .notice { display: none; }\n",
+    ],
+    ids=[
+        "second-block",
+        "no-space",
+        "with-feature",
+        "only",
+        "screen-and-print",
+        "all",
+        "no-medium",
+        "nested-at-rule",
+        "unterminated",
+    ],
+)
+def test_a_print_block_spelled_another_way_is_still_read(
+    subjects: tuple[object, ...], tmp_path: Path, block: str
+) -> None:
+    """Every block that reaches the printer is print rules, however spelled.
+
+    The first fix matched one block written exactly ``@media print {`` and
+    closed at the first ``\\n}``; a second block, ``print{`` without the
+    space, ``print and (...)``, or ``screen, print`` was folded into the
+    screen rules, where nothing checked it for hiding, and a browser applied
+    it when printing. Each of these hides the notice and each is a finding.
+    """
+
+    subject = subjects[1]
+    html = subject.html.replace("</style>", block + "</style>", 1)  # type: ignore[attr-defined]
+    report = _audit((_replace(subject, html),), tmp_path)
+    hiding = [f.detail for f in report.findings if "hides content" in f.detail]  # type: ignore[attr-defined]
+    assert hiding, report.findings  # type: ignore[attr-defined]
+    assert any("'.notice'" in detail and "(by display)" in detail for detail in hiding)
+
+
+def test_a_screen_only_block_is_not_print_and_an_unknown_medium_is_a_finding(
+    subjects: tuple[object, ...], tmp_path: Path
+) -> None:
+    """The other two outcomes: screen rules stay screen, and a medium the gate
+    cannot place is reported rather than filed as screen."""
+
+    subject = subjects[1]
+    screen_only = subject.html.replace(  # type: ignore[attr-defined]
+        "</style>", "@media screen {\n  .notice { display: none; }\n}\n</style>", 1
+    )
+    report = _audit((_replace(subject, screen_only),), tmp_path)
+    assert "print" not in _rules(report), report.findings  # type: ignore[attr-defined]
+    unknown = subject.html.replace(  # type: ignore[attr-defined]
+        "</style>", "@media not screen {\n  .notice { display: none; }\n}\n</style>", 1
+    )
+    report = _audit((_replace(subject, unknown),), tmp_path)
+    assert "print" in _rules(report)
+    assert any("cannot classify" in f.detail for f in report.findings)  # type: ignore[attr-defined]
+
+
+def test_the_stylesheet_is_split_block_by_block() -> None:
+    """The parser, on its own: bodies land where the query says, brace-balanced."""
+
+    sheet = gate._split_media(
+        ".aa { color: #000; }\n"
+        "@media screen { .bb { color: #111; } }\n"
+        "@media print { .cc { color: #222; } @page { margin: 0; } }\n"
+        "@media screen, print { .dd { color: #333; } }\n"
+        "@media speech { .ee { color: #444; } }\n"
+        ".ff { color: #555; }\n"
+    )
+    assert ".aa {" in sheet.screen and ".ff {" in sheet.screen
+    assert ".bb {" in sheet.screen and ".bb {" not in sheet.printed
+    assert ".cc {" in sheet.printed and ".cc {" not in sheet.screen
+    assert "@page" in sheet.printed
+    assert ".dd {" in sheet.printed and ".dd {" in sheet.screen
+    assert ".ee {" not in sheet.printed and ".ee {" not in sheet.screen
+    assert sheet.unclassified == ("speech",)
+    assert gate._media_scopes("") is None
+    assert gate._media_scopes("not print") is None
+
+
+@pytest.mark.parametrize(
+    ("rule", "needle"),
+    [
+        ("tbody tr { break-inside: auto; }", "break-inside"),
+        ("tr { page-break-inside: auto; }", "page-break-inside"),
+        ("li { break-inside: AUTO !important; }", "break-inside"),
+        ("h2 { break-after: auto; }", "break-after"),
+        ("caption { page-break-after: always; }", "page-break-after"),
+        ("table thead { display: block; }", "headers would not repeat"),
+        ("thead { display: none; }", "headers would not repeat"),
+    ],
+)
+def test_a_print_rule_that_undoes_a_keep_together_rule_is_caught(
+    subjects: tuple[object, ...], tmp_path: Path, rule: str, needle: str
+) -> None:
+    """The keep-together check looked for the declaration on the simple
+    selector and not for a later rule overriding it: ``tbody tr {
+    break-inside: auto; }`` wins the cascade and splits a result row, with
+    zero findings, until the review of 2026-09-04."""
+
+    subject = subjects[1]
+    html = subject.html.replace(  # type: ignore[attr-defined]
+        "  .skip-link { display: none; }",
+        f"  .skip-link {{ display: none; }}\n  {rule}",
+    )
+    report = _audit((_replace(subject, html),), tmp_path)
+    assert "print" in _rules(report)
+    detail = " ".join(f.detail for f in report.findings)  # type: ignore[attr-defined]
+    assert needle in detail, detail
+
+
+@pytest.mark.parametrize(
+    ("value", "pixels"),
+    [
+        ("-9999px", -9999.0),
+        ("-50em", -800.0),
+        ("-2rem", -32.0),
+        ("-1in", -96.0),
+        ("-75pt", -100.0),
+        ("-100%", -100.0),
+        ("10", 10.0),
+        ("", None),
+        ("auto", None),
+        (None, None),
+    ],
+)
+def test_lengths_are_measured_in_their_unit(
+    value: str | None, pixels: float | None
+) -> None:
+    """``-50em`` is 800 pixels off the sheet, not the number 50."""
+
+    measured = gate._pixels(value)
+    assert measured == pixels if pixels is None else abs(measured - pixels) < 1e-9
+
+
+def test_a_receipt_value_in_an_announced_attribute_is_caught(
+    subjects: tuple[object, ...], tmp_path: Path
+) -> None:
+    """A ``title``, ``aria-label`` or ``alt`` is read aloud and is text on the page.
+
+    The renderer emits none of these today; this pins that one could not
+    carry a value past the minimization check if it did.
+    """
+
+    subject = subjects[0]
+    value = "CSYN-FIXTURE-VALUE-IN-AN-ATTRIBUTE"
+    for attribute in ("title", "aria-label", "alt"):
+        leaked = subject.html.replace(  # type: ignore[attr-defined]
+            "<main ", f'<main {attribute}="{value}" ', 1
+        )
+        report = _audit((_replace(subject, leaked),), tmp_path)
+        assert "minimization" in _rules(report), attribute
+        detail = " ".join(f.detail for f in report.findings)  # type: ignore[attr-defined]
+        assert value not in detail
+    clean = gate.visible_runs(
+        '<html><head><title t="x">y</title></head><body><p title=" ">z</p></body></html>'
+    )
+    assert clean == ["z"]
 
 
 @pytest.mark.parametrize(

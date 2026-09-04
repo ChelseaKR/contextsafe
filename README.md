@@ -743,12 +743,19 @@ Audited on 2026-09-04 and completed where the audit found a gap:
   a repeating header group; a result row, a limitation with its source-locale
   original, and the translation notice are each kept on one page, and a heading
   or caption stays with what follows it. `make a11y` fails when any of those
-  declarations is missing, when a table has no header group, or when any print
-  rule but the skip link's hides by any technique the gate names: `display`,
-  `visibility`, zero opacity, zero font size, a clip, a collapsed box with its
-  overflow hidden, or a box positioned off the page. The gate does not try to
-  know which selectors cover a disclosure; hiding anything else is the
-  finding.
+  declarations is missing, when a table has no header group, when any print
+  rule on any selector sets a break property or a `thead` display to anything
+  else, or when any print rule but the skip link's hides by any technique the
+  gate names: `display`, `visibility` (`hidden` or `collapse`), zero opacity, a
+  font below a pixel, a clip, a collapsed box with its overflow cut off, a
+  positioned box pushed off the sheet, `content-visibility`, a transform that
+  scales to nothing or translates off the sheet, or a negative indent or
+  margin past the edge. Every `@media` block whose query reaches the printer
+  is read as print rules, a block the gate cannot classify is a finding,
+  declarations are read the way CSS reads them (case-insensitively, with
+  `!important` set aside), and lengths are measured in their unit. The gate
+  does not try to know which selectors cover a disclosure; hiding anything
+  else is the finding.
 - **Evidence-minimized presentation (A-036).** The renderer recomputes
   `payload_sha256` from the payload and refuses a document whose hash does not
   cover it, and refuses any object carrying a field the receipt contract does
@@ -762,10 +769,11 @@ Audited on 2026-09-04 and completed where the audit found a gap:
   the negative control forges the field and a page that carries it, which a
   gate reading the field would audit and the recomputing gate refuses.
 - **Pseudolocale (B-041).** `qps-ploc` expands every message by at least 35
-  percent, and `make i18n` measures that floor, that no accentable letter
-  outside a placeholder is left plain, and placeholder parity on the generated
-  catalog (`pseudolocale-fidelity`) instead of trusting the transform. `hardcoded-string` accepts source-locale wording
-  only where the page marks it as a source-locale original.
+  percent, and `make i18n` measures that floor on the body without its
+  brackets, that no accentable letter outside a placeholder is left plain, and
+  placeholder parity on the generated catalog (`pseudolocale-fidelity`)
+  instead of trusting the transform. `hardcoded-string` accepts source-locale
+  wording only where the page marks it as a source-locale original.
 
 What this does not claim: the print checks are computed from the stylesheet
 and the markup, not from a browser that printed the page, so the print-preview

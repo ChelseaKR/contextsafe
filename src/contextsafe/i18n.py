@@ -79,6 +79,9 @@ PSEUDO_ACCENTABLE = frozenset(_PSEUDO_PLAIN)
 PSEUDO_ACCENTED = frozenset(_PSEUDO_ACCENTED)
 """The accented forms, so a gate can tell a transformed string from a copy."""
 
+PSEUDO_BRACKETS: tuple[str, str] = (_PSEUDO_PREFIX, _PSEUDO_SUFFIX)
+"""The brackets around a pseudolocalized string, which its expansion excludes."""
+
 
 class ReviewStatus(StrEnum):
     """Where a particular string's wording came from."""

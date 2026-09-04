@@ -320,7 +320,7 @@ Built, as of 2026-08-27:
 | 2 | built | ADR 0006; provenance grammars and the boundary scan on `parse_evidence_metadata`, closing issue #35 |
 | 3 | built | ADR 0007; `make scope` |
 | 4 | built, with one substitution | ADR 0008; the three-state contract, proved locally rather than by a CI job nobody has watched run |
-| 5 | built over two of fifteen safety modules | ADR 0009; `make mutants` |
+| 5 | built over two of sixteen safety modules | ADR 0009; `make mutants` |
 | 6 | **blocked on people and money** | nothing, deliberately |
 
 Phase 6 is blocked on people and money, not on code. Nothing in this repository

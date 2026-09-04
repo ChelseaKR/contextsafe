@@ -680,3 +680,127 @@ def test_visible_text_carries_the_language_in_force() -> None:
         ("d", "qps-ploc"),
         ("e", "es-US"),
     ]
+
+
+def test_a_stray_end_tag_moves_no_language() -> None:
+    """An end tag that closes nothing must not shift what follows into en-US.
+
+    The first form popped whatever was on top of the stack on any end tag,
+    so ``</stray>`` inside an ``en-US`` span put the rest of the span under
+    the page language, and an end tag that closed the page's ``<p>`` early
+    put the rest of the page under the accepting source-locale bucket. Pop by
+    name: a stray tag closes nothing, and an end tag closes what it names
+    along with anything left open inside it.
+    """
+
+    runs = gate.visible_text(
+        '<html lang="qps-ploc"><body><p><span lang="en-US">b</stray>c</span>d</p>'
+        '<p lang="es-US"><span lang="en-US">e</p>f'
+        "<style>g</stray>h</style>i</body></html>"
+    )
+    assert [(run.text, run.lang) for run in runs] == [
+        ("b", "en-US"),
+        ("c", "en-US"),
+        ("d", "qps-ploc"),
+        ("e", "en-US"),
+        ("f", "qps-ploc"),
+        ("i", "qps-ploc"),
+    ]
+    parser = gate._VisibleText()
+    parser.feed("<p>a</b>b</p></p>")
+    assert parser.stray == ["b", "p"]
+    assert [run.text for run in parser.runs] == ["a", "b"]
+
+
+def test_the_expansion_floor_is_measured_without_the_brackets() -> None:
+    """A transform that only brackets a label is short of the floor on it.
+
+    Counted, the two brackets were a 50 percent expansion of ``Pass`` and a
+    100 percent expansion of ``No``, so a pseudolocale that stopped padding
+    passed the gate on exactly the short column headers and status words
+    where expansion matters; the property test measured the body and the
+    gate did not. Every message of five characters or fewer must now be
+    named by the gate under that transform.
+    """
+
+    accented = str.maketrans("aeiou", "áéíóú")
+    findings = list(
+        gate.check_pseudolocale(
+            _weakened_pseudolocale(lambda text: "⟦" + text.translate(accented) + "⟧")
+        )
+    )
+    named = {
+        finding.detail.partition(":")[0]
+        for finding in findings
+        if "below" in finding.detail
+    }
+    short = {
+        key
+        for key, message in source_catalog().messages.items()
+        if len(message.text) <= 5
+    }
+    assert short, "the source catalog has no short label to measure"
+    assert short <= named, sorted(short - named)
+
+
+def test_a_placeholder_permitted_no_value_matches_nothing() -> None:
+    """The empty allowlist is a placeholder no run may have filled."""
+
+    from contextsafe import i18n
+
+    catalog = source_catalog()
+    key, message = next(
+        (key, message)
+        for key, message in sorted(catalog.messages.items())
+        if "{" in message.text
+    )
+    filled = message.text.format_map(_AnyValue())
+    assert catalog.accounts_for(filled)
+    assert catalog.accounts_for(filled, {"CSYN-FIXTURE-VALUE"})
+    assert not catalog.accounts_for(filled, set())
+    assert not catalog.accounts_for(filled, {"CSYN-OTHER"})
+    assert i18n._message_pattern(message.text, ()).fullmatch(filled) is None, key
+
+
+class _AnyValue(dict[str, str]):
+    """Format map that fills every placeholder with one synthetic token."""
+
+    def __missing__(self, key: str) -> str:
+        return "CSYN-FIXTURE-VALUE"
+
+
+def test_pseudolocalization_keeps_a_conversion_and_a_format_spec() -> None:
+    """``{count!r:>4}`` survives the transform with both halves intact."""
+
+    rendered = pseudolocalize("n {count!r:>4} m")
+    assert "{count!r:>4}" in rendered
+    assert rendered.count("{") == 1
+
+
+def test_a_review_status_that_is_not_text_is_rejected() -> None:
+    """A review status is a closed enum member, never a number or a flag."""
+
+    from contextsafe import i18n
+
+    payload = json.loads(
+        (REPO_ROOT / "src" / "contextsafe" / "locales" / "en-US.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    key = sorted(payload["messages"])[0]
+    payload["messages"][key]["review"] = True
+    with pytest.raises(ContextSafeError) as excinfo:
+        i18n._parse_catalog(payload, locale="en-US")
+    assert excinfo.value.code == "invalid_catalog"
+    assert excinfo.value.path == f"$.messages.{key}.review"
+
+
+def test_shipped_catalogs_iterate_source_locale_first() -> None:
+    """The source catalog leads, so parity has something to compare against."""
+
+    from contextsafe import i18n
+
+    locales = [catalog.locale for catalog in i18n.iter_shipped_catalogs()]
+    assert locales[0] == SOURCE_LOCALE
+    assert PSEUDO_LOCALE not in locales
+    assert set(locales) == set(available_locales()) - {PSEUDO_LOCALE}
