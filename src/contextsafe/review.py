@@ -44,14 +44,18 @@ canonical JSON, re-derives every hash, and replays every transition before a
 new line may be appended; a log that does not re-hash, does not replay, or is
 bound to a different receipt is refused, and no line is ever rewritten. The
 file is opened once with ``O_APPEND`` and ``O_NOFOLLOW``, read and appended
-through that one descriptor, and the append is refused if the file grew
-between the read and the write. On a platform without ``O_NOFOLLOW`` the
-command fails closed with ``input_path_unsupported``, as the other
-descriptor-anchored commands do. What the chain cannot see is a record removed
-from its end: a log cut back to an earlier line is a valid shorter log, and
-only an external record of the state document's ``log_head_sha256`` can show
-the cut. No clock is read: the log carries sequence
-numbers, not timestamps, for the reason ``contextsafe.eventlog`` records.
+through that one descriptor, and the append is refused if the file is seen
+to have grown between the read and the write. That check is a size comparison,
+not a lock: it narrows the window in which a second writer can append without
+closing it, so one writer at a time is an operating assumption, and a log two
+writers reach is refused on its next read as ``log_chain_broken`` rather than
+repaired. On a platform without ``O_NOFOLLOW`` the command fails closed with
+``input_path_unsupported``, as the other descriptor-anchored commands do. What
+the chain cannot see is a record removed from its end: a log cut back to an
+earlier line is a valid shorter log, and only an external record of the state
+document's ``log_head_sha256`` can show the cut. No clock is read: the log
+carries sequence numbers, not timestamps, for the reason
+``contextsafe.eventlog`` records.
 
 The decision, severity, role, and rationale vocabularies are reference-only
 and ungoverned: they are labels the tests need, not the approved rubric
@@ -299,6 +303,7 @@ _RATIONALE_VALUES = frozenset(item.value for item in RationaleCode)
 _CHECKPOINT_VALUES = frozenset(item.value for item in Checkpoint)
 _CONCEPT_VALUES = frozenset(item.value for item in ConceptKind)
 _FINDING_STATUS_VALUES = frozenset(item.value for item in FINDING_STATUSES)
+_OUTCOME_STATUS_VALUES = frozenset(item.value for item in OutcomeStatus)
 _EVENT_KEYS = frozenset(
     {
         "schema_version",
@@ -709,7 +714,7 @@ def _receipt_outcome(value: object, path: str) -> tuple[OutcomeKey, str]:
     outcome = parse_outcome_key(
         {key: data[key] for key in _OUTCOME_KEYS if key in data}, path
     )
-    status = bounded_string(data["status"], f"{path}.status")
+    status = enum_string(data["status"], f"{path}.status", _OUTCOME_STATUS_VALUES)
     return outcome, status
 
 
@@ -717,8 +722,11 @@ def parse_receipt_findings(value: object) -> ReceiptFindings:
     """Read the hashes and finding outcomes out of a receipt document.
 
     The payload hash is re-derived: an event may not bind to a receipt whose
-    ``payload_sha256`` no longer matches its payload. This is not receipt
-    verification (B-036); it reads the fields review needs and nothing else.
+    ``payload_sha256`` no longer matches its payload. A result whose status is
+    outside the published algebra refuses the receipt rather than being read
+    as "not a finding": an unsupported value is never quietly the safe case.
+    This is not receipt verification (B-036); it reads the fields review needs
+    and nothing else.
     """
 
     data = object_value(value, "$")
@@ -1005,7 +1013,8 @@ def append_review_event(
     """Validate one event against the receipt and the log, then append it.
 
     The log is opened once, read through that descriptor, and appended through
-    it. If the file grew between the read and the write, nothing is written.
+    it. If the file is seen to have grown between the read and the write,
+    nothing is written; that is a size comparison, not a lock.
     """
 
     receipt = parse_receipt_findings(receipt_value)

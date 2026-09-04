@@ -1049,8 +1049,10 @@ rather than after it.
 - **B-032: the append-only review, finding, and disposition state machine,
   unsigned.** `contextsafe finding review --receipt R.json --event E.json
   --log LOG.jsonl` validates one review event against the receipt (the
-  payload hash is re-derived, the event's two hashes must match it, and the
-  outcome must be a `fail`, `indeterminate`, or `blocked` result in it) and
+  payload hash is re-derived, the event's two hashes must match it, the
+  outcome must be a `fail`, `indeterminate`, or `blocked` result in it, and a
+  result whose `status` is outside the published algebra refuses the receipt
+  as `invalid_enum` rather than passing as not a finding) and
   against the log's prior state, then appends one canonical line; `contextsafe
   finding list --log LOG.jsonl` derives the current disposition per outcome.
   Both print the same derived state document. The state machine is data
@@ -1073,7 +1075,10 @@ rather than after it.
   hash, and replays every transition, and a Hypothesis property requires that
   any single changed byte anywhere in the file is refused. The file is opened
   once with `O_APPEND` and `O_NOFOLLOW`, read and appended through that one
-  descriptor, and the append is refused if the file grew in between; on a
+  descriptor, and the append is refused if the file is seen to have grown in
+  between -- a size comparison, not a lock, so one writer at a time is an
+  operating assumption and a log two writers reach is refused on its next
+  read rather than repaired; on a
   platform without `O_NOFOLLOW` both commands fail closed with
   `input_path_unsupported`. No clock is read. Two contracts are published,
   `schemas/contextsafe-review-event-v1.schema.json` (with the log record as a

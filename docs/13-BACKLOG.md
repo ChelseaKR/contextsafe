@@ -606,7 +606,15 @@ be marked `entered_in_error`, which is reachable only through `withdrawn`. That
 is the table's shape today, recorded here rather than governed: an acceptance
 is the state two declared signers stood behind, and whether one event may undo
 it, or only the §9 disputed-findings flow may, is a decision that flow must
-take when it exists.
+take when it exists. Two more are stated as limits of the tool rather than
+closed. The size check between the read and the append is a comparison, not a
+lock: it narrows the window in which a second writer can append without
+closing it, so one writer at a time is an operating assumption, and a log two
+writers reach is refused on its next read as `log_chain_broken` rather than
+repaired. And `finding review` refuses a receipt whose result carries a
+`status` outside the published algebra as `invalid_enum`, rather than reading
+it as "not a finding", because an unsupported value is never quietly the safe
+case; that is a shape check on the fields review reads, not verification.
 Before merge, `--output` naming the review log was found to reach `main`'s
 truncating write after the append and replace the log with exit 0; both
 commands now refuse it as `output_path_unsafe` before the log is opened.
