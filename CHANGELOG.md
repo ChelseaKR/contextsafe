@@ -817,6 +817,41 @@ rather than after it.
   entries are machine translations marked `machine`, like every other entry in
   that catalog: B-042 has not happened, and nothing here claims it has.
 
+- **ADR 0010 proposes the signing layer and stops at the decision only the
+  maintainer can make.** The standard library has no Ed25519, so the first
+  `sign` command is also the first runtime dependency of a project whose
+  `dependencies = []` is a supply-chain claim. The record lays out four options
+  — `cryptography`, `PyNaCl`, an optional `contextsafe[signing]` extra whose
+  commands fail closed with `signing_unavailable` when the backend is absent,
+  and a pure-Python implementation rejected outright because the interpreter's
+  arithmetic is not constant-time and nobody here can review an RFC 8032
+  verifier — with the `pip-audit` surface, per-platform wheels and Windows
+  consequences of each as read from PyPI and OSV on 2026-09-04 and dated in the
+  text, and recommends the extra backed by `PyNaCl`: the smaller surface that
+  contains the one primitive this tool needs, a verifier that rejects the
+  non-canonical inputs a cross-platform verifier must agree about, and on that
+  date a wheel for every platform B-045 names. It then fixes what B-035 and
+  B-036 must implement under any option: a detached-signature document and a
+  trust manifest as draft schema fragments held inside the ADR and not
+  committed to `schemas/`, subject hashes rather than files as the signed
+  thing behind a domain-separation prefix, rotation with a 90-day overlap
+  bound and the honest consequence that without trusted time a signature is
+  as durable as its key's validity interval, root-signed monotonic revocation
+  with the 31-day freshness rule from Architecture §6.6 measured against a
+  caller-declared `--as-of` and never a clock, compromise recovery for a key
+  and for the root, the per-purpose thresholds with distinctness by holder and
+  organization, a closed error-category set for the `sign` and `verify`
+  commands, and what a verified result does not prove without RFC 3161 time.
+  Four points depart from §6.6's wording and are flagged for the maintainer,
+  the first being that the manifest carries opaque holder and organization
+  tokens rather than names, because a producible roster of trans-health
+  reviewers is what T-08, T-17 and T-18 exist to keep small. Status is
+  proposed. No module, command, schema, fixture, key, test or dependency is
+  added; the shipped tool is byte-identical, no security review of the trust
+  model has happened, and every artifact still says `not_signed` or
+  `not_verified`. See
+  [ADR 0010](docs/adr/0010-signing-layer-dependency-and-trust-model.md).
+
 ## [0.1.0] - 2026-09-02
 
 ### Fixed
