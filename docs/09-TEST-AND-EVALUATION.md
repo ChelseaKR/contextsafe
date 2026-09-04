@@ -135,8 +135,8 @@ fixture (B-011) as well as the importer.
 | F-012 | not yet exercisable | — | SPCU predicates awaiting clinical review (B-029) |
 | F-013 | not yet exercisable | — | SPCU predicates awaiting clinical review (B-029) |
 | F-014 | not yet exercisable | — | SPCU predicates awaiting clinical review (B-029) |
-| F-015 | refused | `refused/F-015.json`: `prohibited_spcu_mapping` at `$.observations[0].mapping` | SPCU predicates awaiting clinical review (B-029) |
-| F-016 | refused | `refused/F-016.json`: `prohibited_spcu_mapping` at `$.observations[0].mapping` | SPCU predicates awaiting clinical review (B-029) |
+| F-015 | refused | `refused/F-015.json`: `prohibited_spcu_mapping` at `$.observations[0].mapping` (declared form only; undeclared derivation needs A-020/A-021, B-029) | SPCU predicates awaiting clinical review (B-029) |
+| F-016 | refused | `refused/F-016.json`: `prohibited_spcu_mapping` at `$.observations[0].mapping` (declared form only; undeclared derivation needs A-020/A-021, B-029) | SPCU predicates awaiting clinical review (B-029) |
 | F-017 | not yet exercisable | — | laboratory results (B-011, B-025, B-030) |
 | F-018 | not yet exercisable | — | laboratory results (B-011, B-025, B-030) |
 | F-019 | not yet exercisable | — | laboratory results (B-011, B-025, B-030) |

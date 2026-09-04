@@ -619,7 +619,16 @@ rather than after it.
   contract, a relinked support is only a changed value, and F-012 reads as
   diverged in the divergence section without any predicate able to name the
   order. No contract version moves, no enum widens, no source module
-  changes, and no pinned digest changes.
+  changes, and no pinned digest changes. After review: the README's B-028
+  subsection, which counted twenty-seven faults as undetectable when it was
+  written, now dates that count to its own slice and defers to the B-048
+  subsection, and a test holds the README to one current count (the
+  matrix's); the F-015 and F-016 evidence cells in the matrix and the docs/09
+  table say the refusal covers the declared mapping form only, not the
+  undeclared derivation the library's F-016 also names; the F-023 and F-035
+  evidence prose is built from the same constants their tests read; and the
+  CLI refusal test checks the stderr bytes, not only the error object, for
+  the refused fixtures' identity-shaped tokens.
 - **B-031 slice: the first observed divergence and the evidence trace
   (A-032 to A-035), as mechanism and nothing more.** The receipt payload has a
   `divergence` section, computed by the new `contextsafe.divergence` module

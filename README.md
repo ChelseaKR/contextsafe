@@ -590,8 +590,9 @@ F-004, F-005, F-006, F-007, F-008, F-010, F-031 from
 [Test and evaluation §4](docs/09-TEST-AND-EVALUATION.md) — live as complete
 synthetic inputs under `tests/fixtures/seeded-faults/`, each proved to be
 reported as `fail` with its own reason and never as `pass`; of the other
-twenty-nine, F-023 and F-025 are the B-031 slice's below, and twenty-seven
-are not detectable by anything here.
+twenty-nine, F-023 and F-025 are the B-031 slice's below, and the remaining
+twenty-seven were not detectable by that slice; the B-048 subsection below
+carries the current count.
 
 ### B-031
 

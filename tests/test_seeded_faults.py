@@ -70,6 +70,7 @@ ROOT = Path(__file__).resolve().parents[1]
 FAULTS = ROOT / "tests" / "fixtures" / "seeded-faults"
 REFUSED = FAULTS / "refused"
 TEST_PLAN = ROOT / "docs" / "09-TEST-AND-EVALUATION.md"
+README = ROOT / "README.md"
 RULE_SET_SCHEMA = json.loads(
     (ROOT / "schemas" / "contextsafe-rule-set-v0.2.schema.json").read_text(
         encoding="utf-8"
@@ -104,6 +105,22 @@ share a run identity with the original (F-035) — and each has its own test.
 F-025 is also an evaluator fault (A-034) but is additionally reported as
 ``fail`` by its preserved-across rule, so it is in ``EXPECTED_DETECTION``.
 """
+
+F023_INDETERMINATE_RULES: tuple[str, ...] = ("A-I02", "A-I03")
+"""The rules that read the omitted laboratory return in F-023."""
+
+F023_UNOBSERVED = Checkpoint.LIS_RETURN
+"""The checkpoint F-023 omits."""
+
+F035_MAPPING_VERSION = "0.2.0"
+"""The mapping version F-035 substitutes for the case's declared 0.1.0."""
+
+F035_CLEAN_MAPPING_VERSION = "0.1.0"
+
+SPCU_DECLARED_FORM_ONLY = (
+    "(declared form only; undeclared derivation needs A-020/A-021, B-029)"
+)
+"""What the F-015 and F-016 refusals do not cover, restated in the tables."""
 
 REFUSED_FAULTS: dict[str, tuple[str, str, str]] = {
     # fault: (assertion, error code, structural error path)
@@ -331,14 +348,16 @@ MATRIX: tuple[FaultRow, ...] = (
         "F-015",
         "derive SPCU from GI",
         "A-020",
-        "`refused/F-015.json`: `prohibited_spcu_mapping` at `$.observations[0].mapping`",
+        "`refused/F-015.json`: `prohibited_spcu_mapping` at `$.observations[0].mapping` "
+        + SPCU_DECLARED_FORM_ONLY,
         _SPCU,
     ),
     _refused(
         "F-016",
         "derive or map SPCU from RSG under any declared or undeclared local mapping",
         "A-021",
-        "`refused/F-016.json`: `prohibited_spcu_mapping` at `$.observations[0].mapping`",
+        "`refused/F-016.json`: `prohibited_spcu_mapping` at `$.observations[0].mapping` "
+        + SPCU_DECLARED_FORM_ONLY,
         _SPCU,
     ),
     _waiting("F-017", "attach order to wrong synthetic patient", "A-025", _LAB),
@@ -351,7 +370,8 @@ MATRIX: tuple[FaultRow, ...] = (
         "F-023",
         "omit checkpoint but report pass",
         "A-032",
-        "`F-023.json`: A-I02 and A-I03 `missing_evidence`; `lis_return` unobserved",
+        f"`F-023.json`: {' and '.join(F023_INDETERMINATE_RULES)} "
+        f"`{OutcomeReason.MISSING_EVIDENCE.value}`; `{F023_UNOBSERVED.value}` unobserved",
     ),
     _refused(
         "F-024",
@@ -424,7 +444,8 @@ MATRIX: tuple[FaultRow, ...] = (
         "F-035",
         "change mapping/terminology version without changing the run identity",
         "A-035/P0-12 verifier",
-        "`F-035.json`: trace names mapping `0.2.0`; `payload_sha256` moves",
+        f"`F-035.json`: trace names mapping `{F035_MAPPING_VERSION}`; "
+        "`payload_sha256` moves",
         MissingItem.RECEIPT_VERIFIER,
     ),
     _waiting(
@@ -567,6 +588,15 @@ def test_every_exercised_row_names_its_detector_and_reason() -> None:
         evidence = by_fault[fault].evidence
         assert f"`refused/{fault}.json`" in evidence
         assert f"`{code}` at `{path}`" in evidence
+        assert (SPCU_DECLARED_FORM_ONLY in evidence) == (
+            code == "prohibited_spcu_mapping"
+        )
+    f023 = by_fault["F-023"].evidence
+    for rule_id in F023_INDETERMINATE_RULES:
+        assert rule_id in f023
+    assert f"`{OutcomeReason.MISSING_EVIDENCE.value}`" in f023
+    assert f"`{F023_UNOBSERVED.value}` unobserved" in f023
+    assert f"`{F035_MAPPING_VERSION}`" in by_fault["F-035"].evidence
 
 
 # --- exercised: reported with the right reason ------------------------------
@@ -804,14 +834,14 @@ def test_f023_an_omitted_checkpoint_can_never_be_reported_as_pass() -> None:
     document = _load(FAULTS / "F-023.json")
     outcomes = _outcomes(document)
     assert _by_rule(outcomes, "A-I01").status is OutcomeStatus.PASSED
-    for rule_id in ("A-I02", "A-I03"):
+    for rule_id in F023_INDETERMINATE_RULES:
         outcome = _by_rule(outcomes, rule_id)
         assert outcome.status is OutcomeStatus.INDETERMINATE
         assert outcome.reason is OutcomeReason.MISSING_EVIDENCE
         assert outcome.status is not OutcomeStatus.PASSED
         assert outcome.observed_sha256s == ()
     entry = _divergence(document, ConceptKind.NAME_TO_USE)
-    lis = next(s for s in entry.checkpoints if s.checkpoint is Checkpoint.LIS_RETURN)
+    lis = next(s for s in entry.checkpoints if s.checkpoint is F023_UNOBSERVED)
     assert lis.state is EvidenceState.UNOBSERVED
     assert lis.value_sha256s == ()
     receipt = build_receipt(_bundle(document), outcomes)
@@ -825,7 +855,7 @@ def test_f023_would_pass_if_the_omitted_checkpoint_were_observed() -> None:
     document = _load(FAULTS / "F-023.json")
     restored = json.loads(json.dumps(document["observations"]["observations"][0]))
     restored["observation_id"] = "OBS-I01-NTU-LIS"
-    restored["checkpoint"] = "lis_return"
+    restored["checkpoint"] = F023_UNOBSERVED.value
     document["observations"]["observations"].append(restored)
     assert all(item.status is OutcomeStatus.PASSED for item in _outcomes(document))
 
@@ -883,7 +913,7 @@ def test_f035_a_changed_mapping_version_can_never_share_a_run_identity() -> None
     """
 
     faulted_document = _load(FAULTS / "F-035.json")
-    clean_document = _with_mapping_version(faulted_document, "0.1.0")
+    clean_document = _with_mapping_version(faulted_document, F035_CLEAN_MAPPING_VERSION)
     faulted_bundle = _bundle(faulted_document)
     clean_bundle = _bundle(clean_document)
     faulted = build_receipt_document(faulted_bundle, evaluate(faulted_bundle))
@@ -910,29 +940,36 @@ def test_f035_the_trace_names_the_mapping_the_evidence_came_through() -> None:
     outcome = _by_rule(evaluate(bundle), "A-I01")
     assert outcome.checkpoint == Checkpoint.EHR.value
     mapping = bundle.observations[0].mapping
-    assert mapping.mapping_version == "0.2.0"
+    assert mapping.mapping_version == F035_MAPPING_VERSION
     assert [item.to_dict() for item in outcome.trace.mappings] == [
         {
             "mapping_sha256": sha256_json(mapping.to_dict()),
-            "mapping_version": "0.2.0",
+            "mapping_version": F035_MAPPING_VERSION,
         }
     ]
 
 
-@pytest.mark.parametrize("versions", [("0.1.0", "0.2.0", "1.0.0", "0.2.1")])
-def test_f035_every_distinct_mapping_version_is_a_distinct_identity(
-    versions: tuple[str, ...],
-) -> None:
+_F035_VERSIONS = (F035_CLEAN_MAPPING_VERSION, F035_MAPPING_VERSION, "1.0.0", "0.2.1")
+
+
+def test_f035_every_distinct_mapping_version_is_a_distinct_identity() -> None:
     document = _load(FAULTS / "F-035.json")
     identities = set()
-    for version in versions:
+    for version in _F035_VERSIONS:
         bundle = _bundle(_with_mapping_version(document, version))
         receipt = build_receipt_document(bundle, evaluate(bundle))
         identities.add(receipt["payload_sha256"])
-    assert len(identities) == len(versions)
+    assert len(identities) == len(_F035_VERSIONS)
 
 
 # --- refused before evaluation ------------------------------------------------
+
+_REFUSED_FIXTURE_TOKENS = (
+    "fixture-unsupported",
+    "fixture-record-not-synthetic",
+    "CTP-I02",
+)
+"""The identity-shaped values the refused fixtures carry; none may surface."""
 
 
 @pytest.mark.parametrize(
@@ -948,7 +985,7 @@ def test_each_refused_fault_is_refused_whole_with_its_own_code(path: Path) -> No
     assert raised.value.code == code
     assert raised.value.path == error_path
     rendered = json.dumps(raised.value.to_dict())
-    for token in ("fixture-unsupported", "fixture-record-not-synthetic", "CTP-I02"):
+    for token in _REFUSED_FIXTURE_TOKENS:
         assert token not in rendered
 
 
@@ -979,6 +1016,8 @@ def test_each_refused_fault_exits_two_through_the_cli_and_writes_no_receipt(
     captured = capsys.readouterr()
     assert captured.out == ""
     assert json.loads(captured.err)["error"]["code"] == REFUSED_FAULTS[path.stem][1]
+    for token in _REFUSED_FIXTURE_TOKENS:
+        assert token not in captured.err
     assert not output.exists()
 
 
@@ -1130,6 +1169,78 @@ def test_the_docs_counts_are_the_matrix_counts_and_carry_the_date() -> None:
         len(_rows(CorpusStatus.REFUSED)),
         len(_rows(CorpusStatus.NOT_EXERCISABLE)),
     )
+
+
+_NUMBER_WORDS = [
+    "Zero",
+    "One",
+    "Two",
+    "Three",
+    "Four",
+    "Five",
+    "Six",
+    "Seven",
+    "Eight",
+    "Nine",
+    "Ten",
+    "Eleven",
+    "Twelve",
+    "Thirteen",
+    "Fourteen",
+    "Fifteen",
+    "Sixteen",
+    "Seventeen",
+    "Eighteen",
+    "Nineteen",
+    "Twenty",
+    "Twenty-one",
+    "Twenty-two",
+    "Twenty-three",
+    "Twenty-four",
+    "Twenty-five",
+    "Twenty-six",
+    "Twenty-seven",
+    "Twenty-eight",
+    "Twenty-nine",
+    "Thirty",
+    "Thirty-one",
+    "Thirty-two",
+    "Thirty-three",
+    "Thirty-four",
+    "Thirty-five",
+    "Thirty-six",
+]
+
+
+def _readme_subsection(heading: str) -> str:
+    """The README text under ``### heading`` up to the next heading of any level."""
+
+    text = README.read_text(encoding="utf-8")
+    start = text.index(f"### {heading}\n")
+    following = re.compile(r"\n##+ ").search(text, start + 1)
+    assert following is not None
+    return " ".join(text[start : following.start()].split())
+
+
+def test_the_readme_carries_one_current_count_and_older_slices_defer_to_it() -> None:
+    """A slice subsection may say what it detected, never what the tree detects.
+
+    The B-028 subsection was written when twenty-seven faults had no answer
+    here; that count is dated to its slice and points at the subsection that
+    carries the current one, whose figures are the matrix's.
+    """
+
+    older = _readme_subsection("B-028")
+    assert "are not detectable by anything here" not in older
+    assert "were not detectable by that slice" in older
+    assert "the B-048 subsection below carries the current count" in older
+    current = _readme_subsection("B-048")
+    for status, phrase in (
+        (CorpusStatus.EXERCISED, "are *exercised*"),
+        (CorpusStatus.REFUSED, "are *refused*"),
+        (CorpusStatus.NOT_EXERCISABLE, "are *not yet exercisable*"),
+    ):
+        assert f"{_NUMBER_WORDS[len(_rows(status))]} {phrase}" in current, phrase
 
 
 def test_the_docs_say_what_this_corpus_is_not() -> None:
