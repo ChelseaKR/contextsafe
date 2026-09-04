@@ -173,6 +173,7 @@
         },
         "expected_sha256": {"$ref": "#/$defs/sha256"},
         "observed_sha256s": {
+          "$comment": "The sorted value hashes of every observation the predicate read at the outcome's checkpoint, or, for preserved_across, at both preserved_from and checkpoint with no marker of which hash came from which: the rule that rule_set_sha256 pins names both checkpoints, and a pass is exactly the case where the two hashes are one. No maxItems: the observation-set contract publishes no count bound, so record_count may legitimately carry as many hashes as the set holds at the checkpoint, and the 1 MiB input bound is what limits it.",
           "type": "array",
           "items": {"$ref": "#/$defs/sha256"}
         },

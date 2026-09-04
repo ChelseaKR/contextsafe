@@ -573,7 +573,7 @@ rather than after it.
   value is not consulted, so declined stays declined and never becomes
   unknown, absent, or populated (A-009); `not_coerced`, the observed hash is in
   none of the hashes of a closed `forbidden` set the rule carries in fixture
-  tokens, so X, unknown, and absent are not coerced into M or F (A-014);
+  tokens, which decides whole-value membership and nothing wider (A-014);
   `record_count`, exactly `expected_count` distinct records remain (A-013);
   `preserved_across`, the same value hash at `preserved_from` and at the
   rule's checkpoint (A-005, A-010, A-012); and `not_overwritten_by`, the
@@ -588,17 +588,26 @@ rather than after it.
   anything but gender identity) is refused; and `parse_bundle` refuses a rule
   the case manifest contradicts (a forbidden value the manifest declares, a
   `present` rule on a declined value, an `expected_count` the manifest does
-  not carry). The contract is `schemas/contextsafe-rule-set-v0.2.schema.json`,
+  not carry, a `not_overwritten_by` expectation the manifest also declares
+  under another concept: `overwritten_expectation_conflict`). The contract is
+  `schemas/contextsafe-rule-set-v0.2.schema.json`,
   the first published schema for the rule set, with
   `tests/test_rule_set_schema.py` holding it to the runtime. Fixtures: a
   second ungoverned reference pair, `rules-predicates.json` and
-  `observations-predicates.json`, exercises every predicate against CTP-I01
-  and is pinned in the three-run determinism matrix; and
+  `observations-predicates.json`, exercises every predicate against CTP-I01,
+  ships the `exact` rule beside its `not_coerced` rule on the same field
+  (A-I09 beside A-I06) so the pairing the docs prescribe is demonstrated and
+  tested rather than only described, and is pinned in the three-run
+  determinism matrix; and
   `tests/fixtures/seeded-faults/` carries F-004, F-005, F-006, F-007, F-008,
   F-010, and F-031 from `docs/09-TEST-AND-EVALUATION.md` section 4 as complete
   synthetic inputs, each proved to be reported as `fail` with its own reason
-  and never as `pass`. The property layer now generates every predicate and
-  holds the status algebra over all of them. What this does not do: no
+  and never as `pass`. The property layer generates every predicate, reaches
+  `pass` and `fail` under each one by design (one observation at every
+  checkpoint a predicate reads, values drawn from the faithful, forbidden,
+  status-moved, and other-concept cases), holds the status algebra over all of
+  them, and carries a derandomized guard test that fails when the generator
+  stops reaching a branch. What this does not do: no
   clinical, laboratory, or community review has approved any rule or
   predicate here; `not_coerced` compares whole typed values, so a coercion
   that also rewrites context or source is outside its forbidden set and is
@@ -611,7 +620,9 @@ rather than after it.
 
 - **The receipt contract is 0.2: `contextsafe.receipt/0.2.0`,
   `schemas/contextsafe-receipt-v0.2.schema.json`.** The closed outcome-reason
-  enum widened by the twelve predicate reasons and nothing else changed; the
+  enum widened by the twelve predicate reasons, a `$comment` on
+  `observed_sha256s` says what it carries under `preserved_across` and
+  `record_count`, and nothing else changed; the
   0.1 file is not kept beside it, so a consumer pinned to the 0.1 `$id`
   rejects a 0.2 receipt on its `schema_version` rather than accepting a reason
   it has never seen. Because the payload carries its own `schema_version`,

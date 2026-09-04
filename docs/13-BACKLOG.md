@@ -396,8 +396,25 @@ paired `exact` rule's to catch; `preserved_across` states preservation, not
 correctness; and a 0.2.0 rule set is refused as a pack component
 (`incompatible_component`) until the pack contract's `rule_set_schema` pin is
 revisited, which is a contract decision for the maintainer. The receipt
-contract file the B-033 note above names is now
-`schemas/contextsafe-receipt-v0.2.schema.json`.
+contract file the B-033 note below (Phase 4) names is now
+`schemas/contextsafe-receipt-v0.2.schema.json`. Review fixes of the same day:
+the reference pair now ships A-I09, the `exact` rule beside its `not_coerced`
+rule on the same field, and a test holds that X rewritten to M or F together
+with its context turns the receipt through A-I09 while A-I06 alone reports
+pass, so the packaged set demonstrates the pairing rather than only describing
+it; the property generator reaches pass and fail under every predicate by
+design (one observation at every checkpoint a predicate reads, values drawn
+from the faithful, forbidden, status-moved, and other-concept cases) with a
+derandomized guard test that fails when a branch stops being reached; run
+against the earlier generator, that guard does not reach `preserved_across`
+pass or fail, `not_coerced` fail, or `not_overwritten_by` fail within its
+bound, so the invariants over those branches were asserting nothing;
+and `parse_bundle` refuses a `not_overwritten_by` rule whose expected scalar
+the manifest also declares under another concept
+(`overwritten_expectation_conflict`), since a faithful observation could never
+pass it. `make mutants` still declares only `contract_validation.py` and
+`identifiers.py`; extending that declaration to `evaluator.py` and
+`validation.py` is an ADR 0009 decision the maintainer has not taken.
 
 ## Phase 4 — review and receipts
 

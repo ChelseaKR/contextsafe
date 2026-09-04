@@ -112,11 +112,7 @@ def test_each_fault_is_reported_as_fail_with_its_own_reason_and_never_as_pass(
     assert detector.status is not OutcomeStatus.PASSED
     assert reason in FAILURE_REASONS
     assert detector.observed_sha256s
-    assert detector.expected_sha256 not in detector.observed_sha256s or (
-        # F-010 keeps a genuine record and loses the other; the survivor's
-        # hash may equal the expected hash and the count is still wrong.
-        path.stem == "F-010"
-    )
+    assert detector.expected_sha256 not in detector.observed_sha256s
 
 
 @pytest.mark.parametrize("path", FAULT_FILES, ids=[path.stem for path in FAULT_FILES])

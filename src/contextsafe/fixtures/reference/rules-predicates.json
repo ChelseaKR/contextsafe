@@ -123,6 +123,19 @@
       "required": true,
       "predicate": "preserved_across",
       "preserved_from": "registration"
+    },
+    {
+      "rule_id": "A-I09",
+      "version": "0.1.0",
+      "case_id": "CTP-I01",
+      "checkpoint": "registration",
+      "concept": "recorded_sex_or_gender",
+      "expected": {
+        "value": "X",
+        "context": "government-id",
+        "source": "synthetic-fixture"
+      },
+      "required": true
     }
   ]
 }

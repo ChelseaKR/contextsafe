@@ -1,6 +1,6 @@
 {
   "fault": "F-004",
-  "mutation": "drop pronouns",
+  "mutation": "drop pronouns: the pronoun observation at ehr survives with status absent and no value (a status drop), so A-008 reports fail; a pronoun observation removed entirely would be missing evidence and indeterminate under every predicate, not fail",
   "assertion": "A-008",
   "case": {
     "schema_version": "contextsafe.case/0.1.0",

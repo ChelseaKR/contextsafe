@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://contextsafe.invalid/schemas/contextsafe-rule-set-v0.2.schema.json",
   "title": "ContextSafe deterministic fixture rule set 0.2",
-  "$comment": "The rule-set shape that admits a closed predicate field (B-028). Reference-only and ungoverned: every predicate here is a mechanism for the identity, name-to-use, pronoun, and recorded-sex-or-gender assertions in docs/05-DATA-AND-EVIDENCE.md section 5, and no clinical, laboratory, or community review has approved any rule that uses one. The 0.1.0 shape (no predicate field, exact hash equality only) is still accepted by the runtime unchanged and has no separate published schema; a 0.2.0 document with no predicate field means exactly what a 0.1.0 document means. JSON Schema validates structure only: the runtime additionally requires preserved_from to differ from checkpoint, forbidden values to be unique and not equal to expected, and, in parse_bundle, every expected value to be declared by the case manifest, no forbidden value to be declared by it, present to expect a specified value, and expected_count to equal the records the manifest declares for the concept.",
+  "$comment": "The rule-set shape that admits a closed predicate field (B-028). Reference-only and ungoverned: every predicate here is a mechanism for the identity, name-to-use, pronoun, and recorded-sex-or-gender assertions in docs/05-DATA-AND-EVIDENCE.md section 5, and no clinical, laboratory, or community review has approved any rule that uses one. The 0.1.0 shape (no predicate field, exact hash equality only) is still accepted by the runtime unchanged and has no separate published schema; a 0.2.0 document with no predicate field means exactly what a 0.1.0 document means. JSON Schema validates structure only: the runtime additionally requires preserved_from to differ from checkpoint, forbidden values to be unique and not equal to expected, and, in parse_bundle, every expected value to be declared by the case manifest, no forbidden value to be declared by it, present to expect a specified value, expected_count to equal the records the manifest declares for the concept, and a not_overwritten_by rule not to expect a scalar the manifest declares under another concept (a faithful observation would otherwise be reported as overwritten and the rule could never pass).",
   "x-contextsafe-semantic-constraints": [
     "preserved_from must name a checkpoint other than checkpoint",
     "forbidden values are unique and none equals expected",
@@ -10,6 +10,7 @@
     "no forbidden value is declared by the case manifest",
     "present requires expected.status to be specified",
     "expected_count equals the number of values the case manifest declares for the concept",
+    "not_overwritten_by expects a scalar that no other concept of the case manifest declares",
     "the canonical form omits predicate when it is exact and omits every predicate field the predicate does not read, so an exact rule hashes exactly as a 0.1.0 rule does"
   ],
   "type": "object",

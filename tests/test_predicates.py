@@ -118,7 +118,7 @@ def test_the_packaged_predicate_set_passes_on_its_own_observations(
     outcomes = evaluate(
         parse_bundle(case_json, predicate_observations_json, predicate_rules_json)
     )
-    assert len(outcomes) == 8
+    assert len(outcomes) == 9
     assert all(item.status is OutcomeStatus.PASSED for item in outcomes)
     assert {item.reason for item in outcomes} == AFFIRMATIVE_REASONS
 
@@ -351,6 +351,53 @@ def test_expected_count_must_equal_the_records_the_case_declares(
     )
 
 
+def _pronouns_equal_to_the_expected_gender_identity(
+    case_json: dict[str, Any], predicate_rules_json: dict[str, Any]
+) -> None:
+    """Make the case declare GI's expected scalar under pronouns as well."""
+
+    colliding = {"status": "specified", "value": "fixture-gender-1"}
+    case_json["concepts"]["pronouns"] = colliding
+    for rule_id in ("A-I02", "A-I04"):
+        _rule(predicate_rules_json, rule_id)["expected"] = colliding
+
+
+def test_not_overwritten_by_cannot_expect_a_scalar_another_concept_declares(
+    case_json: dict[str, Any],
+    predicate_observations_json: dict[str, Any],
+    predicate_rules_json: dict[str, Any],
+) -> None:
+    """A faithful GI observation would be reported as overwritten, so the rule
+    could never pass; the bundle is refused instead of evaluated."""
+
+    _pronouns_equal_to_the_expected_gender_identity(case_json, predicate_rules_json)
+    with pytest.raises(ContextSafeError) as caught:
+        parse_bundle(case_json, predicate_observations_json, predicate_rules_json)
+    assert caught.value.code == "overwritten_expectation_conflict"
+    assert caught.value.path == "$.rules[4].expected"
+    assert "fixture-gender" not in caught.value.message
+
+
+def test_the_overwritten_expectation_check_is_only_for_not_overwritten_by(
+    case_json: dict[str, Any],
+    predicate_observations_json: dict[str, Any],
+    predicate_rules_json: dict[str, Any],
+) -> None:
+    """The same manifest is accepted once no rule makes the A-011 claim."""
+
+    _pronouns_equal_to_the_expected_gender_identity(case_json, predicate_rules_json)
+    _observation(predicate_observations_json, "OBS-I01-PRONOUNS")["value"] = {
+        "status": "specified",
+        "value": "fixture-gender-1",
+    }
+    del _rule(predicate_rules_json, "A-I05")["predicate"]
+    outcome = _outcome(
+        case_json, predicate_observations_json, predicate_rules_json, "A-I05"
+    )
+    assert outcome.status is OutcomeStatus.PASSED
+    assert outcome.reason is OutcomeReason.AFFIRMATIVE_EVIDENCE_MATCH
+
+
 def test_a_predicate_rule_still_needs_an_expectation_the_case_declares(
     case_json: dict[str, Any],
     predicate_observations_json: dict[str, Any],
@@ -505,39 +552,64 @@ def test_x_coerced_into_m_or_f_fails(
     assert outcome.reason is OutcomeReason.VALUE_COERCED
 
 
-def test_not_coerced_is_a_whole_value_comparison_and_says_so(
+@pytest.mark.parametrize("coerced_to", ["M", "F"])
+def test_a_coercion_that_also_rewrites_context_is_caught_by_the_paired_exact_rule(
     case_json: dict[str, Any],
     predicate_observations_json: dict[str, Any],
     predicate_rules_json: dict[str, Any],
+    coerced_to: str,
 ) -> None:
-    """The documented limit: a coercion that also rewrites context is outside
-    the forbidden set. The exact rule on the same field is what catches it,
-    so this pins that the pair, not the predicate alone, is the detector."""
+    """The documented limit, held against the packaged pair as shipped.
+
+    ``not_coerced`` compares whole typed values, so X rewritten to M or F
+    together with its context is outside A-I06's forbidden set and A-I06
+    reports ``pass``. A-I09, the ``exact`` rule the reference set pairs with
+    it on the same field, is what turns the receipt: the bundle is reported
+    with a failure and the summary counts it, without any rule being edited.
+    """
 
     _observation(predicate_observations_json, "OBS-I01-RSG")["value"] = {
-        "value": "F",
+        "value": coerced_to,
         "context": "payer",
         "source": "synthetic-fixture",
     }
-    _rule(predicate_rules_json, "A-I01").update(
-        {
-            "checkpoint": "registration",
-            "concept": "recorded_sex_or_gender",
-            "expected": case_json["concepts"]["recorded_sex_or_gender"][0],
-            "predicate": "exact",
-        }
-    )
-    _rule(predicate_rules_json, "A-I03")["expected"] = case_json["concepts"][
-        "gender_identity"
+    bundle = parse_bundle(case_json, predicate_observations_json, predicate_rules_json)
+    outcomes = evaluate(bundle)
+    by_rule = {item.rule_id: item for item in outcomes}
+    assert by_rule["A-I06"].status is OutcomeStatus.PASSED
+    assert by_rule["A-I06"].reason is OutcomeReason.VALUE_NOT_COERCED
+    assert by_rule["A-I09"].status is OutcomeStatus.FAIL
+    assert by_rule["A-I09"].reason is OutcomeReason.SEMANTIC_MISMATCH
+    assert by_rule["A-I09"].expected_sha256 not in by_rule["A-I09"].observed_sha256s
+    summary = build_receipt(bundle, outcomes)["summary"]
+    assert summary["fail"] == 1
+    assert summary["pass"] == 8
+
+
+def test_the_packaged_pair_carries_the_exact_rule_beside_not_coerced(
+    predicate_rules_json: dict[str, Any],
+) -> None:
+    """The pairing the docs prescribe is present in the shipped set, not only
+    described: for every ``not_coerced`` rule there is an ``exact`` rule on the
+    same case, checkpoint, concept, and expected value."""
+
+    rule_set = parse_rule_set(predicate_rules_json)
+    exact_keys = {
+        (rule.case_id, rule.checkpoint, rule.concept, rule.expected)
+        for rule in rule_set.rules
+        if rule.predicate is RulePredicate.EXACT
+    }
+    not_coerced = [
+        rule for rule in rule_set.rules if rule.predicate is RulePredicate.NOT_COERCED
     ]
-    not_coerced = _outcome(
-        case_json, predicate_observations_json, predicate_rules_json, "A-I06"
-    )
-    exact = _outcome(
-        case_json, predicate_observations_json, predicate_rules_json, "A-I01"
-    )
-    assert not_coerced.status is OutcomeStatus.PASSED
-    assert exact.status is OutcomeStatus.FAIL
+    assert not_coerced
+    for rule in not_coerced:
+        assert (
+            rule.case_id,
+            rule.checkpoint,
+            rule.concept,
+            rule.expected,
+        ) in exact_keys
 
 
 # --- record_count (A-013) ----------------------------------------------------
@@ -752,7 +824,8 @@ def test_a_gi_with_no_scalar_is_not_carrying_another_concepts_value(
 
 
 @pytest.mark.parametrize(
-    "rule_id", ["A-I01", "A-I02", "A-I03", "A-I04", "A-I05", "A-I06", "A-I07"]
+    "rule_id",
+    ["A-I01", "A-I02", "A-I03", "A-I04", "A-I05", "A-I06", "A-I07", "A-I09"],
 )
 def test_every_single_observation_predicate_is_indeterminate_without_evidence(
     case_json: dict[str, Any],
@@ -777,7 +850,7 @@ def test_every_single_observation_predicate_is_indeterminate_without_evidence(
 
 
 @pytest.mark.parametrize(
-    "rule_id", ["A-I01", "A-I02", "A-I03", "A-I04", "A-I05", "A-I06"]
+    "rule_id", ["A-I01", "A-I02", "A-I03", "A-I04", "A-I05", "A-I06", "A-I09"]
 )
 def test_every_single_observation_predicate_is_indeterminate_when_ambiguous(
     case_json: dict[str, Any],

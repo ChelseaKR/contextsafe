@@ -748,22 +748,27 @@ def parse_bundle(
         ConceptKind.PRONOUNS: (case.pronouns,),
     }
     for index, rule in enumerate(rule_set.rules):
-        _check_rule_against_case(rule, case_values[rule.concept], f"$.rules[{index}]")
+        _check_rule_against_case(rule, case_values, f"$.rules[{index}]")
     return EvaluationBundle(case=case, observations=observations, rule_set=rule_set)
 
 
 def _check_rule_against_case(
-    rule: Rule, declared: tuple[SemanticValue, ...], path: str
+    rule: Rule,
+    case_values: dict[ConceptKind, tuple[SemanticValue, ...]],
+    path: str,
 ) -> None:
     """Refuse a rule the case manifest contradicts.
 
     A rule can only expect what the manifest declares (every predicate), can
     only forbid what the manifest does not declare (``not_coerced``), can only
-    demand presence of a value the manifest specifies (``present``), and can
-    only count the records the manifest carries (``record_count``). Each of
-    these would otherwise be a rule that could not pass or could not fail.
+    demand presence of a value the manifest specifies (``present``), can only
+    count the records the manifest carries (``record_count``), and can only
+    expect a scalar no other concept of the manifest carries
+    (``not_overwritten_by``). Each of these would otherwise be a rule that
+    could not pass or could not fail.
     """
 
+    declared = case_values[rule.concept]
     if rule.expected not in declared:
         raise _error(
             "rule_expectation_mismatch",
@@ -790,4 +795,35 @@ def _check_rule_against_case(
             "rule_count_mismatch",
             f"{path}.expected_count",
             "expected_count must equal the records the case manifest declares",
+        )
+    if rule.predicate is RulePredicate.NOT_OVERWRITTEN_BY:
+        _check_overwritten_expectation(rule, case_values, path)
+
+
+def _check_overwritten_expectation(
+    rule: Rule,
+    case_values: dict[ConceptKind, tuple[SemanticValue, ...]],
+    path: str,
+) -> None:
+    """Refuse a ``not_overwritten_by`` rule whose faithful value is ruled out.
+
+    The predicate reports fail when the observed scalar equals a scalar the
+    manifest declares under another concept. If the expected scalar itself is
+    one of those, a faithful observation fails and the rule can never pass, so
+    the manifest and the rule contradict each other and the bundle is refused
+    rather than evaluated.
+    """
+
+    other_scalars = {
+        value.value
+        for concept, values in case_values.items()
+        if concept is not rule.concept
+        for value in values
+        if value.value is not None
+    }
+    if rule.expected.value in other_scalars:
+        raise _error(
+            "overwritten_expectation_conflict",
+            f"{path}.expected",
+            "the expected value is declared by another concept of the case manifest",
         )

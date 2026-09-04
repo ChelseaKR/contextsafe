@@ -494,8 +494,10 @@ published in
 status equals the expected status and the value is not consulted, so a
 declined gender identity or pronoun stays declined and never becomes unknown,
 absent, or a value; `not_coerced`, the observed value hash is in none of the
-hashes of a closed `forbidden` set the rule carries in fixture tokens, so an
-X, unknown, or absent recorded sex or gender is not turned into M or F;
+hashes of a closed `forbidden` set the rule carries in fixture tokens, which
+decides whole-value membership and nothing wider (an X recorded sex or gender
+rewritten to the M or F the set names is caught; one rewritten together with
+its context or source is the paired `exact` rule's to catch);
 `record_count`, exactly `expected_count` distinct records remain;
 `preserved_across`, the same value hash at `preserved_from` and at the rule's
 checkpoint; and `not_overwritten_by`, the observed gender identity is not the
@@ -520,8 +522,14 @@ assertions: no clinical, laboratory, or community review has looked at any
 rule that uses them, and the rule sets that do are labelled reference-only.
 `not_coerced` compares whole typed values, so a coercion that also rewrites a
 value's context or source is outside its forbidden set and is the paired
-`exact` rule's to catch. `preserved_across` says a value did not change
-between two boundaries, not that it was right at either. A-006, A-007, and
+`exact` rule's to catch; the reference pair ships that pairing (A-I09 beside
+A-I06), and a test holds that the rewritten-context coercion turns the receipt
+through A-I09 while A-I06 alone reports `pass`. `preserved_across` says a
+value did not change between two boundaries, not that it was right at either.
+A `not_overwritten_by` rule whose expected gender identity scalar the case
+manifest also declares under another concept could never pass, so
+`parse_bundle` refuses it (`overwritten_expectation_conflict`) rather than
+evaluating it. A-006, A-007, and
 A-015 need a patient-facing display observation and a name period that the
 observation contract does not carry, so they have no predicate. The pack
 contract still pins the exact-only rule-set shape, and a 0.2.0 rule set is

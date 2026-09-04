@@ -18,6 +18,17 @@ at least one observation; a fail always carries a failure reason; no
 observation at the rule's checkpoint is never pass; and every reason a receipt
 publishes belongs to the status it accompanies.
 
+An invariant is only as strong as the branches the generator reaches, so the
+generator reaches ``pass`` and ``fail`` under every predicate by design rather
+than by coincidence: for each rule it may emit one observation at every
+checkpoint the predicate reads (both checkpoints of ``preserved_across``,
+``expected_count`` of them for ``record_count``), and an aligned observation's
+value is drawn from the cases each predicate decides on: the faithful value, a
+forbidden value, a status-moved copy, another concept's scalar, or a fresh
+value. ``test_the_generator_reaches_pass_and_fail_under_every_predicate`` is
+the guard: a strategy change that stops reaching a branch fails there instead
+of silently making the invariant above it vacuous.
+
 The same generated bundles also feed the property-layer half of the
 published receipt contract (B-033): every receipt document a generated
 bundle produces must validate against
@@ -28,7 +39,8 @@ import json
 from pathlib import Path
 from typing import Any
 
-from hypothesis import given, settings
+import pytest
+from hypothesis import Phase, event, example, find, given, settings
 from hypothesis import strategies as st
 from jsonschema import Draft202012Validator, FormatChecker
 
@@ -80,17 +92,31 @@ _TOKENS = st.text(alphabet="ABCDEFGH", min_size=1, max_size=6).map(
 _STATUSES = st.sampled_from(
     (ValueStatus.SPECIFIED, ValueStatus.DECLINED, ValueStatus.UNKNOWN)
 )
+_CASE_IDS = st.sampled_from(("CTP-P01", "CTP-P02"))
+
+
+def _status_value(
+    concept: ConceptKind, status: ValueStatus, token: str
+) -> SemanticValue:
+    """Build the status-bearing value of ``concept`` with ``status``."""
+
+    scalar = token if status is ValueStatus.SPECIFIED else None
+    if concept is ConceptKind.GENDER_IDENTITY:
+        return GenderIdentity(
+            status=status, value=scalar, code_system="urn:contextsafe:fixture"
+        )
+    if concept is ConceptKind.NAME_TO_USE:
+        return NameToUse(
+            status=status,
+            value=None if scalar is None else f"CSYN-{scalar}",
+            use="usual",
+        )
+    return Pronouns(status=status, value=scalar)
 
 
 @st.composite
 def _semantic_values(draw: st.DrawFn, concept: ConceptKind) -> SemanticValue:
     token = draw(_TOKENS)
-    status = draw(_STATUSES)
-    value = token if status is ValueStatus.SPECIFIED else None
-    if concept is ConceptKind.GENDER_IDENTITY:
-        return GenderIdentity(
-            status=status, value=value, code_system="urn:contextsafe:fixture"
-        )
     if concept is ConceptKind.RECORDED_SEX_OR_GENDER:
         return RecordedSexOrGender(
             value=draw(st.sampled_from(("F", "M", "X", "unknown"))),
@@ -103,13 +129,7 @@ def _semantic_values(draw: st.DrawFn, concept: ConceptKind) -> SemanticValue:
             context_id=f"ORDER-CSYN-{draw(_TOKENS)}",
             supporting_observation_ids=(f"SUP-CSYN-{draw(_TOKENS)}",),
         )
-    if concept is ConceptKind.NAME_TO_USE:
-        return NameToUse(
-            status=status,
-            value=None if value is None else f"CSYN-{value}",
-            use="usual",
-        )
-    return Pronouns(status=status, value=value)
+    return _status_value(concept, draw(_STATUSES), token)
 
 
 _STATUS_CONCEPTS = (
@@ -144,7 +164,7 @@ def _rules(draw: st.DrawFn, index: int) -> Rule:
     return Rule(
         rule_id=f"A-I{index:02d}",
         version="0.1.0",
-        case_id=draw(st.sampled_from(("CTP-P01", "CTP-P02"))),
+        case_id=draw(_CASE_IDS),
         checkpoint=checkpoint,
         concept=concept,
         expected=expected,
@@ -166,25 +186,82 @@ def _rules(draw: st.DrawFn, index: int) -> Rule:
     )
 
 
-@st.composite
-def _observations(draw: st.DrawFn, rule: Rule, index: int) -> Observation:
-    aligned = draw(st.booleans())
-    concept = rule.concept if aligned else draw(st.sampled_from(tuple(ConceptKind)))
-    matches_expected = draw(st.booleans())
-    value = (
-        rule.expected
-        if aligned and matches_expected and concept is rule.concept
-        else draw(_semantic_values(concept))
+def _other_concept_scalars(
+    case: SyntheticCase, concept: ConceptKind
+) -> tuple[str, ...]:
+    """Every scalar the case declares under a concept other than ``concept``."""
+
+    declared: dict[ConceptKind, tuple[SemanticValue, ...]] = {
+        ConceptKind.GENDER_IDENTITY: (case.gender_identity,),
+        ConceptKind.RECORDED_SEX_OR_GENDER: case.recorded_sex_or_gender,
+        ConceptKind.SEX_PARAMETER_FOR_CLINICAL_USE: (
+            case.sex_parameter_for_clinical_use
+        ),
+        ConceptKind.NAME_TO_USE: (case.name_to_use,),
+        ConceptKind.PRONOUNS: (case.pronouns,),
+    }
+    return tuple(
+        value.value
+        for other, values in declared.items()
+        if other is not concept
+        for value in values
+        if value.value is not None
     )
+
+
+@st.composite
+def _aligned_values(draw: st.DrawFn, rule: Rule, case: SyntheticCase) -> SemanticValue:
+    """Draw the value of an observation the rule reads.
+
+    Half the time it is the faithful value, so predicates that compare two
+    observations (``preserved_across``, ``record_count``) reach equality. The
+    rest is drawn from the branches the predicates decide on: a forbidden
+    value (A-014), a copy whose status moved (A-009), a gender identity that
+    carries another concept's scalar (A-011), or a fresh value.
+    """
+
+    if draw(st.booleans()):
+        return rule.expected
+    kinds = ["fresh"]
+    if rule.forbidden:
+        kinds.append("forbidden")
+    if rule.concept in _STATUS_CONCEPTS:
+        kinds.append("moved")
+    overwriting = _other_concept_scalars(case, rule.concept)
+    if rule.concept is ConceptKind.GENDER_IDENTITY and overwriting:
+        kinds.append("overwritten")
+    kind = draw(st.sampled_from(kinds))
+    if kind == "forbidden":
+        return draw(st.sampled_from(rule.forbidden))
+    if kind == "moved":
+        expected_status = getattr(rule.expected, "status")  # noqa: B009 - typed union
+        moved = draw(
+            st.sampled_from(tuple(ValueStatus)).filter(
+                lambda s: s is not expected_status
+            )
+        )
+        return _status_value(rule.concept, moved, draw(_TOKENS))
+    if kind == "overwritten":
+        return GenderIdentity(
+            status=ValueStatus.SPECIFIED,
+            value=draw(st.sampled_from(overwriting)),
+            code_system="urn:contextsafe:fixture",
+        )
+    return draw(_semantic_values(rule.concept))
+
+
+def _observation_of(
+    case_id: str,
+    checkpoint: Checkpoint,
+    concept: ConceptKind,
+    value: SemanticValue,
+    index: int,
+) -> Observation:
     return Observation(
         schema_version=OBSERVATION_SCHEMA_VERSION,
         observation_id=f"OBS-P{index:02d}",
-        case_id=rule.case_id
-        if aligned
-        else draw(st.sampled_from(("CTP-P01", "CTP-P02"))),
-        checkpoint=rule.checkpoint
-        if aligned
-        else draw(st.sampled_from(tuple(Checkpoint))),
+        case_id=case_id,
+        checkpoint=checkpoint,
         concept=concept,
         value=value,
         evidence=EvidencePointer(
@@ -199,37 +276,158 @@ def _observations(draw: st.DrawFn, rule: Rule, index: int) -> Observation:
     )
 
 
+def _checkpoints_read(rule: Rule) -> tuple[Checkpoint, ...]:
+    """The checkpoints the rule's predicate reads, one entry per observation
+    the deliberate plan emits there."""
+
+    if rule.predicate is RulePredicate.PRESERVED_ACROSS:
+        assert rule.preserved_from is not None
+        return (rule.preserved_from, rule.checkpoint)
+    if rule.predicate is RulePredicate.RECORD_COUNT:
+        assert rule.expected_count is not None
+        return (rule.checkpoint,) * rule.expected_count
+    return (rule.checkpoint,)
+
+
 @st.composite
-def _bundles(draw: st.DrawFn) -> EvaluationBundle:
-    rule_count = draw(st.integers(min_value=1, max_value=4))
-    rules = tuple(draw(_rules(index)) for index in range(rule_count))
-    observations: list[Observation] = []
-    observation_index = 0
-    for rule in rules:
-        for _ in range(draw(st.integers(min_value=0, max_value=3))):
-            observations.append(draw(_observations(rule, observation_index)))
-            observation_index += 1
-    case = SyntheticCase(
+def _observations(
+    draw: st.DrawFn, rule: Rule, index: int, case: SyntheticCase
+) -> Observation:
+    """One observation that may or may not be one the rule reads.
+
+    An aligned observation sits at one of the checkpoints the predicate reads
+    with a value from ``_aligned_values``; anything else is drawn at random
+    so the evaluator's matching is exercised on case, checkpoint, and concept.
+    """
+
+    if draw(st.booleans()):
+        checkpoint = draw(st.sampled_from(sorted(set(_checkpoints_read(rule)))))
+        value = draw(_aligned_values(rule, case))
+        return _observation_of(rule.case_id, checkpoint, rule.concept, value, index)
+    concept = draw(st.sampled_from(tuple(ConceptKind)))
+    return _observation_of(
+        draw(_CASE_IDS),
+        draw(st.sampled_from(tuple(Checkpoint))),
+        concept,
+        draw(_semantic_values(concept)),
+        index,
+    )
+
+
+@st.composite
+def _cases(draw: st.DrawFn) -> SyntheticCase:
+    gender_identity = draw(_semantic_values(ConceptKind.GENDER_IDENTITY))
+    name_to_use = draw(_semantic_values(ConceptKind.NAME_TO_USE))
+    pronouns = draw(_semantic_values(ConceptKind.PRONOUNS))
+    assert isinstance(gender_identity, GenderIdentity)
+    assert isinstance(name_to_use, NameToUse)
+    assert isinstance(pronouns, Pronouns)
+    return SyntheticCase(
         schema_version=CASE_SCHEMA_VERSION,
         case_id="CTP-P01",
         synthetic_identifier=SyntheticIdentifier(
             system="urn:contextsafe:synthetic", value="CSYN-CTP-P01"
         ),
-        gender_identity=draw(_semantic_values(ConceptKind.GENDER_IDENTITY)),
+        gender_identity=gender_identity,
         recorded_sex_or_gender=(),
         sex_parameter_for_clinical_use=(),
-        name_to_use=draw(_semantic_values(ConceptKind.NAME_TO_USE)),
-        pronouns=draw(_semantic_values(ConceptKind.PRONOUNS)),
+        name_to_use=name_to_use,
+        pronouns=pronouns,
         prohibited_inferences=(
             "gender_identity_to_spcu",
             "recorded_sex_or_gender_to_spcu",
         ),
     )
+
+
+@st.composite
+def _bundles(draw: st.DrawFn) -> EvaluationBundle:
+    case = draw(_cases())
+    rule_count = draw(st.integers(min_value=1, max_value=4))
+    rules = tuple(draw(_rules(index)) for index in range(rule_count))
+    observations: list[Observation] = []
+    index = 0
+    for rule in rules:
+        if draw(st.booleans()):
+            # The deliberate plan: exactly what the predicate reads, so pass
+            # and fail are decided by the values and not by evidence count.
+            for checkpoint in _checkpoints_read(rule):
+                value = draw(_aligned_values(rule, case))
+                observations.append(
+                    _observation_of(
+                        rule.case_id, checkpoint, rule.concept, value, index
+                    )
+                )
+                index += 1
+            continue
+        for _ in range(draw(st.integers(min_value=0, max_value=3))):
+            observations.append(draw(_observations(rule, index, case)))
+            index += 1
     return EvaluationBundle(
         case=case,
         observations=tuple(observations),
         rule_set=RuleSet(schema_version=PREDICATE_RULE_SET_SCHEMA_VERSION, rules=rules),
     )
+
+
+_EXAMPLE_CASE = SyntheticCase(
+    schema_version=CASE_SCHEMA_VERSION,
+    case_id="CTP-P01",
+    synthetic_identifier=SyntheticIdentifier(
+        system="urn:contextsafe:synthetic", value="CSYN-CTP-P01"
+    ),
+    gender_identity=GenderIdentity(
+        status=ValueStatus.SPECIFIED,
+        value=f"{_VALUE_MARKER}-A",
+        code_system="urn:contextsafe:fixture",
+    ),
+    recorded_sex_or_gender=(),
+    sex_parameter_for_clinical_use=(),
+    name_to_use=NameToUse(
+        status=ValueStatus.SPECIFIED, value=f"CSYN-{_VALUE_MARKER}-B", use="usual"
+    ),
+    pronouns=Pronouns(status=ValueStatus.SPECIFIED, value=f"{_VALUE_MARKER}-C"),
+    prohibited_inferences=(
+        "gender_identity_to_spcu",
+        "recorded_sex_or_gender_to_spcu",
+    ),
+)
+_EXAMPLE_RULE = Rule(
+    rule_id="A-I00",
+    version="0.1.0",
+    case_id="CTP-P01",
+    checkpoint=Checkpoint.EHR,
+    concept=ConceptKind.NAME_TO_USE,
+    expected=_EXAMPLE_CASE.name_to_use,
+    required=True,
+    predicate=RulePredicate.PRESERVED_ACROSS,
+    preserved_from=Checkpoint.REGISTRATION,
+)
+PRESERVED_ACROSS_PASS = EvaluationBundle(
+    case=_EXAMPLE_CASE,
+    observations=(
+        _observation_of(
+            "CTP-P01",
+            Checkpoint.REGISTRATION,
+            ConceptKind.NAME_TO_USE,
+            _EXAMPLE_CASE.name_to_use,
+            0,
+        ),
+        _observation_of(
+            "CTP-P01",
+            Checkpoint.EHR,
+            ConceptKind.NAME_TO_USE,
+            _EXAMPLE_CASE.name_to_use,
+            1,
+        ),
+    ),
+    rule_set=RuleSet(
+        schema_version=PREDICATE_RULE_SET_SCHEMA_VERSION, rules=(_EXAMPLE_RULE,)
+    ),
+)
+"""The one bundle every run must see: a source and a target observation with
+the same hash, so the ``preserved_across`` pass branch is exercised even if
+the generator never draws it."""
 
 
 def _outcome_for(rule: Rule, outcomes: tuple[Outcome, ...]) -> Outcome:
@@ -254,7 +452,28 @@ def _at_checkpoint(bundle: EvaluationBundle, rule: Rule, checkpoint: Checkpoint)
     )
 
 
+def _reaches(bundle: EvaluationBundle, predicate: RulePredicate, status: str) -> bool:
+    return any(
+        outcome.status.value == status
+        and _rule_of(bundle, outcome).predicate is predicate
+        for outcome in evaluate(bundle)
+    )
+
+
+def _single_observation(bundle: EvaluationBundle, rule: Rule) -> Observation:
+    """The one observation a decided single-observation predicate read."""
+
+    return next(
+        item
+        for item in bundle.observations
+        if item.case_id == rule.case_id
+        and item.checkpoint is rule.checkpoint
+        and item.concept is rule.concept
+    )
+
+
 @settings(max_examples=200, deadline=None)
+@example(bundle=PRESERVED_ACROSS_PASS)
 @given(bundle=_bundles())
 def test_pass_requires_affirmative_evidence_under_every_predicate(
     bundle: EvaluationBundle,
@@ -263,12 +482,14 @@ def test_pass_requires_affirmative_evidence_under_every_predicate(
 
     ``exact`` keeps its stronger form: exactly one observation whose hash is
     the expected hash. Every other predicate still needs at least one
-    observation at the rule's checkpoint, and the single-observation
-    predicates need exactly one.
+    observation at the rule's checkpoint, the single-observation predicates
+    need exactly one, and ``preserved_across`` needs exactly one at each of
+    its two checkpoints with one hash between them.
     """
 
     for outcome in evaluate(bundle):
         rule = _rule_of(bundle, outcome)
+        event(f"{rule.predicate.value}:{outcome.status.value}")
         at_checkpoint = _at_checkpoint(bundle, rule, rule.checkpoint)
         if outcome.status.value == "pass":
             assert outcome.observed_sha256s
@@ -283,7 +504,9 @@ def test_pass_requires_affirmative_evidence_under_every_predicate(
                 assert len(outcome.observed_sha256s) == 1
             if rule.predicate is RulePredicate.PRESERVED_ACROSS:
                 assert rule.preserved_from is not None
+                assert at_checkpoint == 1
                 assert _at_checkpoint(bundle, rule, rule.preserved_from) == 1
+                assert len(outcome.observed_sha256s) == 2
                 assert len(set(outcome.observed_sha256s)) == 1
         if not outcome.observed_sha256s:
             assert outcome.status.value in {"indeterminate", "not_applicable"}
@@ -294,6 +517,50 @@ def test_pass_requires_affirmative_evidence_under_every_predicate(
             RulePredicate.PRESERVED_ACROSS,
         ):
             assert outcome.status.value in {"indeterminate", "not_applicable"}
+
+
+def test_the_explicit_example_is_a_preserved_across_pass() -> None:
+    """The pinned example must itself be the branch it is there to exercise."""
+
+    (outcome,) = evaluate(PRESERVED_ACROSS_PASS)
+    assert outcome.status.value == "pass"
+    assert outcome.reason == "value_preserved_across_checkpoints"
+    assert outcome.reason in AFFIRMATIVE_REASONS
+    assert len(outcome.observed_sha256s) == 2
+    assert set(outcome.observed_sha256s) == {outcome.expected_sha256}
+
+
+@pytest.mark.parametrize(
+    ("predicate", "status"),
+    [(predicate, status) for predicate in RulePredicate for status in ("pass", "fail")],
+    ids=lambda value: value.value if isinstance(value, RulePredicate) else value,
+)
+def test_the_generator_reaches_pass_and_fail_under_every_predicate(
+    predicate: RulePredicate, status: str
+) -> None:
+    """The coverage guard for every ``@given`` above.
+
+    A generated bundle in which some rule with ``predicate`` is reported with
+    ``status`` must exist within a bounded search; otherwise an invariant over
+    that branch is asserting nothing and the strategy, not the evaluator, is
+    what changed. ``find`` raises ``NoSuchExample`` when the search fails.
+    The search is derandomized, so the same bundle is found on every run.
+    """
+
+    found = find(
+        _bundles(),
+        lambda bundle: _reaches(bundle, predicate, status),
+        settings=settings(
+            max_examples=500,
+            deadline=None,
+            database=None,
+            derandomize=True,
+            # The guard asks whether the branch is reachable, not for the
+            # smallest bundle that reaches it, so it does not shrink.
+            phases=(Phase.generate,),
+        ),
+    )
+    assert _reaches(found, predicate, status)
 
 
 @settings(max_examples=200, deadline=None)
@@ -347,16 +614,32 @@ def test_a_status_that_moved_never_passes_status_preserved(
             continue
         if outcome.status.value not in {"pass", "fail"}:
             continue
-        observed = next(
-            item
-            for item in bundle.observations
-            if item.case_id == rule.case_id
-            and item.checkpoint is rule.checkpoint
-            and item.concept is rule.concept
-        )
+        observed = _single_observation(bundle, rule)
         expected_status = getattr(rule.expected, "status")  # noqa: B009 - typed union
         observed_status = getattr(observed.value, "status")  # noqa: B009 - typed union
         assert (outcome.status.value == "pass") == (observed_status is expected_status)
+
+
+@settings(max_examples=200, deadline=None)
+@given(bundle=_bundles())
+def test_a_gender_identity_carrying_another_concepts_scalar_never_passes(
+    bundle: EvaluationBundle,
+) -> None:
+    """A-011 as an invariant: an observed gender identity whose scalar the
+    case declares under another concept is fail, and a pass never carries
+    one."""
+
+    for outcome in evaluate(bundle):
+        rule = _rule_of(bundle, outcome)
+        if rule.predicate is not RulePredicate.NOT_OVERWRITTEN_BY:
+            continue
+        if outcome.status.value not in {"pass", "fail"}:
+            continue
+        observed = _single_observation(bundle, rule).value.value
+        overwritten = observed is not None and (
+            observed in _other_concept_scalars(bundle.case, rule.concept)
+        )
+        assert (outcome.status.value == "fail") == overwritten
 
 
 @settings(max_examples=200, deadline=None)

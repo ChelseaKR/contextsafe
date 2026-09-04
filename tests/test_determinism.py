@@ -57,13 +57,16 @@ hashed payload, so the document digest moved with it while ``input_sha256``,
 """
 
 PREDICATE_RECEIPT_DOCUMENT_SHA256 = (
-    "3f19b6f7562601f885326f2e500828df658142a3a226af6c044ff6c9735d1292"
+    "c1bdb5827fa94e23cdf54ca03f7a2db9daefcda379e421fa5670ea483058e2f4"
 )
 """SHA-256 of the ``evaluate`` document for the packaged predicate pair.
 
 ``rules-predicates.json`` against ``observations-predicates.json``: every
 predicate in the 0.2.0 rule-set contract, evaluated once, pinned to the same
-standard as the exact-only reference receipt.
+standard as the exact-only reference receipt. Moved once, on 2026-09-04, when
+the pair gained A-I09, the ``exact`` rule beside its ``not_coerced`` rule, so
+``rule_set_sha256`` and the outcome list changed; the observation set and the
+case did not.
 """
 
 IMPORTED_OBSERVATIONS_SHA256 = (
@@ -392,7 +395,7 @@ def test_predicate_evaluate_artifact_is_byte_identical_and_pinned(
     _assert_canonical_line(artifact)
     assert hashlib.sha256(artifact).hexdigest() == PREDICATE_RECEIPT_DOCUMENT_SHA256
     document = json.loads(artifact.decode("utf-8"))
-    assert document["payload"]["summary"]["pass"] == 8
+    assert document["payload"]["summary"]["pass"] == 9
     for fragment in (str(tmp_path), "forbidden", "preserved_from", "expected_count"):
         assert fragment.encode("utf-8") not in artifact
 
