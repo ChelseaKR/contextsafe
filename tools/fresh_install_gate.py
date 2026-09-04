@@ -17,13 +17,16 @@ What it examines
 
 1. Exactly one wheel under ``--dist``. Two is not "pick the newest"; it is exit
    2, because a gate that chose would be reporting on an artifact nobody named.
-2. ``python -m venv`` creates an empty environment. ``pip`` must be present in
-   it; a venv without pip is a machine this gate cannot examine, not a finding
-   about the wheel.
-3. ``pip install --no-index <wheel>``. ``--no-index`` is the claim
-   ``[project] dependencies = []`` makes, enforced: a wheel that needs anything
-   from an index fails to install here, and that is a finding, not a harness
-   error, because the artifact was examined and found wanting.
+2. ``python -m venv --clear`` creates an empty environment inside a working
+   directory that did not exist before the gate ran; one that did is exit 2,
+   because a kept environment would install nothing and report the new wheel's
+   name over an old install. ``pip`` must be present in it; a venv without pip
+   is a machine this gate cannot examine, not a finding about the wheel.
+3. ``pip install --no-index --force-reinstall <wheel>``. ``--no-index`` is the
+   claim ``[project] dependencies = []`` makes, enforced: a wheel that needs
+   anything from an index fails to install here, and that is a finding, not a
+   harness error, because the artifact was examined and found wanting.
+   ``--force-reinstall`` is the second guard under step 2's first.
 4. The interpreter in that environment imports ``contextsafe`` from inside the
    environment, not from this checkout. Without this, ``PYTHONPATH`` or a
    ``.pth`` file could turn the whole gate into a test of the tree.
@@ -217,6 +220,10 @@ def quickstart_commands(readme_text: str) -> list[list[str]]:
                 "README.md Quickstart line is not a `uv run contextsafe` command, "
                 f"so it cannot be run from a wheel: {text!r}"
             )
+        if len(tokens) == len(QUICKSTART_PREFIX):
+            raise GateUnavailable(
+                f"README.md Quickstart line names no contextsafe subcommand: {text!r}"
+            )
         commands.append(tokens[3:])
     if not commands:
         raise GateUnavailable("README.md Quickstart names no contextsafe command")
@@ -332,6 +339,7 @@ def _install(
             "pip",
             "install",
             "--no-index",
+            "--force-reinstall",
             "--disable-pip-version-check",
             str(wheel),
         ],
@@ -435,10 +443,16 @@ def run_gate(
 ) -> Report:
     """Install the one wheel under ``dist`` into ``workdir`` and run the Quickstart.
 
-    ``workdir`` must not be inside ``root``: the whole point is a directory the
-    checkout cannot reach. ``python`` creates the environment and defaults to
-    the interpreter running this gate. Raises ``GateUnavailable`` for every
-    state in which the wheel was not examined.
+    ``workdir`` must not exist yet and must not be inside ``root``: the whole
+    point is a directory the checkout cannot reach and nothing else has
+    touched. A directory that already exists is refused before anything runs,
+    because ``python -m venv`` over an existing environment and ``pip install``
+    of an already-installed version both exit 0 and would leave a stale
+    install reporting as the wheel named in the clean line. ``--clear`` and
+    ``--force-reinstall`` sit under that guard, not in place of it. ``python``
+    creates the environment and defaults to the interpreter running this gate.
+    Raises ``GateUnavailable`` for every state in which the wheel was not
+    examined.
     """
 
     python = sys.executable if python is None else python
@@ -455,13 +469,18 @@ def run_gate(
     pinned = pinned_digest(read(root, PIN_SOURCE))
     venv = workdir / "venv"
     outside = workdir / "outside"
+    if workdir.exists():
+        raise GateUnavailable(
+            "the working directory already exists; the gate only examines a "
+            "wheel in an environment it created"
+        )
     try:
         outside.mkdir(parents=True, exist_ok=False)
     except OSError as exc:
         raise GateUnavailable(
             f"cannot create a fresh working directory: {exc}"
         ) from exc
-    if run([python, "-m", "venv", str(venv)], None).returncode != 0:
+    if run([python, "-m", "venv", "--clear", str(venv)], None).returncode != 0:
         raise GateUnavailable("python -m venv could not create an empty environment")
     interpreter, script = venv_layout(venv)
 
@@ -534,7 +553,11 @@ def main(argv: Sequence[str] | None = None) -> int:
     root = args.root.resolve() if args.root is not None else REPO_ROOT
     workdir = args.workdir
     if workdir is None:
-        workdir = Path(tempfile.mkdtemp(prefix="contextsafe-fresh-install-"))
+        # mkdtemp creates the parent, privately; the gate itself creates the
+        # working directory beneath it, so the default path passes the same
+        # "nothing existed here before" guard as an explicit --workdir.
+        parent = Path(tempfile.mkdtemp(prefix="contextsafe-fresh-install-"))
+        workdir = parent / "gate"
 
     try:
         report = run_gate(dist=args.dist, workdir=workdir, root=root)

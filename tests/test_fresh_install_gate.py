@@ -6,7 +6,8 @@ the three states of ADR 0008 are checked on every ``make verify`` without
 building a wheel: a wheel that installs, runs and reproduces the pinned digest
 is exit 0; one that was examined and found wrong is exit 1; a gate that could
 not examine it - no wheel, two wheels, no pin, no Quickstart, no pip, a
-working directory inside the checkout - is exit 2 and never a pass.
+working directory inside the checkout or one that already exists - is exit 2
+and never a pass.
 
 The real path, ``uv build`` then this gate's own subprocess runner against the
 wheel it produced, is ``tests/test_wheel_quickstart.py``.
@@ -23,6 +24,7 @@ import hashlib
 import importlib.util
 import json
 import os
+import shutil
 import sys
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -97,7 +99,7 @@ class FakeRunner:
     def __call__(self, argv: list[str], cwd: Path | None) -> gate.Completed:
         self.calls.append((list(argv), cwd))
         if argv[1:3] == ["-m", "venv"]:
-            self.venv = Path(argv[3])
+            self.venv = Path(argv[-1])
             return gate.Completed(self.venv_exit, b"", b"")
         if argv[1:4] == ["-m", "pip", "--version"]:
             return gate.Completed(0 if self.pip_present else 1, b"", b"")
@@ -362,8 +364,77 @@ def test_a_working_directory_already_used_is_not_examined(scaffold: Scaffold) ->
     """Fresh means fresh: a second run in the same directory could read the first."""
 
     _run(scaffold, FakeRunner())
+    runner = FakeRunner()
+    with pytest.raises(gate.GateUnavailable, match="already exists"):
+        _run(scaffold, runner)
+    assert runner.calls == []
+
+
+def test_a_working_directory_with_a_stale_venv_is_not_examined(
+    scaffold: Scaffold,
+) -> None:
+    """A kept ``venv/`` with ``outside/`` removed is the fail-open shape.
+
+    ``python -m venv`` over an existing environment exits 0, and ``pip install
+    --no-index`` of the same version into it exits 0 without installing
+    anything, so the import-location check passes, the Quickstart runs from
+    whatever was installed before, and the clean line names a wheel the gate
+    never installed. The gate refuses any pre-existing working directory.
+    """
+
+    _run(scaffold, FakeRunner())
+    shutil.rmtree(scaffold.workdir / "outside")
+    stale = scaffold.workdir / "venv" / "lib" / "site-packages" / "contextsafe"
+    stale.mkdir(parents=True, exist_ok=True)
+    (stale / "__init__.py").write_bytes(b"")
+    assert sorted(child.name for child in scaffold.workdir.iterdir()) == ["venv"]
+    runner = FakeRunner()
+    with pytest.raises(gate.GateUnavailable, match="already exists"):
+        _run(scaffold, runner)
+    assert runner.calls == []
+
+
+def test_an_empty_pre_existing_working_directory_is_not_examined(
+    scaffold: Scaffold,
+) -> None:
+    """Even an empty directory: the gate examines only what it created."""
+
+    scaffold.workdir.mkdir()
+    runner = FakeRunner()
+    with pytest.raises(gate.GateUnavailable, match="already exists"):
+        _run(scaffold, runner)
+    assert runner.calls == []
+
+
+def test_the_gate_clears_the_venv_and_forces_the_reinstall(scaffold: Scaffold) -> None:
+    """Belt and braces under the directory guard: never a reused environment."""
+
+    runner = FakeRunner()
+    _run(scaffold, runner)
+
+    venv = next(argv for argv, _ in runner.calls if argv[1:3] == ["-m", "venv"])
+    assert "--clear" in venv
+    install = next(argv for argv, _ in runner.calls if "install" in argv)
+    assert "--force-reinstall" in install
+
+
+def test_a_working_directory_that_cannot_be_created_is_not_examined(
+    scaffold: Scaffold, tmp_path: Path
+) -> None:
+    """A parent that is a file: nothing existed, and nothing can be made."""
+
+    blocker = tmp_path / "blocker"
+    blocker.write_bytes(b"")
+    runner = FakeRunner()
     with pytest.raises(gate.GateUnavailable, match="fresh working directory"):
-        _run(scaffold, FakeRunner())
+        gate.run_gate(
+            dist=scaffold.dist,
+            workdir=blocker / "work",
+            root=scaffold.root,
+            python="fake-python",
+            run=runner,
+        )
+    assert runner.calls == []
 
 
 def test_a_failed_venv_creation_is_not_examined(scaffold: Scaffold) -> None:
@@ -473,6 +544,14 @@ def test_quickstart_parser_reads_continuations_comments_and_the_make_line() -> N
             "not a `uv run",
         ),
         ("# T\n\n## Quickstart\n\n```sh\nuv run python -m x\n```\n", "not a `uv run"),
+        (
+            "# T\n\n## Quickstart\n\n```sh\nuv run contextsafe\n```\n",
+            "names no contextsafe subcommand",
+        ),
+        (
+            "# T\n\n## Quickstart\n\n```sh\nuv run contextsafe   # bare\n```\n",
+            "names no contextsafe subcommand",
+        ),
     ],
 )
 def test_a_quickstart_the_gate_cannot_run_is_not_examined(
@@ -637,8 +716,13 @@ def test_main_defaults_to_a_fresh_temporary_working_directory(
 
     assert code == CLEAN
     venv_argv = next(argv for argv, _ in runner.calls if argv[1:3] == ["-m", "venv"])
-    assert Path(venv_argv[3]).is_relative_to(tmp_path.resolve())
+    venv = Path(venv_argv[-1])
+    assert venv.is_relative_to(tmp_path.resolve())
     assert venv_argv[0] == sys.executable
+    # The directory the gate worked in did not exist before the gate made it:
+    # mkdtemp created only its parent, so the pre-existence guard applied here.
+    assert venv.parent.parent.name.startswith("contextsafe-fresh-install-")
+    assert venv.parent.name == "gate"
 
 
 def test_the_real_runner_reports_an_unrunnable_argv_as_not_examined(

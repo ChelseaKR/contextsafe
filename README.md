@@ -726,7 +726,9 @@ receipt document to reproduce the digest `tests/test_determinism.py` pins.
 Build provenance is attested over the recorded checksums only after every
 platform passes. The gate is `tools/fresh_install_gate.py`; it reads the pin
 rather than restating it, exits 2 rather than 0 for anything it could not
-examine, and its report carries digests, counts and codes and no path.
+examine (including a working directory that existed before it ran, since a
+kept environment would report a wheel it never installed), and its report
+carries digests, counts and codes and no path.
 `make package` builds the same artifacts locally and lists the wheel. The
 limits: these are GitHub's server images, not the desktop fresh installs RG-15
 names; the artifacts are unsigned, and provenance says which workflow produced
