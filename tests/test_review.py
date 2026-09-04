@@ -673,6 +673,21 @@ def test_a_receipt_whose_payload_hash_does_not_rehash_is_refused(
             "invalid_enum",
             "$.payload.results[0].concept",
         ),
+        (
+            lambda r: r["payload"]["results"][0].update(status="passed"),
+            "invalid_enum",
+            "$.payload.results[0].status",
+        ),
+        (
+            lambda r: r["payload"]["results"][0].update(status="reviewed"),
+            "invalid_enum",
+            "$.payload.results[0].status",
+        ),
+        (
+            lambda r: r["payload"]["results"][0].update(status=7),
+            "invalid_string",
+            "$.payload.results[0].status",
+        ),
     ],
 )
 def test_a_receipt_outside_the_shape_review_needs_is_refused(
@@ -681,7 +696,12 @@ def test_a_receipt_outside_the_shape_review_needs_is_refused(
     code: str,
     path: str,
 ) -> None:
-    """Each mutation is applied before re-hashing, so the hash check is not what fails."""
+    """Each mutation is applied before re-hashing, so the hash check is not what fails.
+
+    The three ``status`` cases pin the safety negative: a status outside the
+    published algebra refuses the receipt, and is never read as "not a
+    finding" so that the event is refused for the wrong reason.
+    """
 
     mutate(finding_receipt)
     if "payload_sha256" in finding_receipt and isinstance(
