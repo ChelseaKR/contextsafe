@@ -23,7 +23,7 @@ from pathlib import Path
 from typing import Any
 
 import pytest
-from hypothesis import given, settings
+from hypothesis import example, given, settings
 from hypothesis import strategies as st
 from jsonschema import Draft202012Validator
 
@@ -364,7 +364,10 @@ def test_spcu_records_reject_rather_than_arrive_without_their_support_link(
             _record("recorded_sex_or_gender", "CSYN-NB", "CSYN-ID", 0),
             "invalid_rsg_value",
         ),
-        (_record("name_to_use", "F", None, 0), "non_synthetic_name"),
+        (
+            _record("name_to_use", "F", None, 0),
+            ImportErrorCode.CONCEPT_NOT_CONVERTIBLE.value,
+        ),
         (
             _record("recorded_sex_or_gender", "X", "CSYN-" + "A" * 96, 0),
             "invalid_format",
@@ -377,7 +380,7 @@ def test_spcu_records_reject_rather_than_arrive_without_their_support_link(
         "rsg-without-context",
         "rsg-presence-code",
         "rsg-synthetic-token",
-        "name-not-synthetic",
+        "name-from-rsg-vocabulary",
         "context-over-observation-bound",
     ],
 )
@@ -391,6 +394,69 @@ def test_untyped_or_unsupported_values_reject_instead_of_normalizing(
 
     evidence_source_json["records"] = [record]
     _assert_rejected(evidence_source_json, case, expected_code)
+
+
+_PRESENCE_BEARING = ("gender_identity", "name_to_use", "pronouns")
+_FOREIGN_VALUE_CODES = ("F", "M", "X", "abnormal", "corrected", "final", "normal")
+"""Envelope-admitted codes that belong to RSG or to laboratory status, not GI."""
+
+
+@pytest.mark.parametrize("field_code", _PRESENCE_BEARING)
+@pytest.mark.parametrize("value_code", _FOREIGN_VALUE_CODES)
+def test_a_foreign_vocabulary_code_never_becomes_a_presence_bearing_value(
+    case: SyntheticCase,
+    evidence_source_json: dict[str, Any],
+    field_code: str,
+    value_code: str,
+) -> None:
+    """Concept separation: a sex code or a lab status is not a GI, name, or pronoun.
+
+    The envelope admits these codes for any field, and the observation
+    contract would carry them verbatim as a specified value. The importer
+    must reject the source instead, with the record's location and a fixed
+    sentence, and emit nothing.
+    """
+
+    evidence_source_json["records"] = [
+        _record("pronouns", "CSYN-PRONOUN-THEY-THEM", "CSYN-EHR-DISPLAY", 0),
+        _record(field_code, value_code, None, 1),
+    ]
+    error = _assert_rejected(
+        evidence_source_json, case, ImportErrorCode.CONCEPT_NOT_CONVERTIBLE.value
+    )
+    assert error.to_dict() == {
+        "code": ImportErrorCode.CONCEPT_NOT_CONVERTIBLE.value,
+        "message": (
+            "value code belongs to another concept's vocabulary; a "
+            "presence-bearing concept carries a presence state or a synthetic token"
+        ),
+        "path": "$.records[1].value_code",
+    }
+
+
+@pytest.mark.parametrize("field_code", _PRESENCE_BEARING)
+def test_presence_states_and_synthetic_tokens_still_convert(
+    case: SyntheticCase, evidence_source_json: dict[str, Any], field_code: str
+) -> None:
+    """Boundary of the rule: what the rule must not reject."""
+
+    evidence_source_json["records"] = [
+        _record(field_code, "declined", None, 0),
+        _record(field_code, "unknown", None, 1),
+        _record(field_code, "absent", None, 2),
+        _record(field_code, "CSYN-VAL-KEPT", None, 3),
+    ]
+    result = convert_scanned(
+        _scanned(evidence_source_json), case=case, checkpoint=Checkpoint.EHR
+    )
+    values = [item.value.to_dict() for item in result.observations]
+    assert [item["status"] for item in values] == [
+        "declined",
+        "unknown",
+        "absent",
+        "specified",
+    ]
+    assert values[3]["value"] == "CSYN-VAL-KEPT"
 
 
 def test_one_bad_record_rejects_a_source_with_good_records(
@@ -850,6 +916,71 @@ _CASE = parse_case(json.loads((REFERENCE / "case.json").read_text(encoding="utf-
 _CASE_JSON = json.loads((REFERENCE / "case.json").read_text(encoding="utf-8"))
 
 
+def _reference_envelope() -> tuple[dict[str, Any], Checkpoint]:
+    """The shipped reference source, for pinning explicit property examples."""
+
+    template = json.loads(
+        (REFERENCE / "evidence-source.json").read_text(encoding="utf-8")
+    )
+    return template, Checkpoint(template["checkpoint"])
+
+
+_FIELD_CODE_UNMAPPED_MESSAGE = "field code has no entry in the closed concept mapping"
+_INVALID_ENUM_MESSAGE = "value is not supported"
+_INVALID_STRING_MESSAGE = "expected a bounded non-empty string"
+_INVALID_UNICODE_MESSAGE = "string must contain only Unicode scalar values"
+_INVALID_FORMAT_MESSAGE = "string does not match the required format"
+_NAMESPACE_MISMATCH_MESSAGE = (
+    "the fixed synthetic identifier must match the envelope case token"
+)
+
+
+def _field_code_rejections(index: int) -> tuple[dict[str, str], ...]:
+    """Every error object a rejected field code at ``index`` may produce.
+
+    The set is closed and every message is a fixed sentence from the code
+    path that emits it, so membership proves the rejection carried no part
+    of the drawn value. A substring check against the message cannot prove
+    that: single-character draws are substrings of any English sentence.
+    """
+
+    path = f"$.records[{index}].field_code"
+    return tuple(
+        {"code": code, "message": message, "path": path}
+        for code, message in (
+            (ImportErrorCode.FIELD_CODE_UNMAPPED.value, _FIELD_CODE_UNMAPPED_MESSAGE),
+            ("invalid_enum", _INVALID_ENUM_MESSAGE),
+            ("invalid_string", _INVALID_STRING_MESSAGE),
+            ("invalid_unicode", _INVALID_UNICODE_MESSAGE),
+        )
+    )
+
+
+_IDENTIFIER_REJECTIONS: tuple[dict[str, str], ...] = (
+    {
+        "code": "namespace_mismatch",
+        "message": _NAMESPACE_MISMATCH_MESSAGE,
+        "path": "$.synthetic_identifier",
+    },
+    {
+        "code": "invalid_format",
+        "message": _INVALID_FORMAT_MESSAGE,
+        "path": "$.synthetic_identifier.value",
+    },
+    {
+        "code": "invalid_string",
+        "message": _INVALID_STRING_MESSAGE,
+        "path": "$.synthetic_identifier.value",
+    },
+    {
+        "code": "invalid_unicode",
+        "message": _INVALID_UNICODE_MESSAGE,
+        "path": "$.synthetic_identifier.value",
+    },
+)
+"""Every error object a rejected synthetic identifier may produce (closed)."""
+
+
 def _rules_for(checkpoint: Checkpoint) -> dict[str, Any]:
     """One required rule per concept, expecting what the case manifest declares."""
 
@@ -911,6 +1042,9 @@ def test_import_then_evaluate_is_deterministic(
 
 
 @settings(max_examples=150, deadline=None)
+@example(example=_reference_envelope(), position=0, field_code="l")
+@example(example=_reference_envelope(), position=0, field_code=" ")
+@example(example=_reference_envelope(), position=1, field_code="abnormal")
 @given(
     example=_envelopes(),
     position=st.integers(min_value=0, max_value=6),
@@ -926,20 +1060,28 @@ def test_any_unknown_field_code_rejects_the_whole_source(
 ) -> None:
     envelope, checkpoint = example
     records = envelope["records"]
+    index = min(position, len(records))
     bad = _record(field_code, "CSYN-VAL-X", None, len(records))
-    records.insert(min(position, len(records)), bad)
+    records.insert(index, bad)
     with pytest.raises(ContextSafeError) as raised:
         convert_scanned(_scanned(envelope), case=_CASE, checkpoint=checkpoint)
-    assert raised.value.code in {
-        ImportErrorCode.FIELD_CODE_UNMAPPED.value,
-        "invalid_enum",
-        "invalid_string",
-        "invalid_unicode",
-    }
-    assert field_code not in raised.value.message
+    # Structural, not substring: the error object must be one of the fixed
+    # rejections at exactly the inserted record's field_code path. The pinned
+    # examples are draws a substring check wrongly failed on.
+    assert raised.value.to_dict() in _field_code_rejections(index)
 
 
 @settings(max_examples=150, deadline=None)
+@example(
+    example=_reference_envelope(), identifier="m", system="urn:contextsafe:synthetic"
+)
+@example(example=_reference_envelope(), identifier=" ", system="urn:example:real")
+@example(example=_reference_envelope(), identifier="", system="urn:example:real")
+@example(
+    example=_reference_envelope(),
+    identifier="CSYN-CTP-I01",
+    system="urn:example:real",
+)
 @given(
     example=_envelopes(),
     identifier=st.one_of(
@@ -955,11 +1097,6 @@ def test_any_non_synthetic_identifier_rejects_the_whole_source(
     envelope["synthetic_identifier"] = {"system": system, "value": identifier}
     with pytest.raises(ContextSafeError) as raised:
         convert_scanned(_scanned(envelope), case=_CASE, checkpoint=checkpoint)
-    assert raised.value.code in {
-        "namespace_mismatch",
-        "invalid_format",
-        "invalid_string",
-        "invalid_unicode",
-        "invalid_type",
-    }
-    assert not identifier or identifier not in raised.value.message
+    # Structural, not substring: the error object must be one of the fixed
+    # identifier rejections, whose messages are sentences that name no value.
+    assert raised.value.to_dict() in _IDENTIFIER_REJECTIONS

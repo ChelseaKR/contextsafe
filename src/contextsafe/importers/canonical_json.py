@@ -15,7 +15,12 @@ What the envelope does not carry is not invented from what it does. Gender
 identity needs a code system and recorded sex or gender needs a source; the
 envelope has neither field, so both are filled with a fixed token that says
 so (``urn:contextsafe:unbound-...``) rather than with a value guessed from
-the checkpoint or the case. Sex parameter for clinical use needs a
+the checkpoint or the case. Name to use needs a ``use``; the contract admits
+only ``usual``, so that is what is written, fixed by the contract and not
+read from the source. A value from another concept's vocabulary (a
+recorded-sex code or a laboratory status) offered as a gender identity, name,
+or pronouns value rejects the source rather than arriving as that concept's
+value under a foreign token. Sex parameter for clinical use needs a
 supporting-observation link the envelope cannot express in one record, so a
 record for it rejects the source instead of arriving without the link that
 makes it safe to evaluate. Nothing here derives SPCU from any other concept.
@@ -115,7 +120,14 @@ def _presence(record: BoundaryRecord, path: str) -> tuple[ValueStatus, str | Non
     no value. A null value code is none of those: the source did not say,
     and the importer does not say for it. A value code of ``specified`` is
     a claim that a value exists without the value, which is ambiguous in
-    the same way. Anything else is the value, verbatim.
+    the same way. A synthetic token (``CSYN-...``) is the value, verbatim.
+
+    Anything else the envelope admits is a code from another concept's
+    vocabulary: the recorded-sex-or-gender codes and the laboratory status
+    codes. Carrying one of those into a gender identity, name, or pronouns
+    value would let a sex code arrive as a gender identity with nothing but
+    the token to show for it, which is the substitution the concept
+    separation rule forbids, so the record rejects the source instead.
     """
 
     code = record.value_code
@@ -133,6 +145,13 @@ def _presence(record: BoundaryRecord, path: str) -> tuple[ValueStatus, str | Non
             ImportErrorCode.VALUE_AMBIGUOUS,
             f"{path}.value_code",
             "a record that says specified must carry the value itself",
+        )
+    if not code.startswith(SYNTHETIC_VALUE_PREFIX):
+        raise import_error(
+            ImportErrorCode.CONCEPT_NOT_CONVERTIBLE,
+            f"{path}.value_code",
+            "value code belongs to another concept's vocabulary; a presence-bearing "
+            "concept carries a presence state or a synthetic token",
         )
     return ValueStatus.SPECIFIED, code
 
@@ -163,6 +182,8 @@ def _gender_identity(record: BoundaryRecord, path: str) -> SemanticValue:
 
 
 def _name_to_use(record: BoundaryRecord, path: str) -> SemanticValue:
+    # ``use`` is fixed by the observation contract, which admits only
+    # ``usual``; the envelope carries no name-use field and none is read.
     status, value = _presence(record, path)
     return NameToUse(status=status, value=value, use="usual")
 

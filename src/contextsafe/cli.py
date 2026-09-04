@@ -194,6 +194,11 @@ def _parser() -> argparse.ArgumentParser:
     import_parser = subparsers.add_parser(
         "import", parents=[modes], help=_HELP.text("cli.command.import")
     )
+    # ``choices`` makes argparse echo an unrecognized format name on stderr,
+    # as ``--fail-on`` and ``--lang`` already do. A format name is a registry
+    # key, not identity data. Do not extend the pattern to ``--checkpoint`` or
+    # to any flag whose value comes from a source: those are validated by the
+    # command and rejected with a code and a location, never echoed.
     import_parser.add_argument(
         "--format",
         required=True,

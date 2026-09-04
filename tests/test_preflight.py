@@ -203,6 +203,52 @@ def test_field_namespace_free_text_and_canary_fail_closed(
 
 
 @pytest.mark.parametrize(
+    ("mutation", "expected_code"),
+    [
+        (
+            lambda value: value["synthetic_identifier"].update(
+                {"value": "CSYN-CTP-Z99"}
+            ),
+            "namespace_mismatch",
+        ),
+        (
+            lambda value: value["records"][0].update({"field_code": "temperature"}),
+            "invalid_enum",
+        ),
+        (
+            lambda value: value["records"].append(value["records"][0]),
+            "duplicate_source_pointer",
+        ),
+    ],
+    ids=["namespace", "record-field", "duplicate-pointer"],
+)
+def test_envelope_defects_are_reported_before_plan_scope_mismatch(
+    tmp_path: Path,
+    evidence_source_json: dict[str, Any],
+    evidence_scope: EvidenceScope,
+    mutation: Any,
+    expected_code: str,
+) -> None:
+    """Precedence: the envelope parses whole before it is bound to a scope.
+
+    A source with a scope mismatch and an internal defect reports the
+    defect; the scope check runs on a parsed envelope, not on raw fields.
+    Both defects still reject, and neither is echoed.
+    """
+
+    evidence_source_json["checkpoint"] = "interface"
+    evidence_source_json["plan_id"] = "PLAN-OTHER-TEST"
+    mutation(evidence_source_json)
+    _assert_rejected(tmp_path, evidence_source_json, evidence_scope, expected_code)
+    del evidence_source_json["records"][1:]
+    evidence_source_json["records"][0]["field_code"] = "pronouns"
+    evidence_source_json["synthetic_identifier"]["value"] = "CSYN-CTP-I01"
+    _assert_rejected(
+        tmp_path, evidence_source_json, evidence_scope, "evidence_scope_mismatch"
+    )
+
+
+@pytest.mark.parametrize(
     ("raw", "expected_code"),
     [
         (b"{", "invalid_json"),

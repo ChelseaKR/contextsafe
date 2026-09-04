@@ -301,11 +301,15 @@ format is one module and one entry.
 
 What it does not claim. The conversion is whole or nothing: a field code
 outside the closed five-concept mapping, an untyped value, an identifier
-outside the synthetic namespace, or any value the observation contract rejects
-fails the source with a code and a location and produces nothing, and nothing
-is normalized to the closest supported value (A-033). Values are the source's
-own tokens, carried verbatim — `CSYN-PRONOUN-THEY-THEM` stays that string, not
-`they/them` — so evaluating the imported reference source against the
+outside the synthetic namespace, a gender-identity, name, or pronouns record
+whose value is a recorded-sex code or a laboratory status rather than a
+presence state or a `CSYN-` token, or any value the observation contract
+rejects fails the source with a code and a location and produces nothing, and
+nothing is normalized to the closest supported value (A-033). Values are the
+source's own tokens, carried verbatim — `CSYN-PRONOUN-THEY-THEM` stays that
+string, not `they/them`; a name's `use` is `usual` because the contract admits
+nothing else, not because the source said so — so evaluating the imported
+reference source against the
 reference `rules.json` reports `semantic_mismatch` for the pronouns rule and
 `missing_evidence` for the rest. That is correct: the tool has not been told
 the two are the same, and the mapping profile that would say so (B-026) does
@@ -316,7 +320,8 @@ arrive without the supporting-observation link the concept needs, and the
 result's counts and warnings stay in process because the observation-set
 contract has no field for them.
 
-The durable primitive has no CLI import route. Every iteration-3 evidence record says
+The durable evidence store has no CLI import route; `contextsafe import` writes
+only an observation-set document and never an evidence record. Every iteration-3 evidence record says
 `authorization_status: not_verified_internal_test_only` and
 `usable_for_execution: false`; a future signature-verification layer may not relabel
 these records. The preflight scanner is a fallible boundary check, not proof that bytes

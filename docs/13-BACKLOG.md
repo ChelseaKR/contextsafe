@@ -159,6 +159,14 @@ command line reads, so a new format is one module and one entry. Values are
 carried as the source's own tokens, so evaluating an imported observation
 against the reference rule set reports `semantic_mismatch` until a mapping
 profile binds the token, and `profile_reviewed` is `false` on every result.
+A gender-identity, name, or pronouns record whose value is a recorded-sex code
+or a laboratory status (which the envelope admits for any field) rejects the
+source rather than arriving as that concept's value under a foreign token;
+`evidence preflight` accepts and rejects the same sources as before, with the
+plan-scope check now run after the envelope parse. The property suites assert
+value-free rejection structurally (whole error object in a closed set at the
+expected path), not by substring, so the gate is the same colour for the same
+tree on every Hypothesis draw.
 B-022 is not closed: the field-code mapping is reference-only and no
 interoperability, clinical, or community reviewer has approved it; the source's
 `plan_id` is checked for shape and not against a plan, because the plan-bound,

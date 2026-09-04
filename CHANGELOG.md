@@ -51,13 +51,22 @@ rather than after it.
   normalized to the closest supported value (A-033). A sex-parameter record
   rejects too: the envelope cannot carry the supporting-observation link the
   concept needs in one record, and an SPCU observation without it is not
-  emitted.
+  emitted. A gender-identity, name, or pronouns record whose value code is
+  from another concept's vocabulary (an RSG sex code such as `F`, or a
+  laboratory status such as `abnormal`, both of which the envelope admits for
+  any field) rejects the source with `import_concept_not_convertible` at the
+  record's `value_code`: a presence-bearing concept carries a presence state
+  or a `CSYN-` token and nothing else, so a sex code cannot arrive as a gender
+  identity under a foreign token. This rule is part of mapping version
+  `0.1.0` from its first release; no earlier version of the mapping shipped.
 
   Values are the source's own tokens, verbatim. `CSYN-PRONOUN-THEY-THEM` is
   carried as that string, not as `they/them`; gender identity's `code_system`
   and RSG's `source`, which the envelope does not carry, are filled with a
   fixed `urn:contextsafe:unbound-...` token rather than a value guessed from
-  the case or the checkpoint. So evaluating the reference source against the
+  the case or the checkpoint, and name to use's `use` is `usual` because the
+  observation contract admits nothing else, fixed by the contract and not
+  read from the source. So evaluating the reference source against the
   reference `rules.json` reports `semantic_mismatch` for the pronouns rule
   and `missing_evidence` for the other four, and that is the correct result:
   the tool has not been told the token and the expected value are the same,
@@ -75,7 +84,15 @@ rather than after it.
   declared safety modules. `preflight.scan_source` and
   `evidence.parse_evidence_envelope` are the plan-free halves of the existing
   preflight, factored out so the importer runs the same scan the preflight
-  runs; `evidence preflight` itself is unchanged. `import` honours `--quiet`,
+  runs. `evidence preflight` accepts and rejects exactly the sources it did,
+  but its error precedence moved: the plan-scope equality check now runs on
+  the parsed envelope, after the record and namespace checks, so a source
+  with a wrong checkpoint or plan ID and a record-level or namespace defect
+  reports the record or namespace code where it previously reported
+  `evidence_scope_mismatch`. The Hypothesis suites assert that a rejection is
+  value-free structurally, by comparing the whole error object against a
+  closed set of fixed sentences at the expected path, not by testing that the
+  drawn value is absent from the message. `import` honours `--quiet`,
   `--no-color`, `--output`, and `--log-dir` (the log's closed command
   vocabulary now includes `import`), is in the three-run determinism matrix
   with a pinned artifact digest, and fails closed with

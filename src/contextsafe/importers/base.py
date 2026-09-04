@@ -144,7 +144,13 @@ class ImportResult:
         }
 
     def to_dict(self) -> dict[str, JsonValue]:
-        """Return the value-minimized report of this conversion."""
+        """Return the value-minimized report of this conversion.
+
+        In-process and test-only. This shape has no schema in ``schemas/``
+        and no command emits it: the CLI writes only the observation set.
+        If a second output document is ever decided, it gets a contract, a
+        row in ``schemas/README.md``, and an emitter in that item, not here.
+        """
 
         return {
             "format": self.format_name,
