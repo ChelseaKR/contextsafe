@@ -47,7 +47,10 @@ file is opened once with ``O_APPEND`` and ``O_NOFOLLOW``, read and appended
 through that one descriptor, and the append is refused if the file grew
 between the read and the write. On a platform without ``O_NOFOLLOW`` the
 command fails closed with ``input_path_unsupported``, as the other
-descriptor-anchored commands do. No clock is read: the log carries sequence
+descriptor-anchored commands do. What the chain cannot see is a record removed
+from its end: a log cut back to an earlier line is a valid shorter log, and
+only an external record of the state document's ``log_head_sha256`` can show
+the cut. No clock is read: the log carries sequence
 numbers, not timestamps, for the reason ``contextsafe.eventlog`` records.
 
 The decision, severity, role, and rationale vocabularies are reference-only
@@ -110,8 +113,14 @@ STATE_LIMITATIONS: tuple[str, ...] = (
 
 _CLOEXEC = getattr(os, "O_CLOEXEC", 0)
 _NOFOLLOW = getattr(os, "O_NOFOLLOW", 0)
-_APPEND_FLAGS = os.O_RDWR | os.O_APPEND | os.O_CREAT | _NOFOLLOW | _CLOEXEC
-_READ_FLAGS = os.O_RDONLY | _NOFOLLOW | _CLOEXEC
+_NONBLOCK = getattr(os, "O_NONBLOCK", 0)
+"""Without it, opening a FIFO read-only blocks until a writer appears, so a
+``--log`` that names one would hang instead of being refused as not a regular
+file. Harmless on the regular file the descriptor is then required to be, and
+carried on the append flags too so the refusal does not depend on what a
+platform does with ``O_RDWR`` on a FIFO."""
+_APPEND_FLAGS = os.O_RDWR | os.O_APPEND | os.O_CREAT | _NOFOLLOW | _NONBLOCK | _CLOEXEC
+_READ_FLAGS = os.O_RDONLY | _NOFOLLOW | _NONBLOCK | _CLOEXEC
 _CHUNK_BYTES = 65_536
 _RULE_ID_PATTERN = re.compile(r"^[A-Z][A-Z0-9-]{2,63}$")
 _CASE_ID_PATTERN = re.compile(r"^CTP-[A-Z0-9]{3,16}$")
@@ -825,6 +834,20 @@ def _replay_error(exc: ContextSafeError, index: int) -> ContextSafeError:
     )
 
 
+def _event_error(exc: ContextSafeError) -> ContextSafeError:
+    """The same code, at the field's place inside the record's ``event`` member.
+
+    The event parser and the transition rules report paths relative to an
+    event (``$.severity``, ``$.decision``). Inside a log record the event is
+    the ``event`` member, so a replay refusal must say ``$.log[1].event.severity``
+    or it points at a field the record does not have.
+    """
+
+    return ContextSafeError(
+        code=exc.code, path=f"$.event{exc.path[1:]}", message=exc.message
+    )
+
+
 def _parse_record(raw: bytes, index: int, previous_sha256: str) -> LogRecord:
     parsed = parse_json_bytes(raw)
     data = object_value(parsed, "$")
@@ -835,7 +858,10 @@ def _parse_record(raw: bytes, index: int, previous_sha256: str) -> LogRecord:
         REVIEW_LOG_SCHEMA_VERSION,
         "unsupported_schema_version",
     )
-    event = parse_review_event(data["event"])
+    try:
+        event = parse_review_event(data["event"])
+    except ContextSafeError as exc:
+        raise _event_error(exc) from exc
     record = LogRecord(
         sequence=index,
         previous_record_sha256=previous_sha256,
@@ -873,11 +899,20 @@ def replay_log(raw: bytes) -> ReviewLogState:
     state = EMPTY_LOG_STATE
     for index, line in enumerate(raw[:-1].split(b"\n")):
         try:
-            record = _parse_record(line, index, state.head_sha256)
-            state = _extend(state, record)
+            state = _replay_record(state, line, index)
         except ContextSafeError as exc:
             raise _replay_error(exc, index) from exc
     return state
+
+
+def _replay_record(state: ReviewLogState, raw: bytes, index: int) -> ReviewLogState:
+    """Parse one line and apply it; a transition refusal is at the event's field."""
+
+    record = _parse_record(raw, index, state.head_sha256)
+    try:
+        return _extend(state, record)
+    except ContextSafeError as exc:
+        raise _event_error(exc) from exc
 
 
 # --- the log file -----------------------------------------------------------

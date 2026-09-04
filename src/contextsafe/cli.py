@@ -1,6 +1,7 @@
 """Offline CLI for validating and evaluating synthetic fixture files."""
 
 import argparse
+import os
 import sys
 from collections.abc import Sequence
 from pathlib import Path
@@ -477,6 +478,7 @@ def _finding_command(args: argparse.Namespace) -> str:
     never changed.
     """
 
+    _refuse_output_over_log(args.output, args.log)
     if args.finding_command == "review":
         state = append_review_event(
             args.log, load_json(args.event), load_json(args.receipt)
@@ -485,6 +487,32 @@ def _finding_command(args: argparse.Namespace) -> str:
     if args.finding_command == "list":
         return f"{canonical_json(derive_review_state(args.log).to_dict())}\n"
     raise ContextSafeError("unsupported_command", "$", "finding command is unsupported")
+
+
+def _refuse_output_over_log(output: Path | None, log: Path) -> None:
+    """Refuse ``--output`` naming the review log, before the log is touched.
+
+    ``main`` writes ``--output`` with a plain truncating write after the
+    command has run. For every other command that is harmless; for ``finding``
+    it would replace an append-only log with the state document derived from
+    it, after ``finding review`` had already appended, and exit 0. The two
+    paths are compared as written, and, where both exist, by device and inode
+    so that a symlink or a hard link to the log is refused too. The check runs
+    before the log is opened, so a refusal leaves the log exactly as it was.
+    """
+
+    if output is None:
+        return
+    same = os.path.abspath(output) == os.path.abspath(log)
+    if not same:
+        try:
+            same = os.path.samefile(output, log)
+        except OSError:
+            same = False
+    if same:
+        raise ContextSafeError(
+            "output_path_unsafe", "$", "output must not name the review log"
+        )
 
 
 def _render_command(args: argparse.Namespace) -> str:

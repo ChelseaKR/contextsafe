@@ -1088,7 +1088,21 @@ rather than after it.
   clinical, community, legal, or security review of them has happened. Two
   contracts, so `schemas/README.md` now states `13 contracts` in digits: the
   claims gate's number-word table stops at twelve, and the document was
-  changed rather than the gate.
+  changed rather than the gate. Review of the branch before merge found and
+  closed one defect and three gaps. `--output` naming the review log, by path,
+  symlink, or hard link, had passed through `main`'s truncating write and
+  replaced the log with the state document after the event was appended, with
+  exit 0; both commands now refuse it as `output_path_unsafe` before the log is
+  opened, and the log's bytes are asserted unchanged. A replay refusal at an
+  event field now reports `$.log[i].event.<field>`, where the field is,
+  rather than `$.log[i].<field>`. The log is opened with `O_NONBLOCK`, so a
+  `--log` that names a FIFO is refused as `input_path_unsafe` instead of
+  blocking. `review.py` joins the mutation gate's `DECLARED_TARGETS` and
+  `tests/test_review.py` its screening set. Stated as a limit rather than
+  fixed: the chain cannot detect a record removed from the end of the log,
+  and only an external record of `log_head_sha256` can; a `remediated`
+  decision binds no rerun receipt, so `remediation_verified_by_rerun` is a
+  declaration the tool cannot check.
 
 ## [0.1.0] - 2026-09-02
 

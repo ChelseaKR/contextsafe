@@ -593,7 +593,23 @@ receipt contract is unchanged), `finding review` reads the receipt for its
 hashes and finding outcomes rather than verifying it (B-036), the log has no
 governed cleanup or retention path, and the disputed-findings flow of
 [Service design §9](03-SERVICE-DESIGN.md) — freeze, two independent reviewers,
-majority and dissent — has no representation here.
+majority and dissent — has no representation here. Three further limits are
+recorded rather than closed. The hash chain cannot detect a record removed from
+the end of the log: a log cut back to an earlier line replays as a valid
+shorter log, and only an external record of the state document's
+`log_head_sha256`, taken after each append, can show the cut. A `remediated`
+decision binds no rerun receipt hash, so `remediation_verified_by_rerun` is a
+declaration the tool cannot check, exactly as a declared signer is. And
+`accepted_residual_risk` has no `withdrawn` exit: the transition table lets an
+acceptance move only to `remediated`, so an acceptance entered in error cannot
+be marked `entered_in_error`, which is reachable only through `withdrawn`. That
+is the table's shape today, recorded here rather than governed: an acceptance
+is the state two declared signers stood behind, and whether one event may undo
+it, or only the §9 disputed-findings flow may, is a decision that flow must
+take when it exists.
+Before merge, `--output` naming the review log was found to reach `main`'s
+truncating write after the append and replace the log with exit 0; both
+commands now refuse it as `output_path_unsafe` before the log is opened.
 
 ## Phase 5 — trust and operations
 

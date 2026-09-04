@@ -1,6 +1,7 @@
 """CLI behavior and value-minimizing error tests."""
 
 import json
+import os
 from collections.abc import Callable
 from pathlib import Path
 from typing import Any
@@ -605,6 +606,73 @@ def test_finding_commands_honour_quiet_and_output(
     assert "\x1b" not in reviewed.read_text(encoding="utf-8")
     assert main(["finding", "list", "--log", str(log), "--output", str(tmp_path)]) == 2
     assert json.loads(capsys.readouterr().err)["error"]["code"] == "output_io_error"
+
+
+def _assert_output_over_log_refused(
+    args: list[str], log: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    before = log.read_bytes() if log.exists() else None
+    assert main(args) == 2
+    captured = capsys.readouterr()
+    assert captured.out == ""
+    error = json.loads(captured.err)["error"]
+    assert error["code"] == "output_path_unsafe"
+    assert error["path"] == "$"
+    assert str(log) not in captured.err
+    assert log.name not in captured.err
+    if before is None:
+        assert not log.exists()
+    else:
+        assert log.read_bytes() == before
+
+
+def test_finding_output_naming_the_log_is_refused_before_anything_is_written(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+    finding_receipt: dict[str, Any],
+    review_event: Callable[..., dict[str, Any]],
+) -> None:
+    """``main`` writes ``--output`` by truncation; over the log that would
+    replace an append-only file with the state derived from it, after
+    ``finding review`` had appended, and exit 0. Both commands refuse it first,
+    so the log is exactly what it was: the same bytes when it existed, and no
+    file at all when it did not."""
+
+    receipt, event, log = _finding_files(tmp_path, finding_receipt, review_event)
+    review = _review_args(receipt, event, log)
+    _assert_output_over_log_refused([*review, "--output", str(log)], log, capsys)
+    assert main(review) == 0
+    capsys.readouterr()
+    _assert_output_over_log_refused([*review, "--output", str(log)], log, capsys)
+    listing = ["finding", "list", "--log", str(log)]
+    _assert_output_over_log_refused([*listing, "--output", str(log)], log, capsys)
+    relative = Path(os.path.relpath(log, Path.cwd()))
+    _assert_output_over_log_refused([*listing, "--output", str(relative)], log, capsys)
+    assert main([*listing, "--output", str(tmp_path / "state.json")]) == 0
+    assert capsys.readouterr().out == ""
+
+
+def test_finding_output_through_a_link_to_the_log_is_refused(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+    finding_receipt: dict[str, Any],
+    review_event: Callable[..., dict[str, Any]],
+) -> None:
+    """A symlink or a hard link to the log is the log; the inode says so."""
+
+    receipt, event, log = _finding_files(tmp_path, finding_receipt, review_event)
+    assert main(_review_args(receipt, event, log)) == 0
+    capsys.readouterr()
+    symlink = tmp_path / "state-link.json"
+    symlink.symlink_to(log)
+    hardlink = tmp_path / "state-hard.json"
+    os.link(log, hardlink)
+    listing = ["finding", "list", "--log", str(log)]
+    for alias in (symlink, hardlink):
+        _assert_output_over_log_refused([*listing, "--output", str(alias)], log, capsys)
+        _assert_output_over_log_refused(
+            [*_review_args(receipt, event, log), "--output", str(alias)], log, capsys
+        )
 
 
 def test_finding_list_on_a_missing_log_fails_closed_without_the_path(
