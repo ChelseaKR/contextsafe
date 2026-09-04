@@ -809,6 +809,36 @@ approval, or evidence is verified (B-036). The contract is reference-only and
 ungoverned, and a regression it reports is a finding for a reviewer, not a
 verdict.
 
+### B-032
+
+`contextsafe finding review --receipt R.json --event E.json --log LOG.jsonl`
+records one declared review decision about one finding in an append-only
+log, and `contextsafe finding list --log LOG.jsonl` derives the current
+disposition per outcome from it; both print the same derived state document
+and accept `--output`. An event binds the outcome and the receipt's payload
+and rule-set hashes to a decision from a closed set (`confirmed`, `rejected`,
+`severity_changed`, `owner_assigned`, `remediated`, `accepted_residual_risk`,
+`withdrawn`), a severity from a closed label set, an owner as a role plus the
+SHA-256 of an opaque handle, a rationale *code*, an optional external
+reference under the [ADR 0006](docs/adr/0006-provenance-token-grammar-and-boundary-scan.md)
+grammar, and declared signers as a role plus an organization label. **There
+is no free-text field, by construction**, as with the support bundle. The
+state machine is data, and every transition the table does not contain is
+tested as a refusal. The log is one canonical line per event, hash-chained;
+every read re-hashes and replays the whole file before anything is appended,
+a single changed byte anywhere in it is refused, and no line is ever
+rewritten. Its limits are the point: **signers are declared, not verified.**
+Every event and every signer says `signature_status: not_verified`, an
+accepted residual risk needs two declared signers with distinct roles and
+organizations or is refused, and **a declared signer authorizes nothing** —
+review signatures are B-035. The vocabularies are reference-only and
+ungoverned, not the approved rubric. Dispositions are not bound into any
+receipt; the receipt contract is unchanged. Like the other descriptor-anchored
+commands, both fail closed with `input_path_unsupported` where the platform
+lacks `O_NOFOLLOW`. Contracts:
+[review event](schemas/contextsafe-review-event-v1.schema.json) and
+[review state](schemas/contextsafe-review-state-v1.schema.json).
+
 The durable evidence store has no CLI import route; `contextsafe import` writes
 only an observation-set document and never an evidence record. Every iteration-3 evidence record says
 `authorization_status: not_verified_internal_test_only` and

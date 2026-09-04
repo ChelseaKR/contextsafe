@@ -1,11 +1,14 @@
 """CLI behavior and value-minimizing error tests."""
 
 import json
+from collections.abc import Callable
 from pathlib import Path
+from typing import Any
 
 import pytest
 
 from contextsafe.cli import EXIT_USAGE_ERROR, main
+from contextsafe.eventlog import LOG_FILE_NAME
 from contextsafe.evidence import CANONICAL_JSON_MEDIA_TYPE, CANONICAL_JSON_SOURCE_TYPE
 from contextsafe.plan import ExecutionPlan
 from contextsafe.reference_fixtures import REFERENCE_ROOT
@@ -404,6 +407,9 @@ def test_usage_errors_exit_with_dedicated_code(
         ["mapping", "validate"],
         ["receipt"],
         ["receipt", "diff", "--before", "a.json"],
+        ["finding"],
+        ["finding", "review"],
+        ["finding", "list"],
     ]
     for argv in usage_errors:
         with pytest.raises(SystemExit) as raised:
@@ -513,3 +519,119 @@ def test_no_color_accepted_and_output_never_contains_ansi(
         captured = capsys.readouterr()
         assert "\x1b" not in captured.out
         assert "\x1b" not in captured.err
+
+
+# --- finding review / finding list -------------------------------------------
+
+
+def _finding_files(
+    tmp_path: Path,
+    finding_receipt: dict[str, Any],
+    review_event: Callable[..., dict[str, Any]],
+) -> tuple[Path, Path, Path]:
+    receipt = tmp_path / "receipt.json"
+    receipt.write_text(json.dumps(finding_receipt), encoding="utf-8")
+    event = tmp_path / "event.json"
+    event.write_text(json.dumps(review_event("confirmed")), encoding="utf-8")
+    return receipt, event, tmp_path / "review.jsonl"
+
+
+def _review_args(receipt: Path, event: Path, log: Path) -> list[str]:
+    return [
+        "finding",
+        "review",
+        "--receipt",
+        str(receipt),
+        "--event",
+        str(event),
+        "--log",
+        str(log),
+    ]
+
+
+def test_finding_review_appends_and_prints_the_derived_state(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+    finding_receipt: dict[str, Any],
+    review_event: Callable[..., dict[str, Any]],
+) -> None:
+    receipt, event, log = _finding_files(tmp_path, finding_receipt, review_event)
+    assert main(_review_args(receipt, event, log)) == 0
+    captured = capsys.readouterr()
+    assert captured.err == ""
+    state = json.loads(captured.out)
+    assert state["event_count"] == 1
+    assert state["findings"][0]["disposition"] == "confirmed"
+    assert state["signature_status"] == "not_verified"
+    assert log.read_text(encoding="utf-8").count("\n") == 1
+    assert main(["finding", "list", "--log", str(log)]) == 0
+    assert capsys.readouterr().out == captured.out
+
+
+def test_finding_review_refuses_a_repeat_and_leaves_the_log_alone(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+    finding_receipt: dict[str, Any],
+    review_event: Callable[..., dict[str, Any]],
+) -> None:
+    receipt, event, log = _finding_files(tmp_path, finding_receipt, review_event)
+    assert main(_review_args(receipt, event, log)) == 0
+    capsys.readouterr()
+    before = log.read_bytes()
+    assert main(_review_args(receipt, event, log)) == 2
+    captured = capsys.readouterr()
+    assert captured.out == ""
+    assert json.loads(captured.err)["error"]["code"] == "illegal_transition"
+    assert log.read_bytes() == before
+
+
+def test_finding_commands_honour_quiet_and_output(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+    finding_receipt: dict[str, Any],
+    review_event: Callable[..., dict[str, Any]],
+) -> None:
+    receipt, event, log = _finding_files(tmp_path, finding_receipt, review_event)
+    reviewed = tmp_path / "reviewed.json"
+    args = [*_review_args(receipt, event, log), "--quiet", "--output", str(reviewed)]
+    assert main(args) == 0
+    captured = capsys.readouterr()
+    assert captured.out == ""
+    assert captured.err == ""
+    listed = tmp_path / "state.json"
+    assert main(["finding", "list", "--log", str(log), "--output", str(listed)]) == 0
+    assert capsys.readouterr().out == ""
+    assert reviewed.read_bytes() == listed.read_bytes()
+    assert "\x1b" not in reviewed.read_text(encoding="utf-8")
+    assert main(["finding", "list", "--log", str(log), "--output", str(tmp_path)]) == 2
+    assert json.loads(capsys.readouterr().err)["error"]["code"] == "output_io_error"
+
+
+def test_finding_list_on_a_missing_log_fails_closed_without_the_path(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    missing = tmp_path / "absent-review-log.jsonl"
+    assert main(["finding", "list", "--log", str(missing), "--no-color"]) == 2
+    captured = capsys.readouterr()
+    assert json.loads(captured.err)["error"]["code"] == "log_io_error"
+    assert str(missing) not in captured.err
+    assert missing.name not in captured.err
+    assert "\x1b" not in captured.err
+
+
+def test_finding_review_records_a_closed_vocabulary_log_entry(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+    finding_receipt: dict[str, Any],
+    review_event: Callable[..., dict[str, Any]],
+) -> None:
+    receipt, event, log = _finding_files(tmp_path, finding_receipt, review_event)
+    log_dir = tmp_path / "logs"
+    assert main([*_review_args(receipt, event, log), "--log-dir", str(log_dir)]) == 0
+    capsys.readouterr()
+    records = [
+        json.loads(line)
+        for line in (log_dir / LOG_FILE_NAME).read_text(encoding="utf-8").splitlines()
+    ]
+    assert [record["command"] for record in records] == ["finding"]
+    assert records[0]["outcome"] == "accepted"

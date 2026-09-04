@@ -38,6 +38,7 @@ from contextsafe.reference_fixtures import (
     DEFAULT_EXPORT_DIRECTORY,
     export_reference_fixtures,
 )
+from contextsafe.review import append_review_event, derive_review_state
 from contextsafe.validation import parse_bundle, parse_case
 
 EXIT_SUCCESS = 0
@@ -280,6 +281,40 @@ def _parser() -> argparse.ArgumentParser:
     )
     mapping_validate.add_argument("--profile", required=True, type=Path)
     mapping_validate.add_argument("--output", type=Path)
+
+    finding_parser = subparsers.add_parser(
+        "finding",
+        help=(
+            "record and derive unsigned finding dispositions in an append-only "
+            "review log; every event is declared, not verified"
+        ),
+    )
+    finding_subparsers = finding_parser.add_subparsers(
+        dest="finding_command", required=True
+    )
+    finding_review = finding_subparsers.add_parser(
+        "review",
+        parents=[modes],
+        help=(
+            "validate one review event against a receipt and the log's prior "
+            "state, then append one canonical line; refuses an out-of-order "
+            "transition and a log whose earlier lines do not re-hash"
+        ),
+    )
+    finding_review.add_argument("--receipt", required=True, type=Path)
+    finding_review.add_argument("--event", required=True, type=Path)
+    finding_review.add_argument("--log", required=True, type=Path)
+    finding_review.add_argument("--output", type=Path)
+    finding_list = finding_subparsers.add_parser(
+        "list",
+        parents=[modes],
+        help=(
+            "derive the current disposition per outcome from a review log "
+            "without changing it"
+        ),
+    )
+    finding_list.add_argument("--log", required=True, type=Path)
+    finding_list.add_argument("--output", type=Path)
     fixtures_parser = subparsers.add_parser(
         "fixtures",
         help="Work with the synthetic reference fixtures the package carries.",
@@ -391,6 +426,8 @@ def _operator_command(args: argparse.Namespace) -> str | None:
                 "unsupported_command", "$", "fixtures command is unsupported"
             )
         return f"{canonical_json(export_reference_fixtures(args.directory))}\n"
+    if args.command == "finding":
+        return _finding_command(args)
     return None
 
 
@@ -429,6 +466,25 @@ def _mapping_command(args: argparse.Namespace) -> str:
             "unsupported_command", "$", "mapping command is unsupported"
         )
     return f"{canonical_json(compile_profile(load_json(args.profile)).to_dict())}\n"
+
+
+def _finding_command(args: argparse.Namespace) -> str:
+    """Append one declared review event, or derive the log's current state.
+
+    Both print the derived state document: the disposition of every outcome
+    the log has seen, the log head hash, and the pinned limitations. The
+    receipt is read for its hashes and its finding outcomes only, and it is
+    never changed.
+    """
+
+    if args.finding_command == "review":
+        state = append_review_event(
+            args.log, load_json(args.event), load_json(args.receipt)
+        )
+        return f"{canonical_json(state.to_dict())}\n"
+    if args.finding_command == "list":
+        return f"{canonical_json(derive_review_state(args.log).to_dict())}\n"
+    raise ContextSafeError("unsupported_command", "$", "finding command is unsupported")
 
 
 def _render_command(args: argparse.Namespace) -> str:

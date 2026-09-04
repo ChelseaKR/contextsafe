@@ -1046,6 +1046,50 @@ rather than after it.
   public so the parser can require the exact set rather than restate it; the
   reference receipt bytes and their pinned digest are unchanged.
 
+- **B-032: the append-only review, finding, and disposition state machine,
+  unsigned.** `contextsafe finding review --receipt R.json --event E.json
+  --log LOG.jsonl` validates one review event against the receipt (the
+  payload hash is re-derived, the event's two hashes must match it, and the
+  outcome must be a `fail`, `indeterminate`, or `blocked` result in it) and
+  against the log's prior state, then appends one canonical line; `contextsafe
+  finding list --log LOG.jsonl` derives the current disposition per outcome.
+  Both print the same derived state document. The state machine is data
+  (`TRANSITIONS` and `DECISION_RULES` in `src/contextsafe/review.py`), and
+  `tests/test_review.py` enumerates every pair the table does not contain and
+  requires each to be refused as `illegal_transition`. An event has no
+  free-text field, by construction, the way the support bundle has none: a
+  decision, a severity, a rationale *code*, an owner as a role plus the
+  SHA-256 of an opaque handle, an optional external reference under the
+  ADR 0006 provenance-label grammar, and declared signers as a role plus an
+  organization label under the system-label grammar, both scanned for
+  canaries after the grammar accepts them. Every event and every signer says
+  `signature_status: not_verified` and nothing else can be written there; an
+  `accepted_residual_risk` event needs exactly two declared signers, a
+  customer clinical owner and a ContextSafe clinical safety chair, from
+  distinct organizations, or it is refused. **A declared signer authorizes
+  nothing.** The log is one canonical JSON record per line, each carrying the
+  event's SHA-256 and the SHA-256 of the record before it; every read
+  re-parses every line, requires byte-exact canonical JSON, re-derives every
+  hash, and replays every transition, and a Hypothesis property requires that
+  any single changed byte anywhere in the file is refused. The file is opened
+  once with `O_APPEND` and `O_NOFOLLOW`, read and appended through that one
+  descriptor, and the append is refused if the file grew in between; on a
+  platform without `O_NOFOLLOW` both commands fail closed with
+  `input_path_unsupported`. No clock is read. Two contracts are published,
+  `schemas/contextsafe-review-event-v1.schema.json` (with the log record as a
+  `$defs` subschema) and `schemas/contextsafe-review-state-v1.schema.json`,
+  with agreement tests in `tests/test_review_schema.py`; `review.py` joins
+  `SAFETY_MODULES`; `finding` joins the local event log's command vocabulary;
+  and both commands join the three-run determinism matrix. The receipt
+  contract is unchanged and the pinned reference-receipt digest did not move:
+  binding dispositions into a receipt is a later item. The decision, severity,
+  role, and rationale vocabularies are reference-only and ungoverned -- not the
+  approved severity rubric (B-010) or the reviewer registry (B-035) -- and no
+  clinical, community, legal, or security review of them has happened. Two
+  contracts, so `schemas/README.md` now states `13 contracts` in digits: the
+  claims gate's number-word table stops at twelve, and the document was
+  changed rather than the gate.
+
 ## [0.1.0] - 2026-09-02
 
 ### Fixed

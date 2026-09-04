@@ -352,6 +352,9 @@ def _contract_count(repo: Path) -> int:
 
 
 def test_a_new_contract_missing_from_the_schema_readme_is_a_finding(repo: Path) -> None:
+    """The expected count is derived from the tree, so this test does not
+    silently pin the number of contracts the repository happens to hold."""
+
     (repo / "schemas" / "contextsafe-later-v1.schema.json").write_text("{}\n", "utf-8")
     count = _contract_count(repo)
     stated = gate.NUMBER_WORDS.get(count, str(count))
@@ -362,6 +365,14 @@ def test_a_new_contract_missing_from_the_schema_readme_is_a_finding(repo: Path) 
 
 
 def test_a_count_beyond_the_number_words_is_reported_in_digits(repo: Path) -> None:
+    """Past the table the gate says the digits, and says them either way.
+
+    Two things are pinned here: a stated count that has gone wrong is
+    reported against the tree's real count, and a document that stopped
+    stating a count at all is reported too, so dropping the sentence is not
+    a way to pass.
+    """
+
     beyond = max(gate.NUMBER_WORDS) + 1 - _contract_count(repo)
     assert beyond >= 1, "the tree already exceeds the number-word table"
     for index in range(beyond):
