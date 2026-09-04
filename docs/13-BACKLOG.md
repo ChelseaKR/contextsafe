@@ -228,6 +228,50 @@ tree; neither `diagnostics` nor the support bundle enumerates
 the importer registry's formats; and the receipt's limitation line still
 reads "does not ingest FHIR", a reviewed wording the maintainer decides.
 
+Implementation note (2026-09-04, B-024): `contextsafe import --format
+hl7v2-er7` now exists, registered through the B-022 importer registry with no
+change to the command line: a bounded (one MiB) read of one ER7 message
+through the same no-follow, descriptor-retaining first pass as the other
+boundary commands, a strict parse whose delimiters are exactly MSH-1 and
+MSH-2, and a closed segment allowlist of MSH, PID, GSP, OBR, and OBX. Every
+profile decision is a versioned constant (`HL7V2_ER7_PROFILE`, 0.1.0,
+`profile_reviewed` false and unsettable): PID-3 must carry the synthetic
+identifier system and the case's token; PID-5 name type `D` is the name to
+use; GSP-4 is a closed concept-type table carrying GI, pronouns, SPCU, and RSG
+each to its own concept; OBR and OBX are read only to locate SPCU context and
+supporting-observation tokens and to reject free text. PID-8 reaches
+`recorded_sex_or_gender` with context `administrative` and nothing else, by
+the type of the one function that reads it rather than by any table, and a
+property suite pins that over arbitrary values with a structural comparison
+against a closed set of rejections. A Z-segment, a populated field outside
+the profile, a repetition where one value is admitted, an unhandled escape,
+free text, a non-synthetic identifier, or a value the observation contract
+rejects fails the whole message with a code and a location. GSP-5.3, the
+coding system of a GSP value, is read only as the code system of a specified
+gender identity value and rejects everywhere else rather than being dropped,
+so a pronouns or SPCU token asserted in a vendor coding system cannot convert
+as the bare token and pass its rule; OBX-11 is required.
+B-024 is not closed: the profile is reference-only and no interoperability,
+clinical, or community reviewer has confirmed the `D` name-type code, the
+LOINC concept-type codes, or the decision to read RSG and SPCU from GSP when
+v2.9.1 also defines GSR and GSC for them (both reject as segments outside the
+allowlist); the 12 hours of interoperability review the estimate names have
+not happened; presence states are read from the literal tokens `declined`,
+`unknown`, and `absent` rather than from HL7 null flavors, and table 0001
+values other than the RSG contract's set (`U`, `O`, `A`, `N`) reject until a
+mapping profile (B-026) binds them; the message cannot state a checkpoint, so
+the requested one is applied and the result says so; MSH-7 is checked for
+shape only and never carried; a gender identity presence state is emitted
+with the unbound code system, the same as the canonical JSON importer, and
+whether a presence state may name a coding system at all is a B-026
+mapping-profile decision this importer settles by rejecting; the mutation
+gate's declared targets (`tools/mutation_gate.py`, ADR 0009) do not include
+the importer, so its accept and reject decisions have branch-coverage
+evidence, which measures execution, and no mutation evidence, which would
+measure detection; and the property suites cover the machine-checkable
+invariants, not adapter acceptance against a partner's interface-engine
+output.
+
 ## Phase 4 — review and receipts
 
 | ID | Trace | Deliverable and acceptance | Owner | Dependency | Estimate |

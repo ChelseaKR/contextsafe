@@ -71,6 +71,18 @@ with the reference Patient fixture, the case document, or the FHIR reader's
 profile version.
 """
 
+IMPORTED_HL7V2_OBSERVATIONS_SHA256 = (
+    "b6f4e5d1d9e5c928eeba84d6a0171d679cca2ad440695d308e018c6b373831bc"
+)
+"""SHA-256 of ``import --format hl7v2-er7`` over the reference message.
+
+Pinned for the same reason as the canonical JSON import digest. The ER7
+fixture ends every segment with a bare carriage return, so this constant is
+also the check that no platform's end-of-line handling touched the source
+bytes on the way in. It moves only with the reference message, the case
+document, or the importer's mapping version.
+"""
+
 _ENVIRONMENTS: tuple[dict[str, str], ...] = (
     {
         "TZ": "UTC",
@@ -423,6 +435,80 @@ def test_import_observation_set_is_deterministic_and_pinned(tmp_path: Path) -> N
     assert hashlib.sha256(artifact).hexdigest() == IMPORTED_OBSERVATIONS_SHA256
     for fragment in (str(tmp_path), str(ROOT), "Kiritimati", "en_US", "inputs-b"):
         assert fragment.encode("utf-8") not in artifact
+
+
+@pytest.mark.skipif(os.name == "nt", reason=_WINDOWS_UNSUPPORTED)
+def test_hl7v2_import_observation_set_is_deterministic_and_pinned(
+    tmp_path: Path,
+) -> None:
+    """The ER7 conversion is byte-stable, and its digest is one constant."""
+
+    runs = _three_runs(
+        tmp_path,
+        lambda reference: [
+            "import",
+            "--format",
+            "hl7v2-er7",
+            "--source",
+            str(reference / "hl7v2-er7-message.hl7"),
+            "--case",
+            str(reference / "case.json"),
+            "--checkpoint",
+            "ehr",
+        ],
+        with_output=True,
+    )
+    _assert_identical(runs)
+    assert runs[0].returncode == 0
+    assert runs[0].stdout == b""
+    assert runs[0].stderr == b""
+    artifact = runs[0].artifact
+    assert artifact is not None
+    _assert_canonical_line(artifact)
+    assert hashlib.sha256(artifact).hexdigest() == IMPORTED_HL7V2_OBSERVATIONS_SHA256
+    for fragment in (
+        str(tmp_path),
+        str(ROOT),
+        "Kiritimati",
+        "en_US",
+        "inputs-b",
+        "ZZZTESTCONTEXTSAFE",
+        "CSYN-LEGAL-I01",
+    ):
+        assert fragment.encode("utf-8") not in artifact
+
+
+@pytest.mark.skipif(os.name == "nt", reason=_WINDOWS_UNSUPPORTED)
+def test_hl7v2_import_rejection_is_deterministic(tmp_path: Path) -> None:
+    """A rejected ER7 import is the same one-line error object on every run."""
+
+    rejection = tmp_path / "z-segment.hl7"
+    rejection.write_bytes(
+        (ROOT / "tests" / "fixtures" / "hl7v2" / "z-segment.hl7").read_bytes()
+    )
+    runs = _three_runs(
+        tmp_path,
+        lambda reference: [
+            "import",
+            "--format",
+            "hl7v2-er7",
+            "--source",
+            str(rejection),
+            "--case",
+            str(reference / "case.json"),
+            "--checkpoint",
+            "ehr",
+        ],
+    )
+    _assert_identical(runs)
+    assert runs[0].returncode == 2
+    assert runs[0].stdout == b""
+    _assert_canonical_line(runs[0].stderr)
+    assert json.loads(runs[0].stderr.decode("utf-8"))["error"] == {
+        "code": "import_segment_not_allowed",
+        "message": "segment is outside the profile's closed allowlist",
+        "path": "$[7]",
+    }
 
 
 @pytest.mark.skipif(os.name == "nt", reason=_WINDOWS_UNSUPPORTED)

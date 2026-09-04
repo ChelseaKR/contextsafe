@@ -373,6 +373,47 @@ and cannot be set; no interoperability, clinical, or community reviewer has
 examined it, it is not a FHIR conformance profile, and it reads a file, never
 an endpoint.
 
+### B-024: HL7 v2 ER7 reader
+
+`contextsafe import --format hl7v2-er7 --source MESSAGE.hl7 --case CASE.json
+--checkpoint ehr --output observations.json` reads one ER7 message of at most
+one MiB through the same bounded, no-follow, descriptor-retaining first pass
+as the other boundary commands and converts it, whole or not at all, into the
+same observation-set document. Delimiters are the five characters MSH-1 and
+MSH-2 declare, exactly; segments end with the carriage return the standard
+fixes; only the five delimiter escapes are handled. The segment allowlist is
+MSH, PID, GSP, OBR, and OBX, and a Z-segment, a populated field the profile
+does not name, a repetition where the profile admits one value, an unhandled
+escape, free text, a control character, a PHI canary, a direct-identifier
+pattern, a production processing ID, or a patient identifier outside the
+synthetic namespace rejects the message with a code and a
+`SEG[n]-field.rep.comp` location, never the content. PID-8 Administrative
+Sex is read by exactly one function whose return type is
+`RecordedSexOrGender`, and an observation's concept is a function of the
+type of its value, so PID-8 arrives as `recorded_sex_or_gender` with the
+context `administrative` and can reach neither gender identity nor sex
+parameter for clinical use on any input; a property suite pins it. The
+packaged `hl7v2-er7-message.hl7` is an accepting synthetic message for
+CTP-I01, and `tests/fixtures/hl7v2/` holds three rejection messages.
+
+What it does not claim. Every decision is a constant in
+`HL7V2_ER7_PROFILE`, version 0.1.0, `profile_reviewed: false` and unsettable:
+the name-type code `D` for name to use, the LOINC concept-type codes GSP-4
+may carry, and the reading of recorded sex or gender and sex parameter for
+clinical use from GSP (v2.9.1 also defines GSR and GSC for them, and both
+reject as segments outside the allowlist) are choices no interoperability,
+clinical, or community reviewer has confirmed. Values are carried verbatim:
+`U` in PID-8 is not turned into `unknown`, it rejects, and presence states
+are read from the literal tokens `declined`, `unknown`, and `absent` rather
+than from HL7 null flavors until a mapping profile (B-026) binds them. A
+coding system in GSP-5.3 is read only as the `code_system` of a specified
+gender identity value; with pronouns, recorded sex or gender, sex parameter
+for clinical use, or a presence state it rejects the message rather than
+being dropped, so a token asserted in a vendor namespace is never carried as
+if it were the fixture's own. The message cannot state a checkpoint, so the
+requested one is applied to every observation and the in-process result
+says so.
+
 The durable evidence store has no CLI import route; `contextsafe import` writes
 only an observation-set document and never an evidence record. Every iteration-3 evidence record says
 `authorization_status: not_verified_internal_test_only` and

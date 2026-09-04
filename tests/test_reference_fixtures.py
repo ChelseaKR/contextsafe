@@ -130,7 +130,7 @@ def test_export_refuses_a_path_it_cannot_compare(tmp_path: Path) -> None:
 def test_export_fails_before_writing_when_the_install_is_incomplete(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """Five fixtures out of six is not an export; it is a broken install."""
+    """All but one fixture is not an export; it is a broken install."""
 
     partial = tmp_path / "partial"
     partial.mkdir()

@@ -33,6 +33,7 @@ REFERENCE_FILES: tuple[str, ...] = (
     "case.json",
     "evidence-source.json",
     "fhir-patient.json",
+    "hl7v2-er7-message.hl7",
     "observations.json",
     "pack-draft.json",
     "rules.json",

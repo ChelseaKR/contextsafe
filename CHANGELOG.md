@@ -239,6 +239,85 @@ rather than after it.
   never-echoed assertion; two tests derive the section's figures and its
   literal list from the tree, because the claims gate does not read prose.
 
+- **`contextsafe import --format hl7v2-er7`, an HL7 v2 ER7 reader registered
+  through the importer registry (B-024).** It reads one ER7 message of at
+  most one MiB through the same bounded, no-follow, descriptor-retaining
+  first pass the other boundary commands use (`preflight.read_source`, the
+  format-independent half of `scan_source`, factored out for it) and converts
+  it, whole or not at all, into the observation-set document `evaluate
+  --observations` accepts, with no change to `cli.py`: the registry gained
+  one entry. Delimiters are the five characters MSH-1 and MSH-2 declare,
+  exactly; the segment terminator is the carriage return the standard fixes;
+  the only escape sequences handled are the five that encode a delimiter,
+  and any other rejects. The segment allowlist is MSH, PID, GSP, OBR, and
+  OBX. A segment outside it (every Z-segment included), a populated field
+  the profile does not name, a repetition where the profile admits one
+  value, a value that is not a bounded code token, a control character, a
+  PHI canary, a direct-identifier pattern, a production processing ID, a
+  version other than 2.9.1, or a patient identifier outside the synthetic
+  namespace rejects the message with a code and a `SEG[n]-field.rep.comp`
+  location under the message root, never the content. `source_pointer` on
+  every observation has that same form.
+
+  Every decision is a constant in `HL7V2_ER7_PROFILE`, version 0.1.0, with
+  `profile_reviewed = False` and a type that refuses to be constructed
+  otherwise: PID-3 must carry the synthetic identifier system and the case's
+  token; PID-5 repetitions are typed by table 0200, `D` (Customary Name, the
+  code the Gender Harmony guidance assigns to name to use) becomes the name
+  to use and `L` is admitted as the synthetic legal test name and never
+  emitted; GSP-4 is a closed (code, coding system) table of four LOINC
+  concept types, each to its own concept; OBR and OBX are read only to locate
+  the `ORDER-CSYN-` context and `SUP-CSYN-` supporting-observation tokens a
+  sex parameter for clinical use needs, and an OBX of type TX, FT, or ST
+  rejects as free text. PID-8 Administrative Sex is read by exactly one
+  function whose return type is `RecordedSexOrGender`, and the concept an
+  observation is labelled with is a function of the Python type of its value,
+  so PID-8 reaches `recorded_sex_or_gender` with the context
+  `administrative` and cannot reach gender identity or sex parameter for
+  clinical use by any input; Hypothesis pins that over arbitrary PID-8
+  values, comparing each rejection structurally against a closed set of
+  fixed error objects, and pins that every delimiter set drawn from the 27
+  printable characters a token cannot contain converts the reference message
+  to the same observations (a delimiter that is also a token character is
+  covered by the escape round-trip tests, not by that property). Values are
+  the source's own tokens, verbatim: `U` in PID-8 is not turned into
+  `unknown`, it rejects (A-033). GSP-5.3, the coding system of a GSP value,
+  is read for exactly one thing, the `code_system` of a specified gender
+  identity value; populated with pronouns, recorded sex or gender, sex
+  parameter for clinical use, or a presence state under any concept it
+  rejects with `import_field_not_in_profile` at `GSP[n]-5.1.3` rather than
+  being dropped, so a token asserted in a vendor namespace is never carried
+  as if it were the fixture's own, and a test runs `evaluate` on the
+  accepting and rejecting pair so that pass cannot appear. OBX-11
+  Observation Result Status is required and must be `F`; OBR-25 is optional.
+  These rules are part of mapping version 0.1.0 from its first release; no
+  earlier version of the conversion shipped.
+
+  Fixtures are synthetic with invented tokens: the packaged reference set
+  gains `hl7v2-er7-message.hl7`, an accepting message for CTP-I01 that
+  evaluates against the reference rules to three passes at `ehr` and two
+  indeterminates at the checkpoints it did not observe, and
+  `tests/fixtures/hl7v2/` holds three rejection messages (a Z-segment, a
+  free-text OBX, a non-synthetic MRN). `.gitattributes` marks `*.hl7` as
+  `-text` so no platform's end-of-line handling touches the bare carriage
+  returns. The importer is a declared safety module, is in the three-run
+  determinism matrix with a pinned artifact digest, honours `--quiet`,
+  `--no-color`, `--output`, and `--log-dir`, and fails closed with
+  `input_path_unsupported` where descriptor-relative no-follow reads do not
+  exist. `ImportErrorCode` gains five closed codes
+  (`import_identifier_not_synthetic`, `import_repetition_not_allowed`,
+  `import_segment_not_allowed`, `import_field_not_in_profile`,
+  `import_value_not_in_profile`) and `ImportWarningCode` gains
+  `checkpoint_not_in_source`, because an ER7 message cannot state its
+  checkpoint and the requested one is applied. No published contract
+  changed, no schema version moved, and the pinned reference-receipt digest
+  is unchanged. The profile is reference-only and ungoverned: no
+  interoperability, clinical, laboratory, or community reviewer has approved
+  the name-type code, the concept-type table, or the placement of recorded
+  sex or gender and sex parameter for clinical use in GSP rather than the
+  GSR and GSC segments v2.9.1 also defines, and nothing it emits can
+  authorize execution or relabel an unsigned artifact.
+
 ## [0.1.0] - 2026-09-02
 
 ### Fixed

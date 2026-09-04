@@ -1,0 +1,5 @@
+# HL7 v2 ER7 messages end every segment with a bare carriage return (0x0D),
+# which is the terminator the standard fixes and the one the importer requires.
+# No end-of-line conversion may touch these bytes on any platform: the
+# fixtures are hashed, and their digests are pinned by the determinism suite.
+*.hl7 -text

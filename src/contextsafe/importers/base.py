@@ -100,6 +100,18 @@ class ImportErrorCode(StrEnum):
     CARDINALITY_UNSUPPORTED = "import_cardinality_unsupported"
     """A count the profile fixes (exactly one, at least one, at most N) was not met."""
 
+    REPETITION_NOT_ALLOWED = "import_repetition_not_allowed"
+    """A field repeats where the importer's profile admits exactly one value."""
+
+    SEGMENT_NOT_ALLOWED = "import_segment_not_allowed"
+    """A segment or record kind is outside the importer's closed allowlist."""
+
+    FIELD_NOT_IN_PROFILE = "import_field_not_in_profile"
+    """A populated field has no entry in the importer's closed profile."""
+
+    VALUE_NOT_IN_PROFILE = "import_value_not_in_profile"
+    """A coded value, type, or shape is outside the profile's closed set."""
+
 
 class ImportWarningCode(StrEnum):
     """Everything an importer may say about a conversion beyond its output."""
@@ -112,6 +124,9 @@ class ImportWarningCode(StrEnum):
 
     CHECKPOINT_ASSERTED_BY_CALLER = "checkpoint_asserted_by_caller"
     """The source names no checkpoint; the one recorded is the caller's claim."""
+
+    CHECKPOINT_NOT_IN_SOURCE = "checkpoint_not_in_source"
+    """The source cannot state a checkpoint; the requested one was applied."""
 
 
 UNBOUND_CODE_SYSTEM = "urn:contextsafe:unbound-code-system"

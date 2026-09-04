@@ -23,6 +23,7 @@ from contextsafe.importers.base import (
 )
 from contextsafe.importers.canonical_json import CANONICAL_JSON_IMPORTER
 from contextsafe.importers.fhir_r4_json import FHIR_R4_JSON_IMPORTER
+from contextsafe.importers.hl7v2_er7 import HL7V2_ER7_IMPORTER
 from contextsafe.models import Checkpoint, SyntheticCase
 
 __all__ = [
@@ -41,6 +42,7 @@ REGISTRY: Mapping[str, Importer] = MappingProxyType(
     {
         CANONICAL_JSON_IMPORTER.format_name: CANONICAL_JSON_IMPORTER,
         FHIR_R4_JSON_IMPORTER.format_name: FHIR_R4_JSON_IMPORTER,
+        HL7V2_ER7_IMPORTER.format_name: HL7V2_ER7_IMPORTER,
     }
 )
 """Every registered format, by the name ``--format`` selects it with."""

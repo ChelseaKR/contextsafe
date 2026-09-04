@@ -145,7 +145,7 @@ because it was the finding.*
 | Published today | Not published today |
 |---|---|
 | JSON Schemas, a deterministic evaluator, an unsigned pack/plan compiler, a read-only evidence boundary check | Any governed case pack (B-009) or approved assertion (B-010) — none exists |
-| Six synthetic fixtures using invented tokens (`CSYN-`, `fixture-gender-1`) | Any real system, vendor, version, customer, or partner name — none exists |
+| Seven synthetic fixtures using invented tokens (`CSYN-`, `fixture-gender-1`) | Any real system, vendor, version, customer, or partner name — none exists |
 | The concept separation itself: GI ≠ RSG ≠ SPCU ≠ NtU ≠ pronouns, and why conflating them harms patients | Any receipt about any real installed workflow — none has ever been produced |
 | The four-checkpoint model and the seeded-fault taxonomy | Reviewer identities — the governance roster is unrecruited |
 
@@ -386,10 +386,10 @@ history for a section number is not worth the cost, and the fact is unremarkable
 
 `src/contextsafe/fixtures/reference/` (until 2026-09-02 `fixtures/reference/`;
 moved by `git mv` so the wheel ships it, bytes unchanged, and `git log --follow`
-carries each file's history across the move) holds exactly six files, 9,796
+carries each file's history across the move) holds exactly seven files, 10,340
 bytes total, and **no fixture path has ever been deleted** — when this section
 was written the 89-path full-history file list contained no other fixture, and
-the only fixture directory added since is the one named below.
+the only fixture directories added since are the two named below.
 
 **Update, 2026-09-04.** This section said five files and 7,957 bytes, "no
 `birthDate` field anywhere", and "the only PII-shaped literals in the
@@ -400,7 +400,9 @@ under `tests/fixtures/fhir-r4-json/`. The claims gate compares lists and
 values, not prose, so nothing caught it. The figures, the table, and the two
 statements below were re-derived on that date, and
 `tests/test_reference_fixtures.py` and `tests/test_fhir_r4_import.py` now hold
-them against the tree.
+them against the tree. The same day, B-024 added a seventh packaged file,
+`hl7v2-er7-message.hl7` (544 bytes), and three rejection messages under
+`tests/fixtures/hl7v2/`; the figures above include it.
 
 | File | Evidence that it is synthetic |
 |---|---|
@@ -410,6 +412,7 @@ them against the tree.
 | `fhir-patient.json` | `urn:contextsafe:synthetic` / `CSYN-CTP-I01` as identifier and resource id; family `ZZZTESTCONTEXTSAFE`, given `CSYN-ASTER` and `CSYN-LEGAL-GIVEN-1`; `CSYN-GENDER-1`, `CSYN-PRONOUN-THEY-THEM`, and `CSYN-GOVERNMENT-ID` under `urn:contextsafe:fixture`; recorded sex or gender `X` |
 | `pack-draft.json` | `PACK-SYNTHETIC-REFERENCE-DRAFT`, limitations `synthetic-reference-only`, `not-clinically-reviewed`, `not-community-approved` |
 | `rules.json` | expectations mirror the values above |
+| `hl7v2-er7-message.hl7` (added 2026-09-04, B-024) | `CSYN-SENDER`/`CSYN-FACILITY`/`CSYN-RECEIVER`/`CSYN-LAB` in MSH; PID-3 `CSYN-CTP-I01` under `urn:contextsafe:synthetic`; family name `ZZZTESTCONTEXTSAFE` with given names `CSYN-ASTER` and `CSYN-LEGAL-I01`; processing ID `T`; GSP, OBR, and OBX values are `fixture-`, `ORDER-CSYN-`, and `SUP-CSYN-` tokens; MSH-7 is a fixed message timestamp, checked for shape and never carried |
 
 No name, MRN, date of birth, address, phone number, SSN, or NPI appears in any
 packaged fixture or in any accepting fixture, and none of them carries a

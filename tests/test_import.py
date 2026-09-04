@@ -814,7 +814,7 @@ def test_cli_reports_output_failure(
 
 
 def test_registry_is_read_only_and_names_the_command_line_choices() -> None:
-    assert available_formats() == (CANONICAL_JSON_FORMAT, FHIR_R4_FORMAT)
+    assert available_formats() == (CANONICAL_JSON_FORMAT, FHIR_R4_FORMAT, "hl7v2-er7")
     importer = importer_for(CANONICAL_JSON_FORMAT)
     assert importer is REGISTRY[CANONICAL_JSON_FORMAT]
     assert importer.format_name == CANONICAL_JSON_FORMAT

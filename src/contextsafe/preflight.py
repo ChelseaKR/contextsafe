@@ -34,9 +34,11 @@ __all__ = [
     "CANONICAL_JSON_PROFILE",
     "MAX_EVIDENCE_BYTES",
     "BoundaryProfile",
+    "RawSource",
     "ScannedSource",
     "identifier_hits",
     "open_preflighted_source",
+    "read_source",
     "scan_source",
 ]
 
@@ -146,6 +148,23 @@ class _DescriptorMetadata:
     size: int
     modified_ns: int
     changed_ns: int
+
+
+@dataclass(frozen=True, slots=True)
+class RawSource:
+    """One complete, bounded, read-only first pass over a caller-owned file.
+
+    The bytes themselves, their digest, and their length, and nothing about
+    what they mean: this is the half of a scan that every source format
+    shares. The path was opened once with no-follow, required to be a regular
+    file of at most one MiB, read in full from the retained descriptor, and
+    checked for mutation before the descriptor was closed. A reader that is
+    not JSON starts here and applies its own strict parse to ``raw``.
+    """
+
+    raw_sha256: str
+    raw_byte_count: int
+    raw: bytes
 
 
 @dataclass(frozen=True, slots=True)
@@ -409,19 +428,54 @@ def _boundary_scan(value: object, profile: BoundaryProfile) -> None:
             _reject_unsafe_string(item, path)
 
 
+def _read_open_descriptor(
+    file_descriptor: int,
+) -> tuple[_DescriptorMetadata, RawSource]:
+    """Read and hash one already-open descriptor, and require it unchanged."""
+
+    initial = _descriptor_metadata(file_descriptor)
+    raw, raw_sha256 = _read_first_pass(file_descriptor)
+    _assert_unchanged(file_descriptor, initial)
+    return initial, RawSource(raw_sha256=raw_sha256, raw_byte_count=len(raw), raw=raw)
+
+
 def _scan_open_descriptor(
     file_descriptor: int, profile: BoundaryProfile
 ) -> tuple[_DescriptorMetadata, ScannedSource]:
     """Read, hash, parse, and boundary-scan one already-open descriptor."""
 
-    initial = _descriptor_metadata(file_descriptor)
-    raw, raw_sha256 = _read_first_pass(file_descriptor)
-    _assert_unchanged(file_descriptor, initial)
-    parsed = parse_json_bytes(raw)
+    initial, source = _read_open_descriptor(file_descriptor)
+    parsed = parse_json_bytes(source.raw)
     _boundary_scan(parsed, profile)
     return initial, ScannedSource(
-        raw_sha256=raw_sha256, raw_byte_count=len(raw), value=parsed
+        raw_sha256=source.raw_sha256,
+        raw_byte_count=source.raw_byte_count,
+        value=parsed,
     )
+
+
+def read_source(path: Path) -> RawSource:
+    """Run the format-independent half of the boundary scan and close the file.
+
+    Opens the path once with the same no-follow, regular-file, and one MiB
+    rules as a preflight, reads the whole first pass from that descriptor,
+    checks the descriptor did not change under it, and returns the bytes
+    with their digest. It creates no workspace, copy, index, or log. Where
+    the platform cannot enforce no-follow input it fails closed exactly as
+    :func:`scan_source` does. A format that is not JSON parses ``raw`` with
+    its own strict reader and owns the content checks that follow.
+    """
+
+    file_descriptor = _open_source(path)
+    primary_error: BaseException | None = None
+    try:
+        _initial, source = _read_open_descriptor(file_descriptor)
+        return source
+    except BaseException as exc:
+        primary_error = exc
+        raise
+    finally:
+        _close_source_descriptor(file_descriptor, primary_error=primary_error)
 
 
 def scan_source(
