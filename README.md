@@ -822,17 +822,37 @@ and rule-set hashes to a decision from a closed set (`confirmed`, `rejected`,
 SHA-256 of an opaque handle, a rationale *code*, an optional external
 reference under the [ADR 0006](docs/adr/0006-provenance-token-grammar-and-boundary-scan.md)
 grammar, and declared signers as a role plus an organization label. **There
-is no free-text field, by construction**, as with the support bundle. The
-state machine is data, and every transition the table does not contain is
-tested as a refusal. The log is one canonical line per event, hash-chained;
-every read re-hashes and replays the whole file before anything is appended,
-a single changed byte anywhere in it is refused, no line is ever rewritten,
-and `--output` naming the log (by path, symlink, or hard link) is refused as
-`output_path_unsafe` before the log is opened. What the chain cannot see is a
-record removed from its end: a log cut back to an earlier line is a valid
-shorter log. Detecting that needs an external record of the state document's
-`log_head_sha256`, which is one reason the document carries it. Its limits are
-the point: **signers are declared, not verified.**
+is no free-text field, by construction**, as with the support bundle, and the
+residual is stated rather than implied: a name-shaped token still fits the
+ADR 0006 grammars (`Jordan.Rivera` is a well-formed provenance label,
+`JORDAN-RIVERA` a well-formed system label), only the configured canaries and
+direct-identifier shapes are scanned for, and a grammar cannot see ordinary
+letters. The closed shape removes the field a name would be typed into, not
+the possibility of typing one into a label. The state machine is data, the
+table and the per-decision rules are pinned as literals a change must
+confront, and every transition the table does not contain is tested as a
+refusal. The log is one canonical line per event, hash-chained; every read
+re-hashes and replays the whole file before anything is appended, a single
+changed byte anywhere in it is refused, no line is ever rewritten, and
+`--output` naming the log is refused as `output_path_unsafe`: by device and
+inode when the log exists (a symlink or a hard link to it, from anywhere),
+and by parent-directory inode plus case- and normalization-folded leaf name
+when it does not yet exist (`/tmp/x/log` against `/private/tmp/x/log`, a
+symlinked parent, `REVIEW.jsonl` against `review.jsonl`). The fold is applied
+on every filesystem rather than probing which kind the log is on, so on a
+case-sensitive one it over-refuses a name that is a different file; the check
+runs before the log is opened and, for `finding review`, again after the
+append. What the chain cannot see is a record removed from its end: a log cut
+back to an earlier line is a valid shorter log. Detecting that needs an
+external record of the state document's `log_head_sha256`, which is one
+reason the document carries it. Two operational edges are stated rather than
+closed: a `finding review` whose `--output` cannot be written after the
+append exits 2 with `output_io_error` having recorded the event, so the next
+attempt to record the same event is refused as `illegal_transition` and
+`finding list` is the way to get the state; and a first event that is
+refused at the transition after the receipt binding held leaves a new,
+empty log file behind, which replays to the empty state. Its limits are the
+point: **signers are declared, not verified.**
 Every event and every signer says `signature_status: not_verified`, an
 accepted residual risk needs two declared signers with distinct roles and
 organizations or is refused, and **a declared signer authorizes nothing** —

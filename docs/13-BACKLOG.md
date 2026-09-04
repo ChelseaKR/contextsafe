@@ -575,8 +575,11 @@ to a decision from a closed set, a severity from a closed label set, an owner as
 a role plus the SHA-256 of an opaque handle, a rationale code from a closed
 vocabulary, an optional external reference under the ADR 0006 grammar, and
 declared signers as a role plus an organization label. There is no free-text
-field, by construction. The transition table and the per-decision rules are
-data, and every pair the table does not contain is enumerated as an
+field, by construction; a name-shaped token that fits an ADR 0006 grammar is
+accepted, and that residual is tested as such. The transition table and the
+per-decision rules are data, pinned as literals in `tests/test_review.py` so
+that a change to either must confront the test rather than re-derive it, and
+every pair the table does not contain is enumerated as an
 `illegal_transition` test. The log is append-only: one canonical line per
 event, each carrying the event hash and the hash of the record before it, and
 every read re-hashes and replays the whole file before anything is appended.
@@ -617,7 +620,22 @@ it as "not a finding", because an unsupported value is never quietly the safe
 case; that is a shape check on the fields review reads, not verification.
 Before merge, `--output` naming the review log was found to reach `main`'s
 truncating write after the append and replace the log with exit 0; both
-commands now refuse it as `output_path_unsafe` before the log is opened.
+commands now refuse it as `output_path_unsafe` before the log is opened. A
+second review found that refusal comparing path strings and, only where both
+files existed, inodes, so a log that did not exist yet could be named two ways
+(`/tmp/x/review.jsonl` and `/private/tmp/x/review.jsonl`, a symlinked
+parent, `REVIEW.jsonl` on a case-insensitive filesystem) and the first
+`finding review` created, appended, and then overwrote it. The check now
+lives in `review.py`, compares by inode when the log exists and by
+parent-directory inode plus case- and normalization-folded leaf name when it
+does not, over-refuses a case variant on a case-sensitive filesystem rather
+than probing which kind it is on, and runs again after `finding review` has
+appended. Two more operational edges are stated rather than closed: a
+`finding review` whose `--output` cannot be written after the append exits 2
+with `output_io_error` having recorded the event, so the same event is then
+refused as `illegal_transition` and `finding list` derives the state; and a
+first event refused at the transition after the receipt binding held leaves
+a new, empty log behind, which replays to the empty state.
 
 ## Phase 5 — trust and operations
 

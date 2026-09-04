@@ -8,7 +8,9 @@ from typing import Any
 
 import pytest
 
+import contextsafe.cli as cli_module
 from contextsafe.cli import EXIT_USAGE_ERROR, main
+from contextsafe.errors import ContextSafeError
 from contextsafe.eventlog import LOG_FILE_NAME
 from contextsafe.evidence import CANONICAL_JSON_MEDIA_TYPE, CANONICAL_JSON_SOURCE_TYPE
 from contextsafe.plan import ExecutionPlan
@@ -673,6 +675,153 @@ def test_finding_output_through_a_link_to_the_log_is_refused(
         _assert_output_over_log_refused(
             [*_review_args(receipt, event, log), "--output", str(alias)], log, capsys
         )
+
+
+def test_finding_output_over_an_absent_log_through_a_symlinked_parent_is_refused(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+    finding_receipt: dict[str, Any],
+    review_event: Callable[..., dict[str, Any]],
+) -> None:
+    """Before the fix, a log that did not exist yet could be named two ways:
+    the paths differed as strings and the inode comparison had nothing to
+    stat, so the first ``finding review`` created the log, appended, and then
+    ``main`` truncated it with the state document and exited 0. The parent
+    directories exist even when the log does not, so they are what is
+    compared."""
+
+    real = tmp_path / "real"
+    real.mkdir()
+    link = tmp_path / "link"
+    link.symlink_to(real, target_is_directory=True)
+    receipt, event, _ = _finding_files(tmp_path, finding_receipt, review_event)
+    through_link = link / "review.jsonl"
+    through_real = real / "review.jsonl"
+    for log, output in ((through_link, through_real), (through_real, through_link)):
+        assert not log.exists()
+        _assert_output_over_log_refused(
+            [*_review_args(receipt, event, log), "--output", str(output)], log, capsys
+        )
+        assert not through_real.exists()
+        assert not through_link.exists()
+    assert main(_review_args(receipt, event, through_link)) == 0
+    capsys.readouterr()
+    before = through_real.read_bytes()
+    _assert_output_over_log_refused(
+        ["finding", "list", "--log", str(through_link), "--output", str(through_real)],
+        through_real,
+        capsys,
+    )
+    assert through_real.read_bytes() == before
+
+
+@pytest.mark.parametrize(
+    ("log_name", "variant"),
+    [
+        ("review.jsonl", "REVIEW.jsonl"),
+        ("review.jsonl", "Review.JSONL"),
+        ("revi\u00e9w.jsonl", "revie\u0301w.jsonl"),
+        ("revie\u0301w.jsonl", "revi\u00e9w.jsonl"),
+        ("revi\u00e9w.jsonl", "REVIE\u0301W.jsonl"),
+    ],
+)
+def test_finding_output_as_a_case_or_normalization_variant_of_the_log_is_refused(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+    finding_receipt: dict[str, Any],
+    review_event: Callable[..., dict[str, Any]],
+    log_name: str,
+    variant: str,
+) -> None:
+    """On a case-insensitive or normalization-insensitive filesystem the
+    variant *is* the log, and before the fix a first ``finding review`` with
+    the log absent created it, appended, and overwrote it. The fold is applied
+    on every filesystem rather than probing which kind this one is, so on a
+    case-sensitive filesystem this is an over-refusal, and the test asserts
+    the refusal everywhere rather than skipping."""
+
+    receipt, event, _ = _finding_files(tmp_path, finding_receipt, review_event)
+    log = tmp_path / log_name
+    output = tmp_path / variant
+    assert not log.exists()
+    _assert_output_over_log_refused(
+        [*_review_args(receipt, event, log), "--output", str(output)], log, capsys
+    )
+    assert not log.exists()
+    assert main(_review_args(receipt, event, log)) == 0
+    capsys.readouterr()
+    before = log.read_bytes()
+    _assert_output_over_log_refused(
+        ["finding", "list", "--log", str(log), "--output", str(output)], log, capsys
+    )
+    assert log.read_bytes() == before
+
+
+def test_finding_output_with_the_log_name_in_another_directory_is_accepted(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+    finding_receipt: dict[str, Any],
+    review_event: Callable[..., dict[str, Any]],
+) -> None:
+    """The name fold applies to two names in one directory only; the same
+    name elsewhere is a different file, and a missing parent directory is
+    an ordinary write failure after the check, not the log."""
+
+    receipt, event, log = _finding_files(tmp_path, finding_receipt, review_event)
+    elsewhere = tmp_path / "elsewhere"
+    elsewhere.mkdir()
+    output = elsewhere / log.name
+    assert main([*_review_args(receipt, event, log), "--output", str(output)]) == 0
+    assert capsys.readouterr().out == ""
+    before = log.read_bytes()
+    assert output.read_bytes() != before
+    listing = ["finding", "list", "--log", str(log)]
+    assert main([*listing, "--output", str(tmp_path / "missing" / log.name)]) == 2
+    assert json.loads(capsys.readouterr().err)["error"]["code"] == "output_io_error"
+    assert log.read_bytes() == before
+
+
+def test_finding_checks_the_output_before_the_log_is_opened_and_again_after(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+    finding_receipt: dict[str, Any],
+    review_event: Callable[..., dict[str, Any]],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The first pass runs while the log may not exist; the second, for
+    ``finding review`` only, runs once the append has made it exist, so a
+    spelling only an inode can resolve is still refused before ``main``
+    writes. A refusal on the second pass has recorded the event and not
+    written the state, which is the documented order."""
+
+    receipt, event, log = _finding_files(tmp_path, finding_receipt, review_event)
+    seen: list[tuple[bool, Path | None]] = []
+    original = cli_module.refuse_output_over_log
+
+    def observe(output: Path | None, log_path: Path) -> None:
+        seen.append((log_path.exists(), output))
+        original(output, log_path)
+
+    monkeypatch.setattr(cli_module, "refuse_output_over_log", observe)
+    output = tmp_path / "state.json"
+    assert main([*_review_args(receipt, event, log), "--output", str(output)]) == 0
+    assert seen == [(False, output), (True, output)]
+    seen.clear()
+    assert main(["finding", "list", "--log", str(log), "--output", str(output)]) == 0
+    assert seen == [(True, output)]
+    capsys.readouterr()
+
+    def refuse_second(output: Path | None, log_path: Path) -> None:
+        if log_path.exists():
+            raise ContextSafeError("output_path_unsafe", "$", "second pass")
+
+    monkeypatch.setattr(cli_module, "refuse_output_over_log", refuse_second)
+    log.unlink()
+    output.unlink()
+    assert main([*_review_args(receipt, event, log), "--output", str(output)]) == 2
+    assert json.loads(capsys.readouterr().err)["error"]["code"] == "output_path_unsafe"
+    assert log.exists()
+    assert not output.exists()
 
 
 def test_finding_list_on_a_missing_log_fails_closed_without_the_path(

@@ -1,11 +1,13 @@
 """The append-only review state machine (B-032, P0-10, R-05).
 
-Four things are pinned here. The state machine is data, so every pair the
-transition table does not contain is enumerated and required to fail as
-``illegal_transition``, and every pair it does contain is required to land
-where the table says. No free-text field exists: every string field refuses a
-sentence, a name, a canary, and a direct identifier, and the rejection never
-echoes the value. Signers are declared, not verified: the only writable
+Four things are pinned here. The state machine is data, so the transition
+table and the decision rules are pinned as literals that a table change must
+confront, every pair the table does not contain is enumerated and required to
+fail as ``illegal_transition``, and every pair it does contain is required to
+land where the table says. No free-text field exists: every string field
+refuses a sentence, a canary, and a direct identifier, and the rejection never
+echoes the value; a name-shaped token that fits an ADR 0006 grammar is
+accepted, and that residual is tested as such rather than left implied. Signers are declared, not verified: the only writable
 ``signature_status`` is ``not_verified``, and an accepted residual risk needs
 exactly the two mandated roles from distinct organizations. And the log is
 append-only: every line re-hashes on every read, a single changed byte
@@ -37,6 +39,7 @@ from contextsafe.review import (
     SIGNATURE_STATUS,
     TRANSITIONS,
     Decision,
+    DecisionRule,
     Disposition,
     FindingState,
     OutcomeKey,
@@ -49,6 +52,7 @@ from contextsafe.review import (
     derive_review_state,
     parse_receipt_findings,
     parse_review_event,
+    refuse_output_over_log,
     replay_log,
 )
 
@@ -93,6 +97,87 @@ PATH_TO: dict[Disposition, tuple[Decision, ...]] = {
     Disposition.WITHDRAWN: (Decision.CONFIRMED, Decision.WITHDRAWN),
 }
 """One legal path into every disposition, so each can be the starting state."""
+
+EXPECTED_TRANSITIONS: dict[Disposition, dict[Decision, Disposition]] = {
+    Disposition.UNREVIEWED: {
+        Decision.CONFIRMED: Disposition.CONFIRMED,
+        Decision.REJECTED: Disposition.REJECTED,
+    },
+    Disposition.CONFIRMED: {
+        Decision.SEVERITY_CHANGED: Disposition.CONFIRMED,
+        Decision.OWNER_ASSIGNED: Disposition.OWNED,
+        Decision.WITHDRAWN: Disposition.WITHDRAWN,
+    },
+    Disposition.OWNED: {
+        Decision.SEVERITY_CHANGED: Disposition.OWNED,
+        Decision.OWNER_ASSIGNED: Disposition.OWNED,
+        Decision.REMEDIATED: Disposition.REMEDIATED,
+        Decision.ACCEPTED_RESIDUAL_RISK: Disposition.ACCEPTED_RESIDUAL_RISK,
+        Decision.WITHDRAWN: Disposition.WITHDRAWN,
+    },
+    Disposition.ACCEPTED_RESIDUAL_RISK: {
+        Decision.REMEDIATED: Disposition.REMEDIATED,
+    },
+    Disposition.REMEDIATED: {},
+    Disposition.REJECTED: {},
+    Disposition.WITHDRAWN: {},
+}
+"""Every legal move, written out. ``ILLEGAL_PAIRS`` and ``LEGAL_PAIRS`` below
+are derived from the table under test, so on their own they enumerate whatever
+the table says; this literal is what a change to the table must confront. An
+accepted residual risk is reachable only from ``owned``, so it cannot skip the
+owner, and nothing leaves it except remediation."""
+
+EXPECTED_DECISION_RULES: dict[Decision, DecisionRule] = {
+    Decision.CONFIRMED: DecisionRule(
+        severity=SeverityRule.REQUIRED,
+        owner_required=False,
+        required_signer_roles=frozenset(),
+        distinct_organizations=False,
+    ),
+    Decision.REJECTED: DecisionRule(
+        severity=SeverityRule.FORBIDDEN,
+        owner_required=False,
+        required_signer_roles=frozenset(),
+        distinct_organizations=False,
+    ),
+    Decision.SEVERITY_CHANGED: DecisionRule(
+        severity=SeverityRule.REQUIRED_DIFFERENT,
+        owner_required=False,
+        required_signer_roles=frozenset(),
+        distinct_organizations=False,
+    ),
+    Decision.OWNER_ASSIGNED: DecisionRule(
+        severity=SeverityRule.FORBIDDEN,
+        owner_required=True,
+        required_signer_roles=frozenset(),
+        distinct_organizations=False,
+    ),
+    Decision.REMEDIATED: DecisionRule(
+        severity=SeverityRule.FORBIDDEN,
+        owner_required=False,
+        required_signer_roles=frozenset(),
+        distinct_organizations=False,
+    ),
+    Decision.ACCEPTED_RESIDUAL_RISK: DecisionRule(
+        severity=SeverityRule.REQUIRED_UNCHANGED,
+        owner_required=False,
+        required_signer_roles=frozenset(
+            {
+                SignerRole.CUSTOMER_CLINICAL_OWNER,
+                SignerRole.CONTEXTSAFE_CLINICAL_SAFETY_CHAIR,
+            }
+        ),
+        distinct_organizations=True,
+    ),
+    Decision.WITHDRAWN: DecisionRule(
+        severity=SeverityRule.FORBIDDEN,
+        owner_required=False,
+        required_signer_roles=frozenset(),
+        distinct_organizations=False,
+    ),
+}
+"""What each decision carries, written out, for the same reason."""
 
 ILLEGAL_PAIRS = [
     (state, decision)
@@ -148,6 +233,25 @@ def test_the_transition_table_covers_every_disposition_and_every_decision() -> N
         for decision in path:
             current = TRANSITIONS[current][decision]
         assert current is state
+
+
+def test_the_tables_are_exactly_the_published_ones() -> None:
+    """The enumeration tests read the table they test. This does not: loosening
+    the table, say by letting ``confirmed`` accept a residual risk without an
+    owner or ``accepted_residual_risk`` be withdrawn, shrinks the illegal set
+    and grows the legal set with every derived test still green, and fails
+    here."""
+
+    assert TRANSITIONS == EXPECTED_TRANSITIONS
+    assert DECISION_RULES == EXPECTED_DECISION_RULES
+    assert (
+        Decision.ACCEPTED_RESIDUAL_RISK
+        not in EXPECTED_TRANSITIONS[Disposition.CONFIRMED]
+    )
+    assert EXPECTED_TRANSITIONS[Disposition.ACCEPTED_RESIDUAL_RISK] == {
+        Decision.REMEDIATED: Disposition.REMEDIATED
+    }
+    assert len(ILLEGAL_PAIRS) == len(Disposition) * len(Decision) - len(LEGAL_PAIRS)
 
 
 def test_terminal_dispositions_have_no_exit() -> None:
@@ -472,6 +576,35 @@ def test_every_string_field_refuses_prose_names_and_identifiers(
     error = _assert_code(lambda: parse_review_event(event), code, path=f"$.{field}")
     if isinstance(value, str) and value:
         assert value not in json.dumps(error.to_dict())
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        ("external_reference", "Jordan.Rivera"),
+        ("external_reference", "Dr-Jordan-Rivera-MD"),
+        ("organization_id", "JORDAN-RIVERA"),
+    ],
+)
+def test_a_name_shaped_token_that_fits_a_grammar_is_the_stated_residual(
+    review_event: EventBuilder, field: str, value: str
+) -> None:
+    """What "no free-text field" does not claim. A name with a space is
+    refused because the grammar has no space; the same name as a dotted or
+    hyphenated token is a well-formed label, and only the configured canaries
+    and direct-identifier shapes are scanned for, so it reaches the log
+    record. ADR 0006 records that a grammar cannot see ordinary letters. The
+    closed shape removes the field a name would be typed into, not the
+    possibility of typing one into a label."""
+
+    if field == "organization_id":
+        event = review_event(
+            "confirmed", signers=[{**CHAIR_SIGNER, "organization_id": value}]
+        )
+    else:
+        event = review_event("confirmed", external_reference=value)
+    parsed = parse_review_event(event)
+    assert value in json.dumps(parsed.to_dict())
 
 
 @pytest.mark.parametrize(
@@ -1004,7 +1137,7 @@ def test_the_log_has_a_published_size_limit(
     _assert_code(lambda: derive_review_state(log), "input_too_large")
 
 
-def test_a_log_that_grows_during_the_read_is_refused(
+def test_a_read_past_the_size_bound_is_refused_whatever_fstat_said(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     log = tmp_path / "review.jsonl"
@@ -1015,6 +1148,39 @@ def test_a_log_that_grows_during_the_read_is_refused(
         _assert_code(lambda: review_module._read_log(descriptor), "input_too_large")
     finally:
         os.close(descriptor)
+
+
+class _GrowingOs:
+    """``os`` as ``review`` sees it, except that every read first appends to
+    the file being read, so the size ``fstat`` reported is stale by the time
+    the read loop counts."""
+
+    def __init__(self, path: Path) -> None:
+        self.path = path
+
+    def __getattr__(self, name: str) -> Any:
+        return getattr(os, name)
+
+    def read(self, descriptor: int, size: int) -> bytes:
+        with self.path.open("ab") as handle:
+            handle.write(b"x" * 4)
+        return os.read(descriptor, size)
+
+
+def test_a_log_that_grows_during_the_read_is_refused(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The ``fstat`` at open is a bound on what was there; the running count
+    is the bound on what is read. A file that passes the first and grows past
+    the limit under the read loop is refused by the second."""
+
+    log = tmp_path / "review.jsonl"
+    log.write_bytes(b"x" * 4)
+    monkeypatch.setattr(review_module, "MAX_LOG_BYTES", 10)
+    monkeypatch.setattr(review_module, "_CHUNK_BYTES", 4)
+    monkeypatch.setattr(review_module, "os", _GrowingOs(log))
+    _assert_code(lambda: derive_review_state(log), "input_too_large")
+    assert log.stat().st_size > 10
 
 
 def test_a_log_that_changes_between_read_and_append_is_left_alone(
@@ -1236,6 +1402,73 @@ def test_tail_truncation_replays_cleanly_and_only_the_head_hash_records_it(
     assert truncated.head_sha256 != full.head_sha256
     log.write_bytes(b"")
     assert derive_review_state(log).head_sha256 == GENESIS_SHA256
+
+
+def test_no_output_means_nothing_to_refuse(tmp_path: Path) -> None:
+    refuse_output_over_log(None, tmp_path / "review.jsonl")
+
+
+def test_output_naming_an_absent_log_is_refused_by_its_parent_and_folded_name(
+    tmp_path: Path,
+) -> None:
+    """With the log absent there is no inode to compare, and as strings the
+    two spellings differ. The parent directories exist, so they carry the
+    inode comparison, and the leaf names are folded the way a case- or
+    normalization-insensitive filesystem folds them."""
+
+    real = tmp_path / "real"
+    real.mkdir()
+    link = tmp_path / "link"
+    link.symlink_to(real, target_is_directory=True)
+    log = link / "revi\u00e9w.jsonl"
+    assert not log.exists()
+    for spelling in (
+        real / "revi\u00e9w.jsonl",
+        real / "REVI\u00c9W.jsonl",
+        link / "revie\u0301w.jsonl",
+        link / "sub" / ".." / "revi\u00e9w.jsonl",
+    ):
+        with pytest.raises(ContextSafeError) as raised:
+            refuse_output_over_log(spelling, log)
+        assert raised.value.code == "output_path_unsafe"
+    assert not log.exists()
+    assert not (real / "revi\u00e9w.jsonl").exists()
+
+
+def test_output_elsewhere_or_under_a_missing_parent_is_not_the_log(
+    tmp_path: Path,
+) -> None:
+    """The fold applies to two names in one directory. The same name in
+    another directory is another file, a different name beside the log is
+    another file, and a parent that does not exist is a write failure for
+    ``main`` to report, not the log."""
+
+    log = tmp_path / "review.jsonl"
+    elsewhere = tmp_path / "elsewhere"
+    elsewhere.mkdir()
+    for present in (False, True):
+        if present:
+            log.write_bytes(b"")
+        refuse_output_over_log(elsewhere / "review.jsonl", log)
+        refuse_output_over_log(tmp_path / "state.json", log)
+        refuse_output_over_log(tmp_path / "missing" / "review.jsonl", log)
+
+
+def test_output_through_a_link_to_an_existing_log_is_refused_from_anywhere(
+    tmp_path: Path,
+) -> None:
+    log = tmp_path / "review.jsonl"
+    log.write_bytes(b"")
+    elsewhere = tmp_path / "elsewhere"
+    elsewhere.mkdir()
+    symlink = elsewhere / "state.json"
+    symlink.symlink_to(log)
+    hardlink = elsewhere / "hard.json"
+    os.link(log, hardlink)
+    for alias in (symlink, hardlink, log, Path(os.path.relpath(log, Path.cwd()))):
+        with pytest.raises(ContextSafeError) as raised:
+            refuse_output_over_log(alias, log)
+        assert raised.value.code == "output_path_unsafe"
 
 
 def test_a_fifo_log_is_refused_without_blocking(

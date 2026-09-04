@@ -1057,9 +1057,14 @@ rather than after it.
   finding list --log LOG.jsonl` derives the current disposition per outcome.
   Both print the same derived state document. The state machine is data
   (`TRANSITIONS` and `DECISION_RULES` in `src/contextsafe/review.py`), and
-  `tests/test_review.py` enumerates every pair the table does not contain and
-  requires each to be refused as `illegal_transition`. An event has no
-  free-text field, by construction, the way the support bundle has none: a
+  `tests/test_review.py` pins both tables as literals and, from the table,
+  enumerates every pair it does not contain and requires each to be refused
+  as `illegal_transition`. An event has no free-text field, by construction,
+  the way the support bundle has none, with the residual stated: a
+  name-shaped token that fits an ADR 0006 grammar (`Jordan.Rivera`,
+  `JORDAN-RIVERA`) is accepted, since only canaries and direct-identifier
+  shapes are scanned for and a grammar cannot see ordinary letters; the
+  fields are a
   decision, a severity, a rationale *code*, an owner as a role plus the
   SHA-256 of an opaque handle, an optional external reference under the
   ADR 0006 provenance-label grammar, and declared signers as a role plus an
@@ -1093,12 +1098,26 @@ rather than after it.
   clinical, community, legal, or security review of them has happened. Two
   contracts, so `schemas/README.md` now states `13 contracts` in digits: the
   claims gate's number-word table stops at twelve, and the document was
-  changed rather than the gate. Review of the branch before merge found and
-  closed one defect and three gaps. `--output` naming the review log, by path,
-  symlink, or hard link, had passed through `main`'s truncating write and
-  replaced the log with the state document after the event was appended, with
-  exit 0; both commands now refuse it as `output_path_unsafe` before the log is
-  opened, and the log's bytes are asserted unchanged. A replay refusal at an
+  changed rather than the gate. Two rounds of review before merge found and
+  closed two defects and three gaps. `--output` naming the review log, by
+  path, symlink, or hard link, had passed through `main`'s truncating write
+  and replaced the log with the state document after the event was appended,
+  with exit 0; both commands now refuse it as `output_path_unsafe` before the
+  log is opened. The first check compared path strings and, where both files
+  existed, inodes, so a log that did not exist yet could still be named two
+  ways (`/tmp/x/review.jsonl` against `/private/tmp/x/review.jsonl`, a
+  symlinked parent, `REVIEW.jsonl` on a case-insensitive filesystem) and the
+  first `finding review` created, appended, and then overwrote it. The check
+  now lives in `review.py`, under `SAFETY_MODULES` and the mutation gate,
+  compares by inode when the log exists and by parent-directory inode plus
+  case- and normalization-folded leaf name when it does not, over-refusing a
+  case variant on a case-sensitive filesystem rather than probing which kind
+  it is on, and runs again after `finding review` has appended. The second
+  round also found the illegal-transition enumeration derived from the table
+  it tested, so a loosened table shrank the illegal set with every test still
+  green; `TRANSITIONS` and `DECISION_RULES` are now pinned as literals, and
+  the test that pins them is the one that fails when the table changes. A
+  replay refusal at an
   event field now reports `$.log[i].event.<field>`, where the field is,
   rather than `$.log[i].<field>`. The log is opened with `O_NONBLOCK`, so a
   `--log` that names a FIFO is refused as `input_path_unsafe` instead of
@@ -1109,11 +1128,16 @@ rather than after it.
   of reads as well, with the remaining survivors -- the exact size limit,
   the identifier length bounds, the immutability of every record type, and a
   distinctness flag the code never read -- each pinned by a test rather than
-  exempted. Stated as a limit rather than
-  fixed: the chain cannot detect a record removed from the end of the log,
-  and only an external record of `log_head_sha256` can; a `remediated`
-  decision binds no rerun receipt, so `remediation_verified_by_rerun` is a
-  declaration the tool cannot check.
+  exempted. That kill claim is from the earlier run and is not re-verified for this tree: `make mutants` was started against it and had not finished when this change was recorded, so whether the `--output` check's new branches all die is a question the gate still has to answer. Stated as a limit rather than fixed: the chain
+  cannot detect a record removed from the end of the log, and only an
+  external record of `log_head_sha256` can; a `remediated` decision binds no
+  rerun receipt, so `remediation_verified_by_rerun` is a declaration the tool
+  cannot check; a `finding review` whose `--output` cannot be written after
+  the append exits 2 with `output_io_error` having recorded the event, so the
+  same event is then refused as `illegal_transition` and `finding list`
+  derives the state; and a first event refused at the transition after the
+  receipt binding held leaves a new, empty log behind, which replays to the
+  empty state.
 
 ## [0.1.0] - 2026-09-02
 
