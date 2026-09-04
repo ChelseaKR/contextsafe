@@ -252,13 +252,61 @@
       "review": "source",
       "text": "No evidence was found, so no claim is made"
     },
+    "reason.overwritten_by_other_concept": {
+      "review": "source",
+      "text": "The value was overwritten by another concept's value"
+    },
     "reason.predeclared_not_applicable": {
       "review": "source",
       "text": "The rule declared this case out of scope in advance"
     },
+    "reason.record_count_changed": {
+      "review": "source",
+      "text": "The number of distinct records changed"
+    },
+    "reason.record_count_preserved": {
+      "review": "source",
+      "text": "The number of distinct records was preserved"
+    },
     "reason.semantic_mismatch": {
       "review": "source",
       "text": "Evidence was found and it did not match the expectation"
+    },
+    "reason.status_not_preserved": {
+      "review": "source",
+      "text": "The value's status changed"
+    },
+    "reason.status_preserved": {
+      "review": "source",
+      "text": "The value's status was preserved"
+    },
+    "reason.value_changed_across_checkpoints": {
+      "review": "source",
+      "text": "The value differed between the two boundaries"
+    },
+    "reason.value_coerced": {
+      "review": "source",
+      "text": "The value was coerced into a forbidden value"
+    },
+    "reason.value_not_coerced": {
+      "review": "source",
+      "text": "The value was not coerced into a forbidden value"
+    },
+    "reason.value_not_overwritten": {
+      "review": "source",
+      "text": "The value was not another concept's value"
+    },
+    "reason.value_not_present": {
+      "review": "source",
+      "text": "The value was not present at the boundary"
+    },
+    "reason.value_present": {
+      "review": "source",
+      "text": "The value was present at the boundary"
+    },
+    "reason.value_preserved_across_checkpoints": {
+      "review": "source",
+      "text": "The value was the same at both boundaries"
     },
     "scope.clinical_oracle_approved.label": {
       "review": "source",

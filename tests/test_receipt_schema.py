@@ -1,6 +1,6 @@
 """Published receipt-contract tests (B-033, P0-09, RG-10).
 
-`schemas/contextsafe-receipt-v0.1.schema.json` is the pre-1.0 shape of the
+`schemas/contextsafe-receipt-v0.2.schema.json` is the pre-1.0 shape of the
 receipt schema that `docs/04-ARCHITECTURE.md` section 8 requires ContextSafe to
 publish. These tests are the schema/runtime agreement gate named in
 `docs/09-TEST-AND-EVALUATION.md` section 8 (T-RECEIPT schema) and section 9
@@ -40,7 +40,7 @@ from contextsafe.validation import parse_bundle
 
 ROOT = Path(__file__).resolve().parents[1]
 REFERENCE = REFERENCE_ROOT
-SCHEMA_PATH = ROOT / "schemas" / "contextsafe-receipt-v0.1.schema.json"
+SCHEMA_PATH = ROOT / "schemas" / "contextsafe-receipt-v0.2.schema.json"
 
 CLAIMED = datetime(2026, 8, 4, 9, 30, 0, tzinfo=UTC)
 
@@ -166,7 +166,7 @@ def test_published_contract_accepts_the_reference_receipt_document(
 ) -> None:
     schema = _schema()
     Draft202012Validator.check_schema(schema)
-    assert schema["$id"].endswith("/schemas/contextsafe-receipt-v0.1.schema.json")
+    assert schema["$id"].endswith("/schemas/contextsafe-receipt-v0.2.schema.json")
     _validator().validate(document)
 
 

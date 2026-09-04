@@ -562,6 +562,76 @@ rather than after it.
   no schema and no command emits it. No existing contract version moved, the
   pinned reference-receipt and canonical-import digests are unchanged, and
   no runtime dependency was added.
+- **B-028 slice: assertion predicates for identity, name to use, pronouns,
+  and recorded sex or gender (A-005, A-008 to A-015), as mechanism and
+  nothing more.** A rule used to be one expected value plus `required`, with
+  the single observed hash compared to the expected hash. A rule set that
+  declares `contextsafe.rule-set/0.2.0` may now name one predicate from a
+  closed set, each a pure function in `contextsafe.evaluator`: `exact` (the
+  default, unchanged); `present`, the value has status `specified` (A-008);
+  `status_preserved`, the observed status equals the expected status and the
+  value is not consulted, so declined stays declined and never becomes
+  unknown, absent, or populated (A-009); `not_coerced`, the observed hash is in
+  none of the hashes of a closed `forbidden` set the rule carries in fixture
+  tokens, so X, unknown, and absent are not coerced into M or F (A-014);
+  `record_count`, exactly `expected_count` distinct records remain (A-013);
+  `preserved_across`, the same value hash at `preserved_from` and at the
+  rule's checkpoint (A-005, A-010, A-012); and `not_overwritten_by`, the
+  observed gender identity is not another concept's declared value (A-011).
+  Missing evidence is `indeterminate`, an ambiguous checkpoint is
+  `indeterminate`, and no predicate can pass on zero observations.
+  Every predicate has one affirmative and one failure reason, twelve new codes
+  in the closed `OutcomeReason` set and the receipt contract, so a receipt says
+  which claim was decided. The field a predicate reads is required for it and
+  an unknown field for every other; a predicate that would be vacuous for a
+  concept (`present` on recorded sex or gender, `not_overwritten_by` on
+  anything but gender identity) is refused; and `parse_bundle` refuses a rule
+  the case manifest contradicts (a forbidden value the manifest declares, a
+  `present` rule on a declined value, an `expected_count` the manifest does
+  not carry). The contract is `schemas/contextsafe-rule-set-v0.2.schema.json`,
+  the first published schema for the rule set, with
+  `tests/test_rule_set_schema.py` holding it to the runtime. Fixtures: a
+  second ungoverned reference pair, `rules-predicates.json` and
+  `observations-predicates.json`, exercises every predicate against CTP-I01
+  and is pinned in the three-run determinism matrix; and
+  `tests/fixtures/seeded-faults/` carries F-004, F-005, F-006, F-007, F-008,
+  F-010, and F-031 from `docs/09-TEST-AND-EVALUATION.md` section 4 as complete
+  synthetic inputs, each proved to be reported as `fail` with its own reason
+  and never as `pass`. The property layer now generates every predicate and
+  holds the status algebra over all of them. What this does not do: no
+  clinical, laboratory, or community review has approved any rule or
+  predicate here; `not_coerced` compares whole typed values, so a coercion
+  that also rewrites context or source is outside its forbidden set and is
+  the `exact` rule's to catch; `preserved_across` is a preservation claim,
+  not a correctness claim; and the pack contract still pins the exact-only
+  rule-set shape, so a 0.2.0 rule set is refused as a pack component by name
+  (`incompatible_component`) until that contract moves.
+
+### Changed
+
+- **The receipt contract is 0.2: `contextsafe.receipt/0.2.0`,
+  `schemas/contextsafe-receipt-v0.2.schema.json`.** The closed outcome-reason
+  enum widened by the twelve predicate reasons and nothing else changed; the
+  0.1 file is not kept beside it, so a consumer pinned to the 0.1 `$id`
+  rejects a 0.2 receipt on its `schema_version` rather than accepting a reason
+  it has never seen. Because the payload carries its own `schema_version`,
+  every receipt's `payload_sha256` moved, and the pinned reference-receipt
+  digest in `tests/test_determinism.py` moved with it — once, and only for
+  that reason: the reference `input_sha256`, `result_sha256`, and
+  `rule_set_sha256` are byte-identical to 0.1.0, and `rules.json` and
+  `observations.json` are unchanged. The README example receipt was refreshed
+  for the same two fields. The `receipt-document` version is unchanged: the
+  envelope shape did not move.
+- **The rule-set contract is accepted at two versions.** `0.1.0` is untouched:
+  no predicate field is allowed there, every existing `rules.json` parses
+  unchanged, and its canonical form and hash are what they were. `0.2.0`
+  admits the predicate fields, and its canonical form omits `exact` and every
+  field the predicate does not read, so an exact rule hashes the same under
+  either version. `contextsafe fixtures export` now writes seven files rather
+  than five.
+- Twelve `reason.*` strings were added to both locale catalogs. The `es-US`
+  entries are machine translations marked `machine`, like every other entry in
+  that catalog: B-042 has not happened, and nothing here claims it has.
 
 ## [0.1.0] - 2026-09-02
 

@@ -252,13 +252,61 @@
       "review": "machine",
       "text": "No se encontró evidencia, así que no se afirma nada"
     },
+    "reason.overwritten_by_other_concept": {
+      "review": "machine",
+      "text": "El valor fue sobrescrito por el valor de otro concepto"
+    },
     "reason.predeclared_not_applicable": {
       "review": "machine",
       "text": "La regla declaró de antemano que este caso queda fuera de alcance"
     },
+    "reason.record_count_changed": {
+      "review": "machine",
+      "text": "El número de registros distintos cambió"
+    },
+    "reason.record_count_preserved": {
+      "review": "machine",
+      "text": "Se conservó el número de registros distintos"
+    },
     "reason.semantic_mismatch": {
       "review": "machine",
       "text": "Se encontró evidencia y no coincidió con lo esperado"
+    },
+    "reason.status_not_preserved": {
+      "review": "machine",
+      "text": "El estado del valor cambió"
+    },
+    "reason.status_preserved": {
+      "review": "machine",
+      "text": "Se conservó el estado del valor"
+    },
+    "reason.value_changed_across_checkpoints": {
+      "review": "machine",
+      "text": "El valor difirió entre las dos fronteras"
+    },
+    "reason.value_coerced": {
+      "review": "machine",
+      "text": "El valor fue forzado a un valor prohibido"
+    },
+    "reason.value_not_coerced": {
+      "review": "machine",
+      "text": "El valor no fue forzado a un valor prohibido"
+    },
+    "reason.value_not_overwritten": {
+      "review": "machine",
+      "text": "El valor no era el valor de otro concepto"
+    },
+    "reason.value_not_present": {
+      "review": "machine",
+      "text": "El valor no estaba presente en la frontera"
+    },
+    "reason.value_present": {
+      "review": "machine",
+      "text": "El valor estaba presente en la frontera"
+    },
+    "reason.value_preserved_across_checkpoints": {
+      "review": "machine",
+      "text": "El valor fue el mismo en ambas fronteras"
     },
     "scope.clinical_oracle_approved.label": {
       "review": "machine",

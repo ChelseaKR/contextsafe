@@ -66,7 +66,7 @@ five result objects elided where marked:
       // sex_parameter_for_clinical_use at interface, name_to_use and pronouns at ehr
     ],
     "runner_version": "0.1.0",
-    "schema_version": "contextsafe.receipt/0.1.0",
+    "schema_version": "contextsafe.receipt/0.2.0",
     "scope": {
       "clinical_oracle_approved": false,
       "patient_data_allowed": false,
@@ -80,7 +80,7 @@ five result objects elided where marked:
       "pass": 5
     }
   },
-  "payload_sha256": "a1d26eb86c760d2f148c16bf6244c2c202f6afdf42db5bba8aa56246baec2e13",
+  "payload_sha256": "d3724d57b33d9db641a31fac56f51276905db0329112643cdb3843c8e2cae64a",
   "schema_version": "contextsafe.receipt-document/0.1.0"
 }
 ```
@@ -91,7 +91,7 @@ no approved clinical oracle stands behind it, that patient data is not allowed,
 and that the fixture is synthetic — and the payload carries hashes, statuses and
 counts rather than the identity values themselves. Those fields are pinned by
 the published
-[receipt contract](schemas/contextsafe-receipt-v0.1.schema.json): the disclosure
+[receipt contract](schemas/contextsafe-receipt-v0.2.schema.json): the disclosure
 set is mandated wording in a fixed order, the unsigned envelope constants are
 closed, and a future signing layer may not relabel these documents. A tool on
 this subject that could not state its own boundaries would not be safe to run,
@@ -215,7 +215,7 @@ payload/envelope and B-033 receipt-schema slices):
   when evaluation ran, and a future signing layer may not relabel these
   unsigned documents;
 - the document has a published
-  [receipt contract](schemas/contextsafe-receipt-v0.1.schema.json), the pre-1.0
+  [receipt contract](schemas/contextsafe-receipt-v0.2.schema.json), the pre-1.0
   shape of the receipt schema in [Architecture §8](docs/04-ARCHITECTURE.md).
   Every object is closed, the unsigned envelope constants are pinned, the
   payload may carry only hashes, statuses, counts, and the mandated disclosure
@@ -482,6 +482,55 @@ and an LIS's empty cell are still not bound to presence states; and the
 recording context a profile binds (a `PID-8` value to the `government-id`
 record, say) is a declaration the profile's author makes and nothing here
 has confirmed.
+
+### B-028
+
+A rule can now say *what kind* of claim it makes. A rule set that declares
+`contextsafe.rule-set/0.2.0` may name one predicate from a closed set,
+published in
+[`schemas/contextsafe-rule-set-v0.2.schema.json`](schemas/contextsafe-rule-set-v0.2.schema.json):
+`exact` (the default, and the only thing a 0.1.0 rule set could say);
+`present`, the value has status `specified`; `status_preserved`, the observed
+status equals the expected status and the value is not consulted, so a
+declined gender identity or pronoun stays declined and never becomes unknown,
+absent, or a value; `not_coerced`, the observed value hash is in none of the
+hashes of a closed `forbidden` set the rule carries in fixture tokens, so an
+X, unknown, or absent recorded sex or gender is not turned into M or F;
+`record_count`, exactly `expected_count` distinct records remain;
+`preserved_across`, the same value hash at `preserved_from` and at the rule's
+checkpoint; and `not_overwritten_by`, the observed gender identity is not the
+case's recorded sex or gender, name to use, pronouns, or SPCU value. Each is a
+pure function in `src/contextsafe/evaluator.py`, each has its own affirmative
+and failure reason in the receipt (the receipt contract moved to 0.2 for
+them), and under every one of them missing evidence is `indeterminate`, an
+ambiguous checkpoint is `indeterminate`, and nothing passes on zero
+observations. A second reference pair, `rules-predicates.json` against
+`observations-predicates.json`, exercises every predicate on the same case:
+
+```sh
+uv run contextsafe evaluate \
+  --case fixtures/reference/case.json \
+  --observations fixtures/reference/observations-predicates.json \
+  --rules fixtures/reference/rules-predicates.json
+```
+
+Its limits are the point. The predicates are mechanism for A-005 and A-008 to
+A-015 in [Data and evidence §5](docs/05-DATA-AND-EVIDENCE.md), not approved
+assertions: no clinical, laboratory, or community review has looked at any
+rule that uses them, and the rule sets that do are labelled reference-only.
+`not_coerced` compares whole typed values, so a coercion that also rewrites a
+value's context or source is outside its forbidden set and is the paired
+`exact` rule's to catch. `preserved_across` says a value did not change
+between two boundaries, not that it was right at either. A-006, A-007, and
+A-015 need a patient-facing display observation and a name period that the
+observation contract does not carry, so they have no predicate. The pack
+contract still pins the exact-only rule-set shape, and a 0.2.0 rule set is
+refused as a pack component by name. The seeded faults this slice can detect —
+F-004, F-005, F-006, F-007, F-008, F-010, F-031 from
+[Test and evaluation §4](docs/09-TEST-AND-EVALUATION.md) — live as complete
+synthetic inputs under `tests/fixtures/seeded-faults/`, each proved to be
+reported as `fail` with its own reason and never as `pass`; the other
+twenty-nine are not detectable by anything here.
 
 The durable evidence store has no CLI import route; `contextsafe import` writes
 only an observation-set document and never an evidence record. Every iteration-3 evidence record says

@@ -1,0 +1,145 @@
+{
+  "case": {
+    "schema_version": "contextsafe.case/0.1.0",
+    "case_id": "CTP-I10",
+    "synthetic_identifier": {
+      "system": "urn:contextsafe:synthetic",
+      "value": "CSYN-CTP-I10"
+    },
+    "concepts": {
+      "gender_identity": {
+        "status": "specified",
+        "value": "fixture-gender-2",
+        "code_system": "urn:contextsafe:fixture"
+      },
+      "recorded_sex_or_gender": [
+        {
+          "value": "X",
+          "context": "government-id",
+          "source": "synthetic-fixture"
+        },
+        {
+          "value": "F",
+          "context": "payer",
+          "source": "synthetic-fixture"
+        }
+      ],
+      "sex_parameter_for_clinical_use": [],
+      "name_to_use": {
+        "status": "specified",
+        "value": "CSYN-WREN",
+        "use": "usual"
+      },
+      "pronouns": {
+        "status": "specified",
+        "value": "they/them"
+      }
+    },
+    "prohibited_inferences": [
+      "gender_identity_to_spcu",
+      "recorded_sex_or_gender_to_spcu"
+    ]
+  },
+  "rules": {
+    "schema_version": "contextsafe.rule-set/0.2.0",
+    "rules": [
+      {
+        "rule_id": "A-I01",
+        "version": "0.1.0",
+        "case_id": "CTP-I10",
+        "checkpoint": "registration",
+        "concept": "recorded_sex_or_gender",
+        "expected": {
+          "value": "X",
+          "context": "government-id",
+          "source": "synthetic-fixture"
+        },
+        "required": true,
+        "predicate": "record_count",
+        "expected_count": 2
+      },
+      {
+        "rule_id": "A-I02",
+        "version": "0.1.0",
+        "case_id": "CTP-I10",
+        "checkpoint": "ehr",
+        "concept": "gender_identity",
+        "expected": {
+          "status": "specified",
+          "value": "fixture-gender-2",
+          "code_system": "urn:contextsafe:fixture"
+        },
+        "required": true,
+        "predicate": "not_overwritten_by"
+      }
+    ]
+  },
+  "observations": {
+    "schema_version": "contextsafe.observation-set/0.1.0",
+    "observations": [
+      {
+        "schema_version": "contextsafe.observation/0.1.0",
+        "observation_id": "OBS-I10-RSG-GOV",
+        "case_id": "CTP-I10",
+        "checkpoint": "registration",
+        "concept": "recorded_sex_or_gender",
+        "value": {
+          "value": "X",
+          "context": "government-id",
+          "source": "synthetic-fixture"
+        },
+        "evidence": {
+          "source_sha256": "711cfc74f5f4aeb79b870620489b369d4c3b38fa08a68ec27535a0832aae8c7d",
+          "source_pointer": "$.concepts.recorded_sex_or_gender[0]"
+        },
+        "mapping": {
+          "source_concept": "recorded_sex_or_gender",
+          "target_concept": "recorded_sex_or_gender",
+          "mapping_version": "0.1.0"
+        }
+      },
+      {
+        "schema_version": "contextsafe.observation/0.1.0",
+        "observation_id": "OBS-I10-RSG-PAYER",
+        "case_id": "CTP-I10",
+        "checkpoint": "registration",
+        "concept": "recorded_sex_or_gender",
+        "value": {
+          "value": "F",
+          "context": "payer",
+          "source": "synthetic-fixture"
+        },
+        "evidence": {
+          "source_sha256": "d803c16bcbfa81deba199685ac52432cc0cc7ec8af7dddccf0fc73771ceb1425",
+          "source_pointer": "$.concepts.recorded_sex_or_gender[1]"
+        },
+        "mapping": {
+          "source_concept": "recorded_sex_or_gender",
+          "target_concept": "recorded_sex_or_gender",
+          "mapping_version": "0.1.0"
+        }
+      },
+      {
+        "schema_version": "contextsafe.observation/0.1.0",
+        "observation_id": "OBS-I10-GI",
+        "case_id": "CTP-I10",
+        "checkpoint": "ehr",
+        "concept": "gender_identity",
+        "value": {
+          "status": "specified",
+          "value": "fixture-gender-2",
+          "code_system": "urn:contextsafe:fixture"
+        },
+        "evidence": {
+          "source_sha256": "143bb239fd604c8b07bf186de1f935eebff24746870a2d4333b82342763bf84c",
+          "source_pointer": "$.concepts.gender_identity"
+        },
+        "mapping": {
+          "source_concept": "gender_identity",
+          "target_concept": "gender_identity",
+          "mapping_version": "0.1.0"
+        }
+      }
+    ]
+  }
+}

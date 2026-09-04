@@ -46,9 +46,25 @@ ROOT = Path(__file__).resolve().parents[1]
 REFERENCE = REFERENCE_ROOT
 
 RECEIPT_DOCUMENT_SHA256 = (
-    "f34e58fa642ec0ac5a2368834324d55f1aacbf5f0b51c1ac0cff5c72ea3dce80"
+    "bf4d6b8592d6a9c42cf87fe9e5b9c34fa86d5a09623ee88bd21da5c00c2216fc"
 )
-"""SHA-256 of the reference ``evaluate`` document, terminal newline included."""
+"""SHA-256 of the reference ``evaluate`` document, terminal newline included.
+
+Moved once, on 2026-09-04, when the receipt contract went from 0.1 to 0.2 for
+the B-028 predicate reasons: the payload's ``schema_version`` is inside the
+hashed payload, so the document digest moved with it while ``input_sha256``,
+``result_sha256``, and ``rule_set_sha256`` did not.
+"""
+
+PREDICATE_RECEIPT_DOCUMENT_SHA256 = (
+    "3f19b6f7562601f885326f2e500828df658142a3a226af6c044ff6c9735d1292"
+)
+"""SHA-256 of the ``evaluate`` document for the packaged predicate pair.
+
+``rules-predicates.json`` against ``observations-predicates.json``: every
+predicate in the 0.2.0 rule-set contract, evaluated once, pinned to the same
+standard as the exact-only reference receipt.
+"""
 
 IMPORTED_OBSERVATIONS_SHA256 = (
     "9d7e92c2b771d5aafd00e21bd81debf8c306dde7ed6adff8eafd79b5ae8d9f74"
@@ -258,6 +274,18 @@ def _evaluate_argv(reference: Path) -> list[str]:
     return _fixture_argv("evaluate", reference)
 
 
+def _predicate_evaluate_argv(reference: Path) -> list[str]:
+    return [
+        "evaluate",
+        "--case",
+        str(reference / "case.json"),
+        "--observations",
+        str(reference / "observations-predicates.json"),
+        "--rules",
+        str(reference / "rules-predicates.json"),
+    ]
+
+
 def _assert_canonical_line(payload: bytes) -> None:
     """A canonical artifact is one UTF-8 JSON line with one terminal newline."""
 
@@ -348,6 +376,25 @@ def test_evaluate_receipt_digest_is_pinned_on_every_platform(tmp_path: Path) -> 
     artifact = runs[0].artifact
     assert artifact is not None
     assert hashlib.sha256(artifact).hexdigest() == RECEIPT_DOCUMENT_SHA256
+
+
+def test_predicate_evaluate_artifact_is_byte_identical_and_pinned(
+    tmp_path: Path,
+) -> None:
+    """The predicate rule set is held to the same three-run, pinned standard."""
+
+    runs = _three_runs(tmp_path, _predicate_evaluate_argv, with_output=True)
+    _assert_identical(runs)
+    artifact = runs[0].artifact
+    assert artifact is not None
+    assert runs[0].returncode == 0
+    assert runs[0].stderr == b""
+    _assert_canonical_line(artifact)
+    assert hashlib.sha256(artifact).hexdigest() == PREDICATE_RECEIPT_DOCUMENT_SHA256
+    document = json.loads(artifact.decode("utf-8"))
+    assert document["payload"]["summary"]["pass"] == 8
+    for fragment in (str(tmp_path), "forbidden", "preserved_from", "expected_count"):
+        assert fragment.encode("utf-8") not in artifact
 
 
 def test_no_input_path_or_environment_value_reaches_an_artifact(

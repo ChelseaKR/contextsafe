@@ -48,7 +48,7 @@ def test_document_has_exact_versioned_shape(
     assert document["envelope"]["claimed_generated_at"] == "2026-07-17T01:02:03Z"
     assert document["envelope"]["signature_status"] == "not_signed"
     assert document["envelope"]["trusted_time"] is False
-    assert document["payload"]["schema_version"] == "contextsafe.receipt/0.1.0"
+    assert document["payload"]["schema_version"] == "contextsafe.receipt/0.2.0"
 
 
 def test_envelope_never_changes_payload_or_its_hash(

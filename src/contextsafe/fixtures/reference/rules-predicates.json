@@ -1,0 +1,128 @@
+{
+  "schema_version": "contextsafe.rule-set/0.2.0",
+  "rules": [
+    {
+      "rule_id": "A-I01",
+      "version": "0.1.0",
+      "case_id": "CTP-I01",
+      "checkpoint": "ehr",
+      "concept": "gender_identity",
+      "expected": {
+        "status": "specified",
+        "value": "fixture-gender-1",
+        "code_system": "urn:contextsafe:fixture"
+      },
+      "required": true
+    },
+    {
+      "rule_id": "A-I02",
+      "version": "0.1.0",
+      "case_id": "CTP-I01",
+      "checkpoint": "ehr",
+      "concept": "pronouns",
+      "expected": {
+        "status": "specified",
+        "value": "they/them"
+      },
+      "required": true,
+      "predicate": "present"
+    },
+    {
+      "rule_id": "A-I03",
+      "version": "0.1.0",
+      "case_id": "CTP-I01",
+      "checkpoint": "ehr",
+      "concept": "gender_identity",
+      "expected": {
+        "status": "specified",
+        "value": "fixture-gender-1",
+        "code_system": "urn:contextsafe:fixture"
+      },
+      "required": true,
+      "predicate": "status_preserved"
+    },
+    {
+      "rule_id": "A-I04",
+      "version": "0.1.0",
+      "case_id": "CTP-I01",
+      "checkpoint": "ehr",
+      "concept": "pronouns",
+      "expected": {
+        "status": "specified",
+        "value": "they/them"
+      },
+      "required": true,
+      "predicate": "status_preserved"
+    },
+    {
+      "rule_id": "A-I05",
+      "version": "0.1.0",
+      "case_id": "CTP-I01",
+      "checkpoint": "ehr",
+      "concept": "gender_identity",
+      "expected": {
+        "status": "specified",
+        "value": "fixture-gender-1",
+        "code_system": "urn:contextsafe:fixture"
+      },
+      "required": true,
+      "predicate": "not_overwritten_by"
+    },
+    {
+      "rule_id": "A-I06",
+      "version": "0.1.0",
+      "case_id": "CTP-I01",
+      "checkpoint": "registration",
+      "concept": "recorded_sex_or_gender",
+      "expected": {
+        "value": "X",
+        "context": "government-id",
+        "source": "synthetic-fixture"
+      },
+      "required": true,
+      "predicate": "not_coerced",
+      "forbidden": [
+        {
+          "value": "M",
+          "context": "government-id",
+          "source": "synthetic-fixture"
+        },
+        {
+          "value": "F",
+          "context": "government-id",
+          "source": "synthetic-fixture"
+        }
+      ]
+    },
+    {
+      "rule_id": "A-I07",
+      "version": "0.1.0",
+      "case_id": "CTP-I01",
+      "checkpoint": "registration",
+      "concept": "recorded_sex_or_gender",
+      "expected": {
+        "value": "X",
+        "context": "government-id",
+        "source": "synthetic-fixture"
+      },
+      "required": true,
+      "predicate": "record_count",
+      "expected_count": 1
+    },
+    {
+      "rule_id": "A-I08",
+      "version": "0.1.0",
+      "case_id": "CTP-I01",
+      "checkpoint": "ehr",
+      "concept": "name_to_use",
+      "expected": {
+        "status": "specified",
+        "value": "CSYN-ASTER",
+        "use": "usual"
+      },
+      "required": true,
+      "predicate": "preserved_across",
+      "preserved_from": "registration"
+    }
+  ]
+}

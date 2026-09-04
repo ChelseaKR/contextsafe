@@ -13,6 +13,7 @@ import os
 import re
 import subprocess
 import sys
+from html import escape
 from pathlib import Path
 from typing import Any
 
@@ -23,6 +24,7 @@ from contextsafe.errors import ContextSafeError
 from contextsafe.evaluator import evaluate
 from contextsafe.html_receipt import PAGE_KIND, render_receipt_page
 from contextsafe.i18n import SOURCE_LOCALE, load_catalog, source_catalog
+from contextsafe.models import OutcomeReason
 from contextsafe.receipt import build_receipt_document
 from contextsafe.validation import parse_bundle
 
@@ -346,3 +348,22 @@ def test_the_cli_renders_and_reports_a_bad_receipt(
     not_an_object.write_text("[]", encoding="utf-8")
     assert main(["render", "--receipt", str(not_an_object)]) == EXIT_CONTRACT_ERROR
     assert "invalid_receipt_document" in capsys.readouterr().err
+
+
+@pytest.mark.parametrize("locale", ["en-US", "es-US"])
+@pytest.mark.parametrize("reason", list(OutcomeReason))
+def test_every_published_reason_has_a_label_in_every_shipped_locale(
+    document: dict[str, Any], locale: str, reason: OutcomeReason
+) -> None:
+    """A reason the receipt contract admits must render, never fail closed.
+
+    The renderer refuses a reason with no catalog entry, which is right for an
+    unpublished value and would be a defect for a published one: every member
+    of ``OutcomeReason`` therefore needs a label in every catalog that ships.
+    """
+
+    document["payload"]["results"][0]["reason"] = reason.value
+    page = render_receipt_page(document, locale=locale)
+    label = load_catalog(locale).message(f"reason.{reason.value}").text
+    assert escape(label) in page
+    assert reason.value not in page

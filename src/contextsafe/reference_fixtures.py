@@ -1,6 +1,6 @@
 """The packaged synthetic reference fixtures, and the command that exports them.
 
-The fourteen reference inputs under ``fixtures/reference`` beside this module are
+The reference inputs under ``fixtures/reference`` beside this module are
 package data, so an installed wheel carries them exactly as a checkout does.
 Every documented quickstart names them by the relative path
 ``fixtures/reference/<name>``; ``contextsafe fixtures export`` writes them to
@@ -42,8 +42,10 @@ REFERENCE_FILES: tuple[str, ...] = (
     "mapping-lis-csv.json",
     "mapping-lis-json.json",
     "observations.json",
+    "observations-predicates.json",
     "pack-draft.json",
     "rules.json",
+    "rules-predicates.json",
 )
 """The complete reference set, named rather than globbed.
 
@@ -55,6 +57,15 @@ not the shape of any real system's export. The five ``mapping-*`` files are
 one reference mapping profile per registered importer (B-026), each binding
 that importer's reference fixture tokens to the reference case's values;
 every one says ``not_reviewed``, and none is the profile of any real system.
+
+done. Naming the files makes a missing one a failure instead.
+
+``rules-predicates.json`` and ``observations-predicates.json`` are the B-028
+pair: an ungoverned, reference-only rule set that exercises every predicate of
+the 0.2.0 rule-set contract against the same case, and the observation set it
+needs (the reference observations plus one name-to-use observation at
+registration, so a cross-checkpoint predicate has two checkpoints to read).
+They do not change ``rules.json`` or ``observations.json``.
 """
 
 DEFAULT_EXPORT_DIRECTORY = Path("fixtures") / "reference"

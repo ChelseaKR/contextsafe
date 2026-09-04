@@ -10,10 +10,18 @@ that need pack lifecycle, review signatures, HTML rendering, or
 signature verification (2, 5, 6, 7, 8) have no shipped component yet and
 are deliberately absent here.
 
+Since B-028 the generated rules name every predicate in ``RulePredicate``,
+with the field each predicate reads drawn under the same constraints the
+validator enforces, so the invariants are held over the whole predicate set
+and not only over ``exact``: a pass always carries an affirmative reason and
+at least one observation; a fail always carries a failure reason; no
+observation at the rule's checkpoint is never pass; and every reason a receipt
+publishes belongs to the status it accompanies.
+
 The same generated bundles also feed the property-layer half of the
 published receipt contract (B-033): every receipt document a generated
 bundle produces must validate against
-``schemas/contextsafe-receipt-v0.1.schema.json``.
+``schemas/contextsafe-receipt-v0.2.schema.json``.
 """
 
 import json
@@ -28,9 +36,12 @@ from contextsafe.canonical import sha256_json
 from contextsafe.errors import ContextSafeError
 from contextsafe.evaluator import Outcome, evaluate
 from contextsafe.models import (
+    AFFIRMATIVE_REASONS,
     CASE_SCHEMA_VERSION,
+    FAILURE_REASONS,
+    INDETERMINATE_REASONS,
     OBSERVATION_SCHEMA_VERSION,
-    RULE_SET_SCHEMA_VERSION,
+    PREDICATE_RULE_SET_SCHEMA_VERSION,
     Checkpoint,
     ConceptKind,
     EvaluationBundle,
@@ -42,6 +53,7 @@ from contextsafe.models import (
     Pronouns,
     RecordedSexOrGender,
     Rule,
+    RulePredicate,
     RuleSet,
     SemanticValue,
     SexParameterForClinicalUse,
@@ -56,7 +68,7 @@ from contextsafe.validation import parse_bundle
 ROOT = Path(__file__).resolve().parents[1]
 REFERENCE = REFERENCE_ROOT
 RECEIPT_SCHEMA = json.loads(
-    (ROOT / "schemas" / "contextsafe-receipt-v0.1.schema.json").read_text(
+    (ROOT / "schemas" / "contextsafe-receipt-v0.2.schema.json").read_text(
         encoding="utf-8"
     )
 )
@@ -100,17 +112,57 @@ def _semantic_values(draw: st.DrawFn, concept: ConceptKind) -> SemanticValue:
     return Pronouns(status=status, value=value)
 
 
+_STATUS_CONCEPTS = (
+    ConceptKind.GENDER_IDENTITY,
+    ConceptKind.NAME_TO_USE,
+    ConceptKind.PRONOUNS,
+)
+
+
 @st.composite
 def _rules(draw: st.DrawFn, index: int) -> Rule:
-    concept = draw(st.sampled_from(tuple(ConceptKind)))
+    """Draw one rule under the concept constraints the validator enforces."""
+
+    predicate = draw(st.sampled_from(tuple(RulePredicate)))
+    if predicate in (RulePredicate.PRESENT, RulePredicate.STATUS_PRESERVED):
+        concept = draw(st.sampled_from(_STATUS_CONCEPTS))
+    elif predicate is RulePredicate.NOT_OVERWRITTEN_BY:
+        concept = ConceptKind.GENDER_IDENTITY
+    else:
+        concept = draw(st.sampled_from(tuple(ConceptKind)))
+    checkpoint = draw(st.sampled_from(tuple(Checkpoint)))
+    expected = draw(_semantic_values(concept))
+    forbidden: tuple[SemanticValue, ...] = ()
+    if predicate is RulePredicate.NOT_COERCED:
+        forbidden = tuple(
+            item
+            for item in draw(
+                st.lists(_semantic_values(concept), min_size=1, max_size=3)
+            )
+            if item != expected
+        ) or (draw(_semantic_values(concept).filter(lambda v: v != expected)),)
     return Rule(
         rule_id=f"A-I{index:02d}",
         version="0.1.0",
         case_id=draw(st.sampled_from(("CTP-P01", "CTP-P02"))),
-        checkpoint=draw(st.sampled_from(tuple(Checkpoint))),
+        checkpoint=checkpoint,
         concept=concept,
-        expected=draw(_semantic_values(concept)),
+        expected=expected,
         required=draw(st.booleans()),
+        predicate=predicate,
+        forbidden=forbidden,
+        expected_count=(
+            draw(st.integers(min_value=1, max_value=3))
+            if predicate is RulePredicate.RECORD_COUNT
+            else None
+        ),
+        preserved_from=(
+            draw(
+                st.sampled_from(tuple(Checkpoint)).filter(lambda c: c is not checkpoint)
+            )
+            if predicate is RulePredicate.PRESERVED_ACROSS
+            else None
+        ),
     )
 
 
@@ -176,7 +228,7 @@ def _bundles(draw: st.DrawFn) -> EvaluationBundle:
     return EvaluationBundle(
         case=case,
         observations=tuple(observations),
-        rule_set=RuleSet(schema_version=RULE_SET_SCHEMA_VERSION, rules=rules),
+        rule_set=RuleSet(schema_version=PREDICATE_RULE_SET_SCHEMA_VERSION, rules=rules),
     )
 
 
@@ -186,22 +238,125 @@ def _outcome_for(rule: Rule, outcomes: tuple[Outcome, ...]) -> Outcome:
     return matched[0]
 
 
+def _rule_of(bundle: EvaluationBundle, outcome: Outcome) -> Rule:
+    return next(
+        rule for rule in bundle.rule_set.rules if rule.rule_id == outcome.rule_id
+    )
+
+
+def _at_checkpoint(bundle: EvaluationBundle, rule: Rule, checkpoint: Checkpoint) -> int:
+    return sum(
+        1
+        for item in bundle.observations
+        if item.case_id == rule.case_id
+        and item.checkpoint is checkpoint
+        and item.concept is rule.concept
+    )
+
+
 @settings(max_examples=200, deadline=None)
 @given(bundle=_bundles())
-def test_pass_requires_exactly_one_affirmative_evidence_match(
+def test_pass_requires_affirmative_evidence_under_every_predicate(
     bundle: EvaluationBundle,
 ) -> None:
-    """Invariant 1: missing or ambiguous evidence can never produce pass."""
+    """Invariant 1: missing or ambiguous evidence can never produce pass.
+
+    ``exact`` keeps its stronger form: exactly one observation whose hash is
+    the expected hash. Every other predicate still needs at least one
+    observation at the rule's checkpoint, and the single-observation
+    predicates need exactly one.
+    """
+
+    for outcome in evaluate(bundle):
+        rule = _rule_of(bundle, outcome)
+        at_checkpoint = _at_checkpoint(bundle, rule, rule.checkpoint)
+        if outcome.status.value == "pass":
+            assert outcome.observed_sha256s
+            assert at_checkpoint >= 1
+            if rule.predicate is RulePredicate.EXACT:
+                assert outcome.observed_sha256s == (outcome.expected_sha256,)
+            if rule.predicate not in (
+                RulePredicate.RECORD_COUNT,
+                RulePredicate.PRESERVED_ACROSS,
+            ):
+                assert at_checkpoint == 1
+                assert len(outcome.observed_sha256s) == 1
+            if rule.predicate is RulePredicate.PRESERVED_ACROSS:
+                assert rule.preserved_from is not None
+                assert _at_checkpoint(bundle, rule, rule.preserved_from) == 1
+                assert len(set(outcome.observed_sha256s)) == 1
+        if not outcome.observed_sha256s:
+            assert outcome.status.value in {"indeterminate", "not_applicable"}
+        if at_checkpoint == 0:
+            assert outcome.status.value in {"indeterminate", "not_applicable"}
+        if len(outcome.observed_sha256s) > 1 and rule.predicate not in (
+            RulePredicate.RECORD_COUNT,
+            RulePredicate.PRESERVED_ACROSS,
+        ):
+            assert outcome.status.value in {"indeterminate", "not_applicable"}
+
+
+@settings(max_examples=200, deadline=None)
+@given(bundle=_bundles())
+def test_every_reason_belongs_to_the_status_it_accompanies(
+    bundle: EvaluationBundle,
+) -> None:
+    """A receipt may not say pass with a failure reason, or the reverse."""
 
     for outcome in evaluate(bundle):
         if outcome.status.value == "pass":
-            assert len(outcome.observed_sha256s) == 1
-            assert outcome.observed_sha256s[0] == outcome.expected_sha256
-            assert outcome.reason == "affirmative_evidence_match"
-        if not outcome.observed_sha256s:
-            assert outcome.status.value in {"indeterminate", "not_applicable"}
-        if len(outcome.observed_sha256s) > 1:
-            assert outcome.status.value in {"indeterminate", "not_applicable"}
+            assert outcome.reason in AFFIRMATIVE_REASONS
+        elif outcome.status.value == "fail":
+            assert outcome.reason in FAILURE_REASONS
+        elif outcome.status.value == "indeterminate":
+            assert outcome.reason in INDETERMINATE_REASONS
+        else:
+            assert outcome.reason == "predeclared_not_applicable"
+
+
+@settings(max_examples=200, deadline=None)
+@given(bundle=_bundles())
+def test_unsupported_values_are_never_coerced_into_a_forbidden_one(
+    bundle: EvaluationBundle,
+) -> None:
+    """Invariant 4 over ``not_coerced``: an observation equal to a forbidden
+    value is fail, and a pass never carries a forbidden hash."""
+
+    for outcome in evaluate(bundle):
+        rule = _rule_of(bundle, outcome)
+        if rule.predicate is not RulePredicate.NOT_COERCED or not rule.required:
+            continue
+        forbidden = {sha256_json(item.to_dict()) for item in rule.forbidden}
+        if outcome.status.value == "pass":
+            assert forbidden.isdisjoint(outcome.observed_sha256s)
+        if outcome.status.value == "fail":
+            assert outcome.observed_sha256s[0] in forbidden
+
+
+@settings(max_examples=200, deadline=None)
+@given(bundle=_bundles())
+def test_a_status_that_moved_never_passes_status_preserved(
+    bundle: EvaluationBundle,
+) -> None:
+    """A-009 as an invariant: declined (or any status) that becomes another
+    status is fail, whatever the value did."""
+
+    for outcome in evaluate(bundle):
+        rule = _rule_of(bundle, outcome)
+        if rule.predicate is not RulePredicate.STATUS_PRESERVED:
+            continue
+        if outcome.status.value not in {"pass", "fail"}:
+            continue
+        observed = next(
+            item
+            for item in bundle.observations
+            if item.case_id == rule.case_id
+            and item.checkpoint is rule.checkpoint
+            and item.concept is rule.concept
+        )
+        expected_status = getattr(rule.expected, "status")  # noqa: B009 - typed union
+        observed_status = getattr(observed.value, "status")  # noqa: B009 - typed union
+        assert (outcome.status.value == "pass") == (observed_status is expected_status)
 
 
 @settings(max_examples=200, deadline=None)

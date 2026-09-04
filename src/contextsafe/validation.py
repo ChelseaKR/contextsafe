@@ -11,6 +11,7 @@ from contextsafe.models import (
     OBSERVATION_SCHEMA_VERSION,
     OBSERVATION_SET_SCHEMA_VERSION,
     RULE_SET_SCHEMA_VERSION,
+    SUPPORTED_RULE_SET_SCHEMA_VERSIONS,
     Checkpoint,
     ConceptKind,
     EvaluationBundle,
@@ -22,6 +23,7 @@ from contextsafe.models import (
     Pronouns,
     RecordedSexOrGender,
     Rule,
+    RulePredicate,
     RuleSet,
     SemanticValue,
     SexParameterForClinicalUse,
@@ -83,6 +85,36 @@ location before conversion, instead of the converted document being rejected
 here at a path the source never had. The set is the contract's, not the
 reader's: nothing else may extend it, and nothing maps a value into it.
 """
+_RULE_KEYS = frozenset(
+    {"rule_id", "version", "case_id", "checkpoint", "concept", "expected", "required"}
+)
+_PREDICATE_FIELDS: dict[RulePredicate, frozenset[str]] = {
+    RulePredicate.EXACT: frozenset(),
+    RulePredicate.PRESENT: frozenset(),
+    RulePredicate.STATUS_PRESERVED: frozenset(),
+    RulePredicate.NOT_COERCED: frozenset({"forbidden"}),
+    RulePredicate.RECORD_COUNT: frozenset({"expected_count"}),
+    RulePredicate.PRESERVED_ACROSS: frozenset({"preserved_from"}),
+    RulePredicate.NOT_OVERWRITTEN_BY: frozenset(),
+}
+"""The one field each predicate reads; any other predicate field is unknown."""
+_STATUS_CONCEPTS = frozenset(
+    {ConceptKind.GENDER_IDENTITY, ConceptKind.NAME_TO_USE, ConceptKind.PRONOUNS}
+)
+"""Concepts whose values carry presence semantics (a ``status``)."""
+_PREDICATE_CONCEPTS: dict[RulePredicate, frozenset[ConceptKind]] = {
+    RulePredicate.PRESENT: _STATUS_CONCEPTS,
+    RulePredicate.STATUS_PRESERVED: _STATUS_CONCEPTS,
+    RulePredicate.NOT_OVERWRITTEN_BY: frozenset({ConceptKind.GENDER_IDENTITY}),
+}
+"""Predicates that are only meaningful for some concepts.
+
+``present`` and ``status_preserved`` on a concept with no status would pass on
+every observation, and A-011 is a claim about gender identity. A rule that
+would be vacuously true is rejected rather than allowed to look like evidence.
+"""
+_MAX_FORBIDDEN = 16
+_MAX_EXPECTED_COUNT = 64
 
 
 def _error(code: str, path: str, message: str) -> ContextSafeError:
@@ -541,32 +573,126 @@ def parse_observations(value: object) -> tuple[Observation, ...]:
     return observations
 
 
-def _rule(value: object, path: str) -> Rule:
-    data = _object(value, path)
-    _exact_keys(
-        data,
-        frozenset(
-            {
-                "rule_id",
-                "version",
-                "case_id",
-                "checkpoint",
-                "concept",
-                "expected",
-                "required",
-            }
-        ),
-        path,
+def _rule_keys(
+    data: dict[str, object], path: str, *, predicates: bool
+) -> RulePredicate:
+    """Return the rule's predicate after checking its key set fails closed.
+
+    Under the 0.1.0 shape no predicate key exists at all. Under 0.2.0 the
+    predicate is optional and defaults to ``exact``; the field a predicate
+    reads is required for that predicate and unknown for every other.
+    """
+
+    if not predicates:
+        _exact_keys(data, _RULE_KEYS, path)
+        return RulePredicate.EXACT
+    predicate = RulePredicate.EXACT
+    if "predicate" in data:
+        predicate = _enum(RulePredicate, data["predicate"], f"{path}.predicate")
+    specific = _PREDICATE_FIELDS[predicate]
+    unexpected = data.keys() - _RULE_KEYS - {"predicate"} - specific
+    if unexpected:
+        raise _error("unknown_field", path, "field is not allowed for this predicate")
+    missing = sorted((_RULE_KEYS | specific) - data.keys())
+    if missing:
+        raise _error(
+            "missing_field", f"{path}.{missing[0]}", "required field is missing"
+        )
+    return predicate
+
+
+def _forbidden(
+    data: dict[str, object], path: str, concept: ConceptKind, expected: SemanticValue
+) -> tuple[SemanticValue, ...]:
+    raw = _array(data["forbidden"], f"{path}.forbidden")
+    if not raw or len(raw) > _MAX_FORBIDDEN:
+        raise _error(
+            "invalid_forbidden_set",
+            f"{path}.forbidden",
+            f"between 1 and {_MAX_FORBIDDEN} forbidden values are required",
+        )
+    forbidden = tuple(
+        _semantic_value(concept, item, f"{path}.forbidden[{index}]")
+        for index, item in enumerate(raw)
     )
+    if len(set(forbidden)) != len(forbidden):
+        raise _error(
+            "duplicate_forbidden_value", f"{path}.forbidden", "values must be unique"
+        )
+    if expected in forbidden:
+        raise _error(
+            "forbidden_expected_conflict",
+            f"{path}.forbidden",
+            "the expected value cannot also be forbidden",
+        )
+    return forbidden
+
+
+def _expected_count(data: dict[str, object], path: str) -> int:
+    value = data["expected_count"]
+    if (
+        isinstance(value, bool)
+        or not isinstance(value, int)
+        or not 1 <= value <= _MAX_EXPECTED_COUNT
+    ):
+        raise _error(
+            "invalid_expected_count",
+            f"{path}.expected_count",
+            f"expected an integer between 1 and {_MAX_EXPECTED_COUNT}",
+        )
+    return value
+
+
+def _preserved_from(
+    data: dict[str, object], path: str, checkpoint: Checkpoint
+) -> Checkpoint:
+    preserved_from = _enum(Checkpoint, data["preserved_from"], f"{path}.preserved_from")
+    if preserved_from is checkpoint:
+        raise _error(
+            "invalid_checkpoint_pair",
+            f"{path}.preserved_from",
+            "preserved_from must name a different checkpoint",
+        )
+    return preserved_from
+
+
+def _rule(value: object, path: str, *, predicates: bool) -> Rule:
+    data = _object(value, path)
+    predicate = _rule_keys(data, path, predicates=predicates)
     concept = _enum(ConceptKind, data["concept"], f"{path}.concept")
+    allowed_concepts = _PREDICATE_CONCEPTS.get(predicate)
+    if allowed_concepts is not None and concept not in allowed_concepts:
+        raise _error(
+            "predicate_concept_mismatch",
+            f"{path}.predicate",
+            "predicate is not defined for this concept",
+        )
+    checkpoint = _enum(Checkpoint, data["checkpoint"], f"{path}.checkpoint")
+    expected = _semantic_value(concept, data["expected"], f"{path}.expected")
     return Rule(
         rule_id=_string(data["rule_id"], f"{path}.rule_id", pattern=_RULE_ID),
         version=_string(data["version"], f"{path}.version", pattern=_SEMVER),
         case_id=_string(data["case_id"], f"{path}.case_id", pattern=_CASE_ID),
-        checkpoint=_enum(Checkpoint, data["checkpoint"], f"{path}.checkpoint"),
+        checkpoint=checkpoint,
         concept=concept,
-        expected=_semantic_value(concept, data["expected"], f"{path}.expected"),
+        expected=expected,
         required=_boolean(data["required"], f"{path}.required"),
+        predicate=predicate,
+        forbidden=(
+            _forbidden(data, path, concept, expected)
+            if predicate is RulePredicate.NOT_COERCED
+            else ()
+        ),
+        expected_count=(
+            _expected_count(data, path)
+            if predicate is RulePredicate.RECORD_COUNT
+            else None
+        ),
+        preserved_from=(
+            _preserved_from(data, path, checkpoint)
+            if predicate is RulePredicate.PRESERVED_ACROSS
+            else None
+        ),
     )
 
 
@@ -577,12 +703,13 @@ def parse_rule_set(value: object) -> RuleSet:
     data = _object(value, "$")
     _exact_keys(data, frozenset({"schema_version", "rules"}), "$")
     schema_version = _string(data["schema_version"], "$.schema_version")
-    if schema_version != RULE_SET_SCHEMA_VERSION:
+    if schema_version not in SUPPORTED_RULE_SET_SCHEMA_VERSIONS:
         raise _error(
             "unsupported_schema", "$.schema_version", "rule-set schema is unsupported"
         )
+    predicates = schema_version != RULE_SET_SCHEMA_VERSION
     rules = tuple(
-        _rule(item, f"$.rules[{index}]")
+        _rule(item, f"$.rules[{index}]", predicates=predicates)
         for index, item in enumerate(_array(data["rules"], "$.rules"))
     )
     ids = [rule.rule_id for rule in rules]
@@ -621,10 +748,46 @@ def parse_bundle(
         ConceptKind.PRONOUNS: (case.pronouns,),
     }
     for index, rule in enumerate(rule_set.rules):
-        if rule.expected not in case_values[rule.concept]:
-            raise _error(
-                "rule_expectation_mismatch",
-                f"$.rules[{index}].expected",
-                "rule expectation must be declared by the case manifest",
-            )
+        _check_rule_against_case(rule, case_values[rule.concept], f"$.rules[{index}]")
     return EvaluationBundle(case=case, observations=observations, rule_set=rule_set)
+
+
+def _check_rule_against_case(
+    rule: Rule, declared: tuple[SemanticValue, ...], path: str
+) -> None:
+    """Refuse a rule the case manifest contradicts.
+
+    A rule can only expect what the manifest declares (every predicate), can
+    only forbid what the manifest does not declare (``not_coerced``), can only
+    demand presence of a value the manifest specifies (``present``), and can
+    only count the records the manifest carries (``record_count``). Each of
+    these would otherwise be a rule that could not pass or could not fail.
+    """
+
+    if rule.expected not in declared:
+        raise _error(
+            "rule_expectation_mismatch",
+            f"{path}.expected",
+            "rule expectation must be declared by the case manifest",
+        )
+    if any(item in declared for item in rule.forbidden):
+        raise _error(
+            "forbidden_case_conflict",
+            f"{path}.forbidden",
+            "a forbidden value cannot be declared by the case manifest",
+        )
+    if (
+        rule.predicate is RulePredicate.PRESENT
+        and getattr(rule.expected, "status", None) is not ValueStatus.SPECIFIED
+    ):
+        raise _error(
+            "predicate_expectation_mismatch",
+            f"{path}.expected",
+            "present requires an expected value with specified status",
+        )
+    if rule.expected_count is not None and rule.expected_count != len(declared):
+        raise _error(
+            "rule_count_mismatch",
+            f"{path}.expected_count",
+            "expected_count must equal the records the case manifest declares",
+        )

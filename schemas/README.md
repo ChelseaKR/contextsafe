@@ -5,7 +5,7 @@ document shape. They are the published half of the fail-closed boundary: the
 runtime has no dependencies and does not validate its own output at run time,
 so these files are what a consumer validates against, and
 `tests/test_contracts.py` and `tests/test_receipt_schema.py` are what keep them
-in agreement with the code. There are fifteen contracts:
+in agreement with the code. There are sixteen contracts:
 
 | Contract | Shape |
 | --- | --- |
@@ -20,12 +20,13 @@ in agreement with the code. There are fifteen contracts:
 | `contextsafe-engagement-v1.schema.json` | an engagement declaration |
 | `contextsafe-plan-v1.schema.json` | an execution plan |
 | `contextsafe-compiled-plan-v1.schema.json` | the unsigned compiled plan |
-| `contextsafe-receipt-v0.1.schema.json` | the receipt document: deterministic payload plus untrusted envelope |
+| `contextsafe-receipt-v0.2.schema.json` | the receipt document: deterministic payload plus untrusted envelope; 0.2 widens the closed outcome-reason set for the rule-set predicates and changes nothing else |
+| `contextsafe-rule-set-v0.2.schema.json` | a deterministic fixture rule set whose rules may name a closed, reference-only predicate; the exact-only 0.1.0 shape has no separate schema and is still accepted by the runtime |
 | `contextsafe-lis-export-v0.1.schema.json` | the synthetic LIS export identity profile `import --format lis-json` reads; reference-only, ungoverned, result columns recognized but not observed |
 | `contextsafe-mapping-profile-v1.schema.json` | a versioned mapping profile: one importer format's token table, from source token to canonical concept and value; reference-only, the only review status is `not_reviewed`, and no row may reach SPCU from GI or RSG |
 | `contextsafe-compiled-mapping-profile-v1.schema.json` | the unsigned compiled mapping profile `mapping validate` emits: the canonical profile and its digest, `signature_status: not_verified`, `executable: false` |
 
-That is fifteen contracts. The LIS export profile and the mapping profile are
+That is sixteen contracts. The LIS export profile and the mapping profile are
 *input* shapes rather than output ones: they say what `contextsafe import
 --format lis-json` and `contextsafe import --mapping` will read, and
 `tests/test_lis_export_schema.py` and `tests/test_mapping_profile_schema.py`
@@ -73,3 +74,13 @@ These are pre-1.0. `v0.1` in a filename means the shape may still change; `v1`
 means the shape is settled for the v1 boundary but the project itself is
 pre-release. Nothing here has been tagged or released, so the contracts carry
 no stability guarantee yet beyond the tests in this repository.
+
+When a closed set in a published contract widens, the contract's version moves
+with it: the `schema_version` constant the runtime emits, the filename, and the
+`$id` change together, and the previous file is not kept beside the new one.
+The receipt contract went from 0.1 to 0.2 this way when the rule-set predicates
+added outcome reasons, so a consumer pinned to the 0.1 `$id` rejects a 0.2
+receipt on its `schema_version` rather than accepting a reason it has never
+seen. The rule-set contract's 0.1.0 shape is the one exception to "one file per
+contract": it predates the published schemas, is still accepted unchanged by
+the runtime and pinned by the pack contract, and has no file here.

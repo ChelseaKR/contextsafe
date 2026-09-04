@@ -370,6 +370,34 @@ community reviewer has confirmed; the `mapping sign` command, a signer key,
 a trust manifest, and the enrolled ContextSafe interoperability reviewer it
 needs all wait on B-035; and the sibling `contextsafe-observation-v1`
 contract, which no runtime parser reads, carries no profile binding.
+Implementation note (2026-09-04, B-028): the identity, name-to-use, pronoun,
+and recorded-sex-or-gender predicates of A-005 and A-008 to A-015 exist as
+mechanism. A rule set declaring `contextsafe.rule-set/0.2.0` may name one of a
+closed set — `exact` (the default), `present`, `status_preserved`,
+`not_coerced`, `record_count`, `preserved_across`, `not_overwritten_by` — each
+a pure function in `src/contextsafe/evaluator.py` with one affirmative and one
+failure reason in the receipt contract, which moved to 0.2 for those reasons.
+Missing or ambiguous evidence stays indeterminate under every predicate; a rule
+that would be vacuous for its concept, or that the case manifest contradicts,
+is refused; and the 0.1.0 rule-set shape, the reference `rules.json`, and the
+pack contract that pins it are untouched. A second ungoverned reference pair
+(`rules-predicates.json`, `observations-predicates.json`) exercises every
+predicate against CTP-I01, and `tests/fixtures/seeded-faults/` carries F-004,
+F-005, F-006, F-007, F-008, F-010, and F-031 with tests proving each is
+reported as fail with its own reason and never as pass. B-028 is not closed:
+the predicates are reference-only and ungoverned, because B-010 — the authored
+assertions with applicability, evidence, severity rubric, and clinical,
+laboratory, and community approval — has not happened, and no predicate here
+is an approved assertion; A-006, A-007, and A-015 (patient-facing display,
+legal-name contexts, expired name history) need a display observation and a
+name period the observation contract does not carry; `not_coerced` compares
+whole typed values, so a coercion that also rewrites context or source is the
+paired `exact` rule's to catch; `preserved_across` states preservation, not
+correctness; and a 0.2.0 rule set is refused as a pack component
+(`incompatible_component`) until the pack contract's `rule_set_schema` pin is
+revisited, which is a contract decision for the maintainer. The receipt
+contract file the B-033 note above names is now
+`schemas/contextsafe-receipt-v0.2.schema.json`.
 
 ## Phase 4 — review and receipts
 

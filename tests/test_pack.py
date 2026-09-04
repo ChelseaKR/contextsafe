@@ -602,3 +602,30 @@ def test_pack_compiler_rejects_additional_stale_or_tampered_states(
         compile_pack(pack, root=REFERENCE, as_of=AS_OF)
 
     assert raised.value.code == expected_code
+
+
+def test_pack_refuses_a_predicate_rule_set_component_by_name(tmp_path: Path) -> None:
+    """The pack contract pins the exact-only 0.1.0 rule-set shape.
+
+    A 0.2.0 rule set parses on its own, but it is not a pack component until
+    the pack contract says so. The refusal names the component rather than
+    surfacing later as a manifest relationship error, and the hash is correct
+    so that the version check, not the hash check, is what fires.
+    """
+
+    shutil.copyfile(REFERENCE / "case.json", tmp_path / "case.json")
+    rules = json.loads((REFERENCE / "rules.json").read_text(encoding="utf-8"))
+    rules["schema_version"] = "contextsafe.rule-set/0.2.0"
+    rules["rules"][0]["predicate"] = "present"
+    (tmp_path / "rules.json").write_text(json.dumps(rules), encoding="utf-8")
+    pack = _valid_pack()
+    pack["components"]["rule_sets"][0]["sha256"] = sha256_json(
+        parse_rule_set(rules).to_dict()
+    )
+    _bind_test_approvals(pack)
+
+    with pytest.raises(ContextSafeError) as raised:
+        compile_pack(pack, root=tmp_path, as_of=AS_OF)
+
+    assert raised.value.code == "incompatible_component"
+    assert raised.value.path == "$.components.rule_sets"

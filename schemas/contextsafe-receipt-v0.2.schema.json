@@ -1,8 +1,8 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://contextsafe.invalid/schemas/contextsafe-receipt-v0.1.schema.json",
-  "title": "ContextSafe evaluation receipt document 0.1",
-  "$comment": "Pre-1.0 shape of the contextsafe-receipt-v1.schema.json listed in docs/04-ARCHITECTURE.md section 8; the published payload is the iteration-4 claim-minimal payload, not a reviewed pilot receipt. The document root carries the untrusted envelope, the deterministic payload, and the payload hash. #/$defs/deterministic_payload is the standalone contract for the hashed payload. JSON Schema validates structure only; ContextSafe tests additionally verify payload_sha256 agreement and enum parity with the runtime status, reason, checkpoint, and concept types.",
+  "$id": "https://contextsafe.invalid/schemas/contextsafe-receipt-v0.2.schema.json",
+  "title": "ContextSafe evaluation receipt document 0.2",
+  "$comment": "Pre-1.0 shape of the contextsafe-receipt-v1.schema.json listed in docs/04-ARCHITECTURE.md section 8; the published payload is the iteration-4 claim-minimal payload, not a reviewed pilot receipt. 0.2 widens the outcome reason set for the B-028 identity predicates (one affirmative and one failure reason per predicate) and changes nothing else; a 0.1 document differs only in its payload schema_version and does not validate here, by design. The document root carries the untrusted envelope, the deterministic payload, and the payload hash. #/$defs/deterministic_payload is the standalone contract for the hashed payload. JSON Schema validates structure only; ContextSafe tests additionally verify payload_sha256 agreement and enum parity with the runtime status, reason, checkpoint, and concept types.",
   "x-contextsafe-semantic-constraints": [
     "payload_sha256 equals the SHA-256 of the canonical JSON encoding of payload",
     "the pinned limitations bound this document only; F-030 also requires every rendered report derived from it to present each disclosure, which no JSON Schema can check",
@@ -67,7 +67,7 @@
         "summary"
       ],
       "properties": {
-        "schema_version": {"const": "contextsafe.receipt/0.1.0"},
+        "schema_version": {"const": "contextsafe.receipt/0.2.0"},
         "case_id": {"$ref": "#/$defs/case_id"},
         "hashes": {
           "type": "object",
@@ -177,12 +177,25 @@
           "items": {"$ref": "#/$defs/sha256"}
         },
         "reason": {
+          "$comment": "One affirmative and one failure reason per predicate in the rule-set 0.2 contract, plus the three evidence-state reasons. A pass may carry only an affirmative reason, a fail only a failure reason, and an indeterminate only missing_evidence or ambiguous_evidence; tests/test_property_invariants.py holds that partition.",
           "enum": [
             "affirmative_evidence_match",
             "ambiguous_evidence",
             "missing_evidence",
             "predeclared_not_applicable",
-            "semantic_mismatch"
+            "semantic_mismatch",
+            "value_present",
+            "value_not_present",
+            "status_preserved",
+            "status_not_preserved",
+            "value_not_coerced",
+            "value_coerced",
+            "record_count_preserved",
+            "record_count_changed",
+            "value_preserved_across_checkpoints",
+            "value_changed_across_checkpoints",
+            "value_not_overwritten",
+            "overwritten_by_other_concept"
           ]
         },
         "rule_id": {"type": "string", "pattern": "^A-I[0-9]{2}$"},
