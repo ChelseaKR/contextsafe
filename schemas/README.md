@@ -5,7 +5,7 @@ document shape. They are the published half of the fail-closed boundary: the
 runtime has no dependencies and does not validate its own output at run time,
 so these files are what a consumer validates against, and
 `tests/test_contracts.py` and `tests/test_receipt_schema.py` are what keep them
-in agreement with the code. There are sixteen contracts:
+in agreement with the code. There are seventeen contracts:
 
 `tests/test_contracts.py`, `tests/test_receipt_schema.py`, and
 `tests/test_receipt_delta_schema.py` are what keep them in agreement with the
@@ -30,7 +30,7 @@ code.
 | `contextsafe-mapping-profile-v1.schema.json` | a versioned mapping profile: one importer format's token table, from source token to canonical concept and value; reference-only, the only review status is `not_reviewed`, and no row may reach SPCU from GI or RSG |
 | `contextsafe-compiled-mapping-profile-v1.schema.json` | the unsigned compiled mapping profile `mapping validate` emits: the canonical profile and its digest, `signature_status: not_verified`, `executable: false` |
 
-That is sixteen contracts. The LIS export profile and the mapping profile are
+That is seventeen contracts. The LIS export profile and the mapping profile are
 *input* shapes rather than output ones: they say what `contextsafe import
 --format lis-json` and `contextsafe import --mapping` will read, and
 `tests/test_lis_export_schema.py` and `tests/test_mapping_profile_schema.py`
@@ -38,7 +38,6 @@ keep each in agreement with the runtime's allowlists and grammars. Neither
 is a claim that any laboratory system exports this shape or that any
 interoperability reviewer has approved a mapping.
 
-| `contextsafe-receipt-v0.1.schema.json` | the receipt document: deterministic payload plus untrusted envelope |
 | `contextsafe-receipt-delta-v0.1.schema.json` | the envelope-free delta between two compatible receipt documents (reference-only, ungoverned) |
 
 ## Why every `$id` is under a domain that will never resolve
