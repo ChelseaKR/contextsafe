@@ -11,6 +11,39 @@ rather than after it.
 
 ### Fixed
 
+- **The full-history secret scan has been red on `main` since B-026 landed, on
+  four false positives.** gitleaks' `generic-api-key` rule reads
+  `SOURCE_TOKEN_PATTERN, max_length=96` as a credential because the assignment
+  follows a constant whose name contains TOKEN, and reads
+  `{"token": "CSYN-9876543210"}` as one too -- that being the value in
+  `tests/test_mapping_profile.py` whose whole purpose is to prove such a value
+  is refused. A repository about synthetic identity tokens was always going to
+  meet this rule.
+
+  There is now a `.gitleaks.toml`: the default ruleset, extended, plus the
+  narrowest allowlist that makes it usable. Three entries, each a false
+  positive verified by hand, each carrying its reason. Two of them are this
+  project's own published synthetic-token grammar, which is the namespace that
+  exists so a real identifier cannot be mistaken for a fixture one.
+
+  The config is passed to all three phases explicitly rather than discovered.
+  gitleaks looks for a config beside its `--source`, and phase 2's source is a
+  temporary directory of materialized object blobs, so discovery would have
+  applied the allowlist to two phases out of three and silently not to the one
+  that exists to read what the other two cannot see. A missing config is now
+  exit 2, "I did not examine", alongside an absent scanner and an unpinned one.
+
+  An allowlist is a hole in a gate, so its boundary is pinned rather than
+  asserted in a comment: `tests/test_secret_scan_allowlist.py` checks that each
+  entry admits the shape it exists for and that no credential shape passes,
+  including a credential sitting beside an allowed token, which is what an
+  unanchored allowlist would have swallowed. Those credential shapes are joined
+  at run time from parts, because written whole they are real findings for the
+  scanner under test -- they were, on this file's first run -- and a literal
+  would be folded into the `.pyc` as well.
+
+### Fixed
+
 - **A mapping profile could write a name into an observation.** Every target
   value is held to the synthetic grammar except the one field whose purpose is
   to carry a person's name: `_target_problem` returned `None` for a name to use

@@ -91,6 +91,19 @@ GITLEAKS_BIN="${GITLEAKS_BIN:-gitleaks}"
 repo_root="$(git rev-parse --show-toplevel)"
 cd "$repo_root"
 
+# Passed explicitly to every phase. gitleaks discovers a config beside its
+# --source, and phase 2's source is a temporary directory of object blobs, so
+# discovery would apply the allowlist to two phases out of three and silently
+# not to the one that reads unreachable objects.
+gitleaks_config="${GITLEAKS_CONFIG:-$repo_root/.gitleaks.toml}"
+if [ ! -f "$gitleaks_config" ]; then
+  echo "secret-scan: no gitleaks config at '${gitleaks_config}'." >&2
+  echo "  The allowlist is part of this gate; running without it would change" >&2
+  echo "  what the gate can see without saying so." >&2
+  echo "secret-scan: this is a failure to run the scan, not a clean result." >&2
+  exit 2
+fi
+
 if ! command -v "$GITLEAKS_BIN" >/dev/null 2>&1; then
   echo "secret-scan: gitleaks not found (looked for '${GITLEAKS_BIN}')." >&2
   echo "  macOS:  brew install gitleaks" >&2
@@ -119,6 +132,7 @@ echo "secret-scan: [1/3] all reachable commits on all refs"
 "$GITLEAKS_BIN" detect \
   --source . \
   --log-opts="--all --full-history" \
+  --config "$gitleaks_config" \
   --redact \
   --exit-code 1 \
   --no-banner
@@ -211,6 +225,7 @@ fi
 "$GITLEAKS_BIN" detect \
   --source "$objects_dir" \
   --no-git \
+  --config "$gitleaks_config" \
   --redact \
   --exit-code 1 \
   --no-banner
@@ -220,6 +235,7 @@ echo "secret-scan: [3/3] working tree, including untracked files"
 "$GITLEAKS_BIN" detect \
   --source . \
   --no-git \
+  --config "$gitleaks_config" \
   --redact \
   --exit-code 1 \
   --no-banner
