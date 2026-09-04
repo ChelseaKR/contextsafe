@@ -493,11 +493,13 @@ published in
 `present`, the value has status `specified`; `status_preserved`, the observed
 status equals the expected status and the value is not consulted, so a
 declined gender identity or pronoun stays declined and never becomes unknown,
-absent, or a value; `not_coerced`, the observed value hash is in none of the
-hashes of a closed `forbidden` set the rule carries in fixture tokens, which
-decides whole-value membership and nothing wider (an X recorded sex or gender
-rewritten to the M or F the set names is caught; one rewritten together with
-its context or source is the paired `exact` rule's to catch);
+absent, or a value; `not_coerced`, the observed value's presence status and
+scalar are those of none of a closed `forbidden` set the rule carries in
+fixture tokens, so an X or unknown recorded sex or gender rewritten to the M
+or F the set names is a coercion whether or not the boundary also stamped its
+own context or source on the record, and a declined, unknown, or absent
+gender identity or pronoun rewritten to a value is a coercion whatever code
+system came with it;
 `record_count`, exactly `expected_count` distinct records remain;
 `preserved_across`, the same value hash at `preserved_from` and at the rule's
 checkpoint; and `not_overwritten_by`, the observed gender identity is not the
@@ -520,12 +522,19 @@ Its limits are the point. The predicates are mechanism for A-005 and A-008 to
 A-015 in [Data and evidence §5](docs/05-DATA-AND-EVIDENCE.md), not approved
 assertions: no clinical, laboratory, or community review has looked at any
 rule that uses them, and the rule sets that do are labelled reference-only.
-`not_coerced` compares whole typed values, so a coercion that also rewrites a
-value's context or source is outside its forbidden set and is the paired
-`exact` rule's to catch; the reference pair ships that pairing (A-I09 beside
-A-I06), and a test holds that the rewritten-context coercion turns the receipt
-through A-I09 while A-I06 alone reports `pass`. `preserved_across` says a
-value did not change between two boundaries, not that it was right at either.
+`not_coerced` decides status and scalar and nothing else: the faithful X
+carried under a different context is not a coercion and passes it, and the
+`exact` rule the reference pair ships beside it (A-I09 beside A-I06) is what
+reports that the record is no longer the declared one, so a receipt says
+which claim turned. On the recorded-sex-or-gender concept the value set is
+F, M, X, and unknown, so "absent" in A-014 is only expressible through a
+status-bearing concept (gender identity, name to use, pronouns), which is how
+F-008 carries it. Every single-observation predicate, `not_coerced` among
+them, reports `indeterminate` with `ambiguous_evidence` when a checkpoint
+carries two records of the concept, so a multi-record case such as CTP-I10
+cannot be evaluated for A-014 at all until the observation contract can name
+which record a rule reads. `preserved_across` says a value did not change
+between two boundaries, not that it was right at either.
 A `not_overwritten_by` rule whose expected gender identity scalar the case
 manifest also declares under another concept could never pass, so
 `parse_bundle` refuses it (`overwritten_expectation_conflict`) rather than

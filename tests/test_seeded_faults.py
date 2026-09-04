@@ -27,6 +27,7 @@ from typing import Any
 import pytest
 from jsonschema import Draft202012Validator
 
+from contextsafe.canonical import sha256_json
 from contextsafe.evaluator import Outcome, evaluate
 from contextsafe.models import (
     FAILURE_REASONS,
@@ -155,6 +156,47 @@ def test_the_declined_fault_would_pass_if_declined_became_declined_again() -> No
         clean = _load(FAULTS / "clean" / "CTP-I07.json")
         document["observations"] = clean["observations"]
         assert all(item.status is OutcomeStatus.PASSED for item in _outcomes(document))
+
+
+@pytest.mark.parametrize(
+    "restamp",
+    [
+        {"context": "payer"},
+        {"source": "interface-engine"},
+        {"context": "payer", "source": "interface-engine"},
+    ],
+    ids=["context", "source", "both"],
+)
+@pytest.mark.parametrize("name", ["F-007", "F-008"])
+def test_the_coercion_faults_are_still_detected_when_the_boundary_restamps_the_record(
+    name: str, restamp: dict[str, str]
+) -> None:
+    """F-007 and F-008 with the boundary's own context or source on the record.
+
+    The coerced value then hashes like nothing in the forbidden set, and the
+    detector must still report ``fail``/``value_coerced``: A-014 is a claim
+    about the value, and a boundary that relabels what it rewrote does not
+    earn a pass for it.
+    """
+
+    document = _load(FAULTS / f"{name}.json")
+    _, rule_id, reason = EXPECTED_DETECTION[name]
+    coerced = next(
+        item
+        for item in document["observations"]["observations"]
+        if item["concept"] == "recorded_sex_or_gender"
+    )
+    coerced["value"].update(restamp)
+    bundle = parse_bundle(document["case"], document["observations"], document["rules"])
+    detector = _by_rule(evaluate(bundle), rule_id)
+    forbidden_hashes = {
+        sha256_json(item.to_dict())
+        for rule in bundle.rule_set.rules
+        for item in rule.forbidden
+    }
+    assert detector.status is OutcomeStatus.FAIL
+    assert detector.reason is reason
+    assert forbidden_hashes.isdisjoint(detector.observed_sha256s)
 
 
 def test_no_fault_fixture_carries_a_non_synthetic_identifier() -> None:

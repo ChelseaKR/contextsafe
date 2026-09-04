@@ -147,7 +147,7 @@ class RulePredicate(StrEnum):
     """The observed status equals the expected status; value ignored (A-009)."""
 
     NOT_COERCED = "not_coerced"
-    """The observed hash is in none of the rule's forbidden hashes (A-014)."""
+    """The observed status and scalar are none of the rule's forbidden (A-014)."""
 
     RECORD_COUNT = "record_count"
     """Exactly ``expected_count`` distinct records were observed (A-013)."""
@@ -243,6 +243,28 @@ type SemanticValue = (
     | NameToUse
     | Pronouns
 )
+
+
+def coercion_key(value: SemanticValue) -> tuple[str, str | None]:
+    """Return the projection of a value that A-014 is a claim about.
+
+    A coercion rewrites what a value says (X becomes F, declined becomes a
+    value), not the descriptors around it. The key is therefore the presence
+    status and the scalar, and nothing else: a recorded sex or gender's
+    context and source, a gender identity's code system, and an SPCU's order
+    context are outside it, so a boundary that stamps its own context or
+    source on a coerced record is still reported as a coercion. Recorded sex
+    or gender and SPCU carry no status field and are specified by
+    construction. The key is a comparison key only; receipts still carry the
+    whole-value hash.
+    """
+
+    status = (
+        value.status
+        if isinstance(value, GenderIdentity | NameToUse | Pronouns)
+        else ValueStatus.SPECIFIED
+    )
+    return (status.value, value.value)
 
 
 @dataclass(frozen=True, slots=True)

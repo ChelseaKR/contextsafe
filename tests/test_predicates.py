@@ -16,6 +16,7 @@ from typing import Any
 
 import pytest
 
+from contextsafe.canonical import sha256_json
 from contextsafe.errors import ContextSafeError
 from contextsafe.evaluator import Outcome, evaluate
 from contextsafe.models import (
@@ -256,19 +257,47 @@ def test_expected_count_of_exactly_the_bound_is_accepted(
 def test_a_forbidden_set_of_exactly_the_bound_is_accepted(
     predicate_rules_json: dict[str, Any],
 ) -> None:
-    forbidden = [
-        {"value": "M", "context": f"context-{index}", "source": "synthetic-fixture"}
+    rule = _rule(predicate_rules_json, "A-I02")
+    rule["predicate"] = "not_coerced"
+    rule["forbidden"] = [
+        {"status": "specified", "value": f"fixture-pronoun-{index}"}
         for index in range(16)
     ]
-    _rule(predicate_rules_json, "A-I06")["forbidden"] = forbidden
-    assert len(parse_rule_set(predicate_rules_json).rules[5].forbidden) == 16
+    assert len(parse_rule_set(predicate_rules_json).rules[1].forbidden) == 16
 
 
-def test_the_expected_value_cannot_also_be_forbidden(
+def test_a_forbidden_scalar_repeated_under_another_context_is_a_duplicate(
     predicate_rules_json: dict[str, Any],
 ) -> None:
+    """Two entries that say M are one forbidden value, whatever their context;
+    a set that lists it twice is ambiguous about what it forbids and is
+    refused rather than read as sixteen distinct values."""
+
+    _rule(predicate_rules_json, "A-I06")["forbidden"] = [
+        RSG_M,
+        {"value": "M", "context": "payer", "source": "synthetic-fixture"},
+    ]
+    _assert_code("duplicate_forbidden_value", parse_rule_set, predicate_rules_json)
+
+
+@pytest.mark.parametrize(
+    "restamped",
+    [
+        {"value": "X", "context": "payer", "source": "synthetic-fixture"},
+        {"value": "X", "context": "government-id", "source": "interface-engine"},
+    ],
+    ids=["context", "source"],
+)
+def test_the_expected_value_cannot_also_be_forbidden(
+    predicate_rules_json: dict[str, Any], restamped: dict[str, Any]
+) -> None:
+    """Forbidding the expected scalar under any context is the same
+    contradiction as forbidding the expected value itself."""
+
     rule = _rule(predicate_rules_json, "A-I06")
     rule["forbidden"] = [RSG_M, rule["expected"]]
+    _assert_code("forbidden_expected_conflict", parse_rule_set, predicate_rules_json)
+    rule["forbidden"] = [RSG_M, restamped]
     _assert_code("forbidden_expected_conflict", parse_rule_set, predicate_rules_json)
 
 
@@ -302,15 +331,47 @@ def test_a_predicate_that_would_be_vacuous_for_a_concept_is_refused(
 # --- cross-document checks in parse_bundle -----------------------------------
 
 
+@pytest.mark.parametrize(
+    "declared",
+    [RSG_F, {"value": "F", "context": "payer", "source": "synthetic-fixture"}],
+    ids=["same-context", "other-context"],
+)
 def test_a_forbidden_value_the_case_declares_is_refused(
     case_json: dict[str, Any],
     predicate_observations_json: dict[str, Any],
     predicate_rules_json: dict[str, Any],
+    declared: dict[str, Any],
 ) -> None:
-    case_json["concepts"]["recorded_sex_or_gender"].append(RSG_F)
+    """A manifest that legitimately carries F in a payer context contradicts
+    a rule forbidding F in any context: the faithful record would be reported
+    as a coercion, so the bundle is refused before it is evaluated."""
+
+    case_json["concepts"]["recorded_sex_or_gender"].append(declared)
     _rule(predicate_rules_json, "A-I07")["expected_count"] = 2
     _assert_code(
         "forbidden_case_conflict",
+        parse_bundle,
+        case_json,
+        predicate_observations_json,
+        predicate_rules_json,
+    )
+
+
+def test_record_count_refuses_a_manifest_that_declares_one_record_twice(
+    case_json: dict[str, Any],
+    predicate_observations_json: dict[str, Any],
+    predicate_rules_json: dict[str, Any],
+) -> None:
+    """The predicate demands distinct hashes, so a faithful copy of a manifest
+    with a repeated record could only ever be reported as a changed count;
+    the contradiction is the manifest's and is refused as such."""
+
+    case_json["concepts"]["recorded_sex_or_gender"].append(
+        copy.deepcopy(case_json["concepts"]["recorded_sex_or_gender"][0])
+    )
+    _rule(predicate_rules_json, "A-I07")["expected_count"] = 2
+    _assert_code(
+        "indistinct_declared_records",
         parse_bundle,
         case_json,
         predicate_observations_json,
@@ -552,46 +613,138 @@ def test_x_coerced_into_m_or_f_fails(
     assert outcome.reason is OutcomeReason.VALUE_COERCED
 
 
+@pytest.mark.parametrize(
+    "restamp",
+    [
+        {"context": "payer"},
+        {"source": "interface-engine"},
+        {"context": "payer", "source": "interface-engine"},
+    ],
+    ids=["context", "source", "both"],
+)
 @pytest.mark.parametrize("coerced_to", ["M", "F"])
-def test_a_coercion_that_also_rewrites_context_is_caught_by_the_paired_exact_rule(
+def test_a_coercion_that_also_rewrites_context_or_source_still_fails(
     case_json: dict[str, Any],
     predicate_observations_json: dict[str, Any],
     predicate_rules_json: dict[str, Any],
     coerced_to: str,
+    restamp: dict[str, str],
 ) -> None:
-    """The documented limit, held against the packaged pair as shipped.
+    """F-007 as a boundary that stamps its own context or source on the record.
 
-    ``not_coerced`` compares whole typed values, so X rewritten to M or F
-    together with its context is outside A-I06's forbidden set and A-I06
-    reports ``pass``. A-I09, the ``exact`` rule the reference set pairs with
-    it on the same field, is what turns the receipt: the bundle is reported
-    with a failure and the summary counts it, without any rule being edited.
+    The forbidden set names M and F in the government-id context; the
+    observation carries M or F under a different context, a different source,
+    or both, so its whole-value hash is in no forbidden hash. A-014 is a claim
+    about the value, and ``not_coerced`` must report the coercion regardless:
+    a pass here would be a green receipt on the exact fault the predicate
+    exists to detect.
     """
 
     _observation(predicate_observations_json, "OBS-I01-RSG")["value"] = {
         "value": coerced_to,
-        "context": "payer",
+        "context": "government-id",
         "source": "synthetic-fixture",
+        **restamp,
     }
     bundle = parse_bundle(case_json, predicate_observations_json, predicate_rules_json)
     outcomes = evaluate(bundle)
     by_rule = {item.rule_id: item for item in outcomes}
+    forbidden_hashes = {
+        sha256_json(item.to_dict())
+        for rule in bundle.rule_set.rules
+        for item in rule.forbidden
+    }
+    assert by_rule["A-I06"].status is OutcomeStatus.FAIL
+    assert by_rule["A-I06"].reason is OutcomeReason.VALUE_COERCED
+    assert forbidden_hashes.isdisjoint(by_rule["A-I06"].observed_sha256s)
+    assert by_rule["A-I09"].status is OutcomeStatus.FAIL
+    summary = build_receipt(bundle, outcomes)["summary"]
+    assert summary["fail"] == 2
+    assert summary["pass"] == 7
+
+
+def test_a_rewritten_context_on_the_faithful_value_is_not_a_coercion(
+    case_json: dict[str, Any],
+    predicate_observations_json: dict[str, Any],
+    predicate_rules_json: dict[str, Any],
+) -> None:
+    """``not_coerced`` and ``exact`` are different claims on the same field.
+
+    X carried under another context is still X: A-I06 reports that nothing
+    was coerced, and A-I09, the ``exact`` rule beside it, is what reports
+    that the record is not the declared one. The receipt says which claim
+    turned, which is why the reference pair ships both.
+    """
+
+    _observation(predicate_observations_json, "OBS-I01-RSG")["value"] = {
+        "value": "X",
+        "context": "payer",
+        "source": "synthetic-fixture",
+    }
+    bundle = parse_bundle(case_json, predicate_observations_json, predicate_rules_json)
+    by_rule = {item.rule_id: item for item in evaluate(bundle)}
     assert by_rule["A-I06"].status is OutcomeStatus.PASSED
     assert by_rule["A-I06"].reason is OutcomeReason.VALUE_NOT_COERCED
     assert by_rule["A-I09"].status is OutcomeStatus.FAIL
     assert by_rule["A-I09"].reason is OutcomeReason.SEMANTIC_MISMATCH
-    assert by_rule["A-I09"].expected_sha256 not in by_rule["A-I09"].observed_sha256s
-    summary = build_receipt(bundle, outcomes)["summary"]
-    assert summary["fail"] == 1
-    assert summary["pass"] == 8
+
+
+@pytest.mark.parametrize(
+    ("forbidden", "observed"),
+    [
+        (
+            {
+                "status": "specified",
+                "value": "M",
+                "code_system": "urn:contextsafe:fixture",
+            },
+            {
+                "status": "specified",
+                "value": "M",
+                "code_system": "urn:contextsafe:other-fixture",
+            },
+        ),
+        (
+            GI_ABSENT,
+            {
+                "status": "absent",
+                "value": None,
+                "code_system": "urn:contextsafe:other-fixture",
+            },
+        ),
+    ],
+    ids=["value-under-another-code-system", "absent-under-another-code-system"],
+)
+def test_a_status_bearing_coercion_is_decided_on_status_and_scalar(
+    case_json: dict[str, Any],
+    predicate_observations_json: dict[str, Any],
+    predicate_rules_json: dict[str, Any],
+    forbidden: dict[str, Any],
+    observed: dict[str, Any],
+) -> None:
+    """For gender identity the projection is the (status, value) pair: a
+    specified M and a dropped-to-absent value are each coerced whatever code
+    system the boundary attached, and neither hashes like the forbidden entry."""
+
+    rule = _rule(predicate_rules_json, "A-I01")
+    rule["predicate"] = "not_coerced"
+    rule["forbidden"] = [forbidden]
+    _observation(predicate_observations_json, "OBS-I01-GI")["value"] = observed
+    outcome = _outcome(
+        case_json, predicate_observations_json, predicate_rules_json, "A-I01"
+    )
+    assert outcome.status is OutcomeStatus.FAIL
+    assert outcome.reason is OutcomeReason.VALUE_COERCED
+    assert sha256_json(forbidden) not in outcome.observed_sha256s
 
 
 def test_the_packaged_pair_carries_the_exact_rule_beside_not_coerced(
     predicate_rules_json: dict[str, Any],
 ) -> None:
-    """The pairing the docs prescribe is present in the shipped set, not only
-    described: for every ``not_coerced`` rule there is an ``exact`` rule on the
-    same case, checkpoint, concept, and expected value."""
+    """The two claims are held side by side in the shipped set, so a receipt
+    for the pair says whether the value was coerced, whether the record is
+    the declared one, or both: for every ``not_coerced`` rule there is an
+    ``exact`` rule on the same case, checkpoint, concept, and expected value."""
 
     rule_set = parse_rule_set(predicate_rules_json)
     exact_keys = {

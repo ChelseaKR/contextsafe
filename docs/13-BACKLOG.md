@@ -390,29 +390,43 @@ assertions with applicability, evidence, severity rubric, and clinical,
 laboratory, and community approval — has not happened, and no predicate here
 is an approved assertion; A-006, A-007, and A-015 (patient-facing display,
 legal-name contexts, expired name history) need a display observation and a
-name period the observation contract does not carry; `not_coerced` compares
-whole typed values, so a coercion that also rewrites context or source is the
-paired `exact` rule's to catch; `preserved_across` states preservation, not
-correctness; and a 0.2.0 rule set is refused as a pack component
+name period the observation contract does not carry; `not_coerced` decides
+presence status and scalar only, so the faithful X under a rewritten context
+passes it and is the `exact` rule's to report, and a checkpoint carrying two
+records of one concept is `ambiguous_evidence` under it, so a multi-record
+case cannot be evaluated for A-014; `preserved_across` states preservation,
+not correctness; and a 0.2.0 rule set is refused as a pack component
 (`incompatible_component`) until the pack contract's `rule_set_schema` pin is
 revisited, which is a contract decision for the maintainer. The receipt
 contract file the B-033 note below (Phase 4) names is now
 `schemas/contextsafe-receipt-v0.2.schema.json`. Review fixes of the same day:
-the reference pair now ships A-I09, the `exact` rule beside its `not_coerced`
-rule on the same field, and a test holds that X rewritten to M or F together
-with its context turns the receipt through A-I09 while A-I06 alone reports
-pass, so the packaged set demonstrates the pairing rather than only describing
-it; the property generator reaches pass and fail under every predicate by
-design (one observation at every checkpoint a predicate reads, values drawn
-from the faithful, forbidden, status-moved, and other-concept cases) with a
-derandomized guard test that fails when a branch stops being reached; run
-against the earlier generator, that guard does not reach `preserved_across`
-pass or fail, `not_coerced` fail, or `not_overwritten_by` fail within its
-bound, so the invariants over those branches were asserting nothing;
-and `parse_bundle` refuses a `not_overwritten_by` rule whose expected scalar
-the manifest also declares under another concept
+`not_coerced` first compared whole typed values, so X rewritten to F was
+reported as `pass`/`value_not_coerced` whenever the boundary also stamped its
+own context or source on the record, a false affirmative on the fault (F-007)
+the predicate exists to detect; it now compares the presence status and the
+scalar (`coercion_key` in `models.py`), the validator applies the same
+projection to the forbidden set's uniqueness, its conflict with the expected
+value, and its conflict with the case manifest, and tests hold that M or F
+under a rewritten context, source, or both is `fail`/`value_coerced` in the
+reference pair and in F-007 and F-008 while the faithful X under another
+context is not a coercion; the reference pair ships A-I09, the `exact` rule
+beside A-I06, so a receipt says which of the two claims turned; the property
+generator reaches pass and fail under every predicate by design (one
+observation at every checkpoint a predicate reads, values drawn from the
+faithful, forbidden, restamped-forbidden, status-moved, and other-concept
+cases) with a derandomized guard test that fails when a branch stops being
+reached; run against the earlier generator, that guard does not reach
+`preserved_across` pass or fail, `not_coerced` fail, or `not_overwritten_by`
+fail within its bound, so the invariants over those branches were asserting
+nothing; `parse_bundle` refuses a `not_overwritten_by` rule whose expected
+scalar the manifest also declares under another concept
 (`overwritten_expectation_conflict`), since a faithful observation could never
-pass it. `make mutants` still declares only `contract_validation.py` and
+pass it, and a `record_count` rule over a manifest that declares one record
+twice (`indistinct_declared_records`), since the predicate counts distinct
+hashes and a faithful copy could only be reported as a changed count. The
+case contract itself still admits the repeated record; refusing it there is a
+0.1 case-contract decision this pass did not take. `make mutants` still
+declares only `contract_validation.py` and
 `identifiers.py`; extending that declaration to `evaluator.py` and
 `validation.py` is an ADR 0009 decision the maintainer has not taken.
 

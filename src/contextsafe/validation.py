@@ -30,6 +30,7 @@ from contextsafe.models import (
     SyntheticCase,
     SyntheticIdentifier,
     ValueStatus,
+    coercion_key,
 )
 
 _CASE_ID = re.compile(r"^CTP-[A-Z0-9]{3,16}$")
@@ -615,11 +616,14 @@ def _forbidden(
         _semantic_value(concept, item, f"{path}.forbidden[{index}]")
         for index, item in enumerate(raw)
     )
-    if len(set(forbidden)) != len(forbidden):
+    keys = {coercion_key(item) for item in forbidden}
+    if len(keys) != len(forbidden):
         raise _error(
-            "duplicate_forbidden_value", f"{path}.forbidden", "values must be unique"
+            "duplicate_forbidden_value",
+            f"{path}.forbidden",
+            "values must be distinct in status and scalar",
         )
-    if expected in forbidden:
+    if coercion_key(expected) in keys:
         raise _error(
             "forbidden_expected_conflict",
             f"{path}.forbidden",
@@ -760,12 +764,12 @@ def _check_rule_against_case(
     """Refuse a rule the case manifest contradicts.
 
     A rule can only expect what the manifest declares (every predicate), can
-    only forbid what the manifest does not declare (``not_coerced``), can only
-    demand presence of a value the manifest specifies (``present``), can only
-    count the records the manifest carries (``record_count``), and can only
-    expect a scalar no other concept of the manifest carries
-    (``not_overwritten_by``). Each of these would otherwise be a rule that
-    could not pass or could not fail.
+    only forbid what the manifest does not declare in status and scalar under
+    any context (``not_coerced``), can only demand presence of a value the
+    manifest specifies (``present``), can only count records the manifest
+    carries as distinct (``record_count``), and can only expect a scalar no
+    other concept of the manifest carries (``not_overwritten_by``). Each of
+    these would otherwise be a rule that could not pass or could not fail.
     """
 
     declared = case_values[rule.concept]
@@ -775,7 +779,8 @@ def _check_rule_against_case(
             f"{path}.expected",
             "rule expectation must be declared by the case manifest",
         )
-    if any(item in declared for item in rule.forbidden):
+    declared_keys = {coercion_key(item) for item in declared}
+    if any(coercion_key(item) in declared_keys for item in rule.forbidden):
         raise _error(
             "forbidden_case_conflict",
             f"{path}.forbidden",
@@ -790,14 +795,35 @@ def _check_rule_against_case(
             f"{path}.expected",
             "present requires an expected value with specified status",
         )
-    if rule.expected_count is not None and rule.expected_count != len(declared):
+    if rule.expected_count is not None:
+        _check_record_count(rule.expected_count, declared, path)
+    if rule.predicate is RulePredicate.NOT_OVERWRITTEN_BY:
+        _check_overwritten_expectation(rule, case_values, path)
+
+
+def _check_record_count(
+    expected_count: int, declared: tuple[SemanticValue, ...], path: str
+) -> None:
+    """Refuse a ``record_count`` rule the manifest cannot be observed to meet.
+
+    The predicate demands ``expected_count`` observations with distinct hashes,
+    so a manifest that declares the same record twice could only ever be
+    reported as ``record_count_changed``; that is a contradiction between the
+    rule and the manifest, refused here, not a fault at the boundary.
+    """
+
+    if expected_count != len(declared):
         raise _error(
             "rule_count_mismatch",
             f"{path}.expected_count",
             "expected_count must equal the records the case manifest declares",
         )
-    if rule.predicate is RulePredicate.NOT_OVERWRITTEN_BY:
-        _check_overwritten_expectation(rule, case_values, path)
+    if len(set(declared)) != len(declared):
+        raise _error(
+            "indistinct_declared_records",
+            f"{path}.expected_count",
+            "record_count needs distinct records in the case manifest",
+        )
 
 
 def _check_overwritten_expectation(

@@ -38,6 +38,7 @@ from contextsafe.models import (
     SemanticValue,
     SyntheticCase,
     ValueStatus,
+    coercion_key,
 )
 
 
@@ -202,20 +203,23 @@ def _status_preserved(bundle: EvaluationBundle, rule: Rule) -> _Verdict:
 
 
 def _not_coerced(bundle: EvaluationBundle, rule: Rule) -> _Verdict:
-    """A-014: the observed hash is in none of the rule's forbidden hashes.
+    """A-014: the observed value is, in status and scalar, none of the forbidden.
 
-    The comparison is over whole typed values, so a coercion that also
-    rewrites the value's context or source is not in the forbidden set and is
-    not reported here; an ``exact`` rule on the same field is what catches it.
+    The comparison is over ``coercion_key``, the presence status and the
+    scalar, so X rewritten to F is a coercion whether or not the boundary also
+    stamped its own context or source on the record; the descriptors around
+    the value are not what the claim is about. A different context on the
+    faithful value is not a coercion and is the ``exact`` predicate's to
+    report.
     """
 
     matches = _matches(bundle.observations, rule, rule.checkpoint)
     gated = _evidence_gate(matches)
     if gated is not None:
         return gated
-    forbidden = {sha256_json(item.to_dict()) for item in rule.forbidden}
+    forbidden = {coercion_key(item) for item in rule.forbidden}
     return _decided(
-        _value_sha256(matches[0]) not in forbidden,
+        coercion_key(matches[0].value) not in forbidden,
         OutcomeReason.VALUE_NOT_COERCED,
         OutcomeReason.VALUE_COERCED,
         matches,
@@ -331,11 +335,12 @@ def _outcome(bundle: EvaluationBundle, rule: Rule) -> Outcome:
     if rule.required:
         verdict = _PREDICATES[rule.predicate](bundle, rule)
     else:
+        matches = _matches(bundle.observations, rule, rule.checkpoint)
         verdict = _Verdict(
             OutcomeStatus.NOT_APPLICABLE,
             OutcomeReason.PREDECLARED_NOT_APPLICABLE,
-            _observed(_matches(bundle.observations, rule, rule.checkpoint)),
-            _evidence(_matches(bundle.observations, rule, rule.checkpoint)),
+            _observed(matches),
+            _evidence(matches),
         )
     return Outcome(
         rule_id=rule.rule_id,

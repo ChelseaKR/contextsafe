@@ -2,14 +2,14 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://contextsafe.invalid/schemas/contextsafe-rule-set-v0.2.schema.json",
   "title": "ContextSafe deterministic fixture rule set 0.2",
-  "$comment": "The rule-set shape that admits a closed predicate field (B-028). Reference-only and ungoverned: every predicate here is a mechanism for the identity, name-to-use, pronoun, and recorded-sex-or-gender assertions in docs/05-DATA-AND-EVIDENCE.md section 5, and no clinical, laboratory, or community review has approved any rule that uses one. The 0.1.0 shape (no predicate field, exact hash equality only) is still accepted by the runtime unchanged and has no separate published schema; a 0.2.0 document with no predicate field means exactly what a 0.1.0 document means. JSON Schema validates structure only: the runtime additionally requires preserved_from to differ from checkpoint, forbidden values to be unique and not equal to expected, and, in parse_bundle, every expected value to be declared by the case manifest, no forbidden value to be declared by it, present to expect a specified value, expected_count to equal the records the manifest declares for the concept, and a not_overwritten_by rule not to expect a scalar the manifest declares under another concept (a faithful observation would otherwise be reported as overwritten and the rule could never pass).",
+  "$comment": "The rule-set shape that admits a closed predicate field (B-028). Reference-only and ungoverned: every predicate here is a mechanism for the identity, name-to-use, pronoun, and recorded-sex-or-gender assertions in docs/05-DATA-AND-EVIDENCE.md section 5, and no clinical, laboratory, or community review has approved any rule that uses one. The 0.1.0 shape (no predicate field, exact hash equality only) is still accepted by the runtime unchanged and has no separate published schema; a 0.2.0 document with no predicate field means exactly what a 0.1.0 document means. JSON Schema validates structure only: the runtime additionally requires preserved_from to differ from checkpoint, forbidden values to be unique in status and scalar and none to share the expected value's status and scalar, and, in parse_bundle, every expected value to be declared by the case manifest, no forbidden value's status and scalar to be declared by it under any context, present to expect a specified value, expected_count to equal the records the manifest declares for the concept and those records to be distinct, and a not_overwritten_by rule not to expect a scalar the manifest declares under another concept (a faithful observation would otherwise be reported as overwritten and the rule could never pass).",
   "x-contextsafe-semantic-constraints": [
     "preserved_from must name a checkpoint other than checkpoint",
-    "forbidden values are unique and none equals expected",
+    "forbidden values are unique in status and scalar, and none shares the status and scalar of expected",
     "expected is declared by the case manifest for the rule's concept",
-    "no forbidden value is declared by the case manifest",
+    "no forbidden value's status and scalar is declared by the case manifest under any context, source, or code system",
     "present requires expected.status to be specified",
-    "expected_count equals the number of values the case manifest declares for the concept",
+    "expected_count equals the number of values the case manifest declares for the concept, and those values are distinct",
     "not_overwritten_by expects a scalar that no other concept of the case manifest declares",
     "the canonical form omits predicate when it is exact and omits every predicate field the predicate does not read, so an exact rule hashes exactly as a 0.1.0 rule does"
   ],
@@ -36,7 +36,7 @@
       ]
     },
     "predicate": {
-      "$comment": "exact: the single observed value hash equals the expected hash. present: the single observed value has status specified (A-008). status_preserved: the observed status equals the expected status and the value is ignored (A-009). not_coerced: the observed hash is in none of the forbidden hashes (A-014). record_count: exactly expected_count distinct records were observed (A-013). preserved_across: the same value hash at preserved_from and at checkpoint (A-005, A-010, A-012). not_overwritten_by: the observed gender identity is not another concept's declared value (A-011).",
+      "$comment": "exact: the single observed value hash equals the expected hash. present: the single observed value has status specified (A-008). status_preserved: the observed status equals the expected status and the value is ignored (A-009). not_coerced: the observed value's presence status and scalar are those of none of the forbidden values, whatever context, source, or code system the boundary attached (A-014). record_count: exactly expected_count distinct records were observed (A-013). preserved_across: the same value hash at preserved_from and at checkpoint (A-005, A-010, A-012). not_overwritten_by: the observed gender identity is not another concept's declared value (A-011).",
       "enum": [
         "exact",
         "present",
@@ -174,7 +174,7 @@
         "required": {"type": "boolean"},
         "predicate": {"$ref": "#/$defs/predicate"},
         "forbidden": {
-          "$comment": "not_coerced only: the closed set of typed values the observation must not equal, in fixture tokens. Compared as whole-value hashes, so a coercion that also rewrites context or source is outside this set; pair with an exact rule.",
+          "$comment": "not_coerced only: the closed set of typed values, in fixture tokens, whose presence status and scalar the observation must not carry. Each entry has the concept's own shape, but only its status and scalar are compared: an X recorded sex or gender rewritten to the F this set names is a coercion whether or not the boundary also rewrote the record's context or source. A different context on the faithful value is not a coercion; that is the exact predicate's claim.",
           "type": "array",
           "minItems": 1,
           "maxItems": 16,

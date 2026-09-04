@@ -571,9 +571,11 @@ rather than after it.
   default, unchanged); `present`, the value has status `specified` (A-008);
   `status_preserved`, the observed status equals the expected status and the
   value is not consulted, so declined stays declined and never becomes
-  unknown, absent, or populated (A-009); `not_coerced`, the observed hash is in
-  none of the hashes of a closed `forbidden` set the rule carries in fixture
-  tokens, which decides whole-value membership and nothing wider (A-014);
+  unknown, absent, or populated (A-009); `not_coerced`, the observed value's
+  presence status and scalar are those of none of a closed `forbidden` set the
+  rule carries in fixture tokens, so X or unknown rewritten to M or F is a
+  coercion whether or not the boundary also stamped its own context or source
+  on the record (A-014);
   `record_count`, exactly `expected_count` distinct records remain (A-013);
   `preserved_across`, the same value hash at `preserved_from` and at the
   rule's checkpoint (A-005, A-010, A-012); and `not_overwritten_by`, the
@@ -585,36 +587,45 @@ rather than after it.
   which claim was decided. The field a predicate reads is required for it and
   an unknown field for every other; a predicate that would be vacuous for a
   concept (`present` on recorded sex or gender, `not_overwritten_by` on
-  anything but gender identity) is refused; and `parse_bundle` refuses a rule
-  the case manifest contradicts (a forbidden value the manifest declares, a
+  anything but gender identity) is refused; a forbidden set that repeats a
+  status and scalar under another context, or names the expected one, is
+  refused; and `parse_bundle` refuses a rule the case manifest contradicts (a
+  forbidden status and scalar the manifest declares under any context, a
   `present` rule on a declined value, an `expected_count` the manifest does
-  not carry, a `not_overwritten_by` expectation the manifest also declares
-  under another concept: `overwritten_expectation_conflict`). The contract is
+  not carry or that it carries as a repeated record, which the predicate's
+  distinct-hash count could never meet: `indistinct_declared_records`, a
+  `not_overwritten_by` expectation the manifest also declares under another
+  concept: `overwritten_expectation_conflict`). The contract is
   `schemas/contextsafe-rule-set-v0.2.schema.json`,
   the first published schema for the rule set, with
   `tests/test_rule_set_schema.py` holding it to the runtime. Fixtures: a
   second ungoverned reference pair, `rules-predicates.json` and
   `observations-predicates.json`, exercises every predicate against CTP-I01,
   ships the `exact` rule beside its `not_coerced` rule on the same field
-  (A-I09 beside A-I06) so the pairing the docs prescribe is demonstrated and
-  tested rather than only described, and is pinned in the three-run
-  determinism matrix; and
+  (A-I09 beside A-I06) so a receipt says which of the two claims turned, and
+  is pinned in the three-run determinism matrix; and
   `tests/fixtures/seeded-faults/` carries F-004, F-005, F-006, F-007, F-008,
   F-010, and F-031 from `docs/09-TEST-AND-EVALUATION.md` section 4 as complete
   synthetic inputs, each proved to be reported as `fail` with its own reason
-  and never as `pass`. The property layer generates every predicate, reaches
-  `pass` and `fail` under each one by design (one observation at every
-  checkpoint a predicate reads, values drawn from the faithful, forbidden,
-  status-moved, and other-concept cases), holds the status algebra over all of
-  them, and carries a derandomized guard test that fails when the generator
-  stops reaching a branch. What this does not do: no
-  clinical, laboratory, or community review has approved any rule or
-  predicate here; `not_coerced` compares whole typed values, so a coercion
-  that also rewrites context or source is outside its forbidden set and is
-  the `exact` rule's to catch; `preserved_across` is a preservation claim,
-  not a correctness claim; and the pack contract still pins the exact-only
-  rule-set shape, so a 0.2.0 rule set is refused as a pack component by name
-  (`incompatible_component`) until that contract moves.
+  and never as `pass`, and F-007 and F-008 additionally with the boundary's
+  own context, source, or both stamped on the coerced record. The property
+  layer generates every predicate, reaches `pass` and `fail` under each one
+  by design (one observation at every checkpoint a predicate reads, values
+  drawn from the faithful, forbidden, restamped-forbidden, status-moved, and
+  other-concept cases), holds the status algebra over all of them, and
+  carries a derandomized guard test that fails when the generator stops
+  reaching a branch. What this does not do: no clinical, laboratory, or
+  community review has approved any rule or predicate here; `not_coerced`
+  decides status and scalar only, so the faithful X under a rewritten context
+  passes it and is the `exact` rule's to report; on the recorded-sex-or-gender
+  concept only X and unknown are expressible, so "absent" in A-014 is
+  reachable only through a status-bearing concept; a checkpoint carrying two
+  records of one concept is `ambiguous_evidence` under every
+  single-observation predicate, `not_coerced` included, so a multi-record
+  case cannot be evaluated for A-014; `preserved_across` is a preservation
+  claim, not a correctness claim; and the pack contract still pins the
+  exact-only rule-set shape, so a 0.2.0 rule set is refused as a pack
+  component by name (`incompatible_component`) until that contract moves.
 
 ### Changed
 

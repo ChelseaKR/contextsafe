@@ -36,6 +36,7 @@ bundle produces must validate against
 """
 
 import json
+from dataclasses import replace
 from pathlib import Path
 from typing import Any
 
@@ -72,6 +73,7 @@ from contextsafe.models import (
     SyntheticCase,
     SyntheticIdentifier,
     ValueStatus,
+    coercion_key,
 )
 from contextsafe.receipt import build_receipt, build_receipt_document, render_receipt
 from contextsafe.reference_fixtures import REFERENCE_ROOT
@@ -140,6 +142,31 @@ _STATUS_CONCEPTS = (
 
 
 @st.composite
+def _forbidden_sets(
+    draw: st.DrawFn, concept: ConceptKind, expected: SemanticValue
+) -> tuple[SemanticValue, ...]:
+    """Draw a forbidden set under the validator's constraints: one to three
+    values, distinct in status and scalar, none sharing the expected value's
+    status and scalar."""
+
+    seen = {coercion_key(expected)}
+    chosen: list[SemanticValue] = []
+    for item in draw(st.lists(_semantic_values(concept), min_size=1, max_size=4)):
+        if coercion_key(item) not in seen and len(chosen) < 3:
+            seen.add(coercion_key(item))
+            chosen.append(item)
+    if not chosen:
+        chosen.append(
+            draw(
+                _semantic_values(concept).filter(
+                    lambda v: coercion_key(v) != coercion_key(expected)
+                )
+            )
+        )
+    return tuple(chosen)
+
+
+@st.composite
 def _rules(draw: st.DrawFn, index: int) -> Rule:
     """Draw one rule under the concept constraints the validator enforces."""
 
@@ -154,13 +181,7 @@ def _rules(draw: st.DrawFn, index: int) -> Rule:
     expected = draw(_semantic_values(concept))
     forbidden: tuple[SemanticValue, ...] = ()
     if predicate is RulePredicate.NOT_COERCED:
-        forbidden = tuple(
-            item
-            for item in draw(
-                st.lists(_semantic_values(concept), min_size=1, max_size=3)
-            )
-            if item != expected
-        ) or (draw(_semantic_values(concept).filter(lambda v: v != expected)),)
+        forbidden = draw(_forbidden_sets(concept, expected))
     return Rule(
         rule_id=f"A-I{index:02d}",
         version="0.1.0",
@@ -209,30 +230,50 @@ def _other_concept_scalars(
     )
 
 
+def _restamped(value: SemanticValue, token: str) -> SemanticValue:
+    """Return ``value`` with every descriptor around its status and scalar
+    rewritten, the way a boundary that stamps its own context, source, code
+    system, or order context on a record would leave it."""
+
+    if isinstance(value, RecordedSexOrGender):
+        return replace(value, context=token, source="interface-engine")
+    if isinstance(value, GenderIdentity):
+        return replace(value, code_system=f"urn:contextsafe:{token}")
+    if isinstance(value, SexParameterForClinicalUse):
+        return replace(value, context_id=f"ORDER-CSYN-{token}")
+    return value
+
+
 @st.composite
 def _aligned_values(draw: st.DrawFn, rule: Rule, case: SyntheticCase) -> SemanticValue:
     """Draw the value of an observation the rule reads.
 
-    Half the time it is the faithful value, so predicates that compare two
-    observations (``preserved_across``, ``record_count``) reach equality. The
-    rest is drawn from the branches the predicates decide on: a forbidden
-    value (A-014), a copy whose status moved (A-009), a gender identity that
-    carries another concept's scalar (A-011), or a fresh value.
+    The kinds are the branches the predicates decide on, faithful first so
+    that predicates comparing two observations (``preserved_across``,
+    ``record_count``) reach equality, then the faults: a forbidden value,
+    verbatim or with its descriptors restamped by the boundary (A-014), a
+    copy whose status moved (A-009), a gender identity that carries another
+    concept's scalar (A-011), and last a fresh value. Hypothesis favours low
+    indices when it simplifies, so the order is what keeps every fault kind
+    reachable under a derandomized search.
     """
 
-    if draw(st.booleans()):
-        return rule.expected
-    kinds = ["fresh"]
+    kinds = ["faithful"]
     if rule.forbidden:
-        kinds.append("forbidden")
+        kinds.extend(("forbidden", "restamped"))
     if rule.concept in _STATUS_CONCEPTS:
         kinds.append("moved")
     overwriting = _other_concept_scalars(case, rule.concept)
     if rule.concept is ConceptKind.GENDER_IDENTITY and overwriting:
         kinds.append("overwritten")
+    kinds.append("fresh")
     kind = draw(st.sampled_from(kinds))
+    if kind == "faithful":
+        return rule.expected
     if kind == "forbidden":
         return draw(st.sampled_from(rule.forbidden))
+    if kind == "restamped":
+        return _restamped(draw(st.sampled_from(rule.forbidden)), draw(_TOKENS))
     if kind == "moved":
         expected_status = getattr(rule.expected, "status")  # noqa: B009 - typed union
         moved = draw(
@@ -586,18 +627,19 @@ def test_every_reason_belongs_to_the_status_it_accompanies(
 def test_unsupported_values_are_never_coerced_into_a_forbidden_one(
     bundle: EvaluationBundle,
 ) -> None:
-    """Invariant 4 over ``not_coerced``: an observation equal to a forbidden
-    value is fail, and a pass never carries a forbidden hash."""
+    """Invariant 4 over ``not_coerced``: an observation whose status and
+    scalar are a forbidden value's is fail, whatever else the boundary wrote
+    around it, and a pass never carries a forbidden status and scalar."""
 
     for outcome in evaluate(bundle):
         rule = _rule_of(bundle, outcome)
         if rule.predicate is not RulePredicate.NOT_COERCED or not rule.required:
             continue
-        forbidden = {sha256_json(item.to_dict()) for item in rule.forbidden}
-        if outcome.status.value == "pass":
-            assert forbidden.isdisjoint(outcome.observed_sha256s)
-        if outcome.status.value == "fail":
-            assert outcome.observed_sha256s[0] in forbidden
+        if outcome.status.value not in {"pass", "fail"}:
+            continue
+        forbidden = {coercion_key(item) for item in rule.forbidden}
+        observed = coercion_key(_single_observation(bundle, rule).value)
+        assert (outcome.status.value == "fail") == (observed in forbidden)
 
 
 @settings(max_examples=200, deadline=None)
