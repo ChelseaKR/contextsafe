@@ -178,6 +178,44 @@ contract has no field for them; and the property suites cover the
 machine-checkable invariants only, not adapter acceptance against a partner
 export.
 
+Implementation note (2026-09-04, B-023): `contextsafe import --format
+fhir-r4-json` now reads one FHIR R4 JSON `Patient`, alone or as the only
+entry of a `collection` or `searchset` `Bundle`, through the shared boundary
+scan and an exact element allowlist, and converts the HL7 Gender Harmony
+`individual-genderIdentity`, `individual-pronouns`, and
+`individual-recordedSexOrGender` extensions and the `HumanName` with `use`
+`usual` into the observation set `evaluate` accepts, with the source digest,
+the profile version, and an RFC 6901 pointer on every observation. Any
+narrative, contained resource, element outside the allowlist, unknown
+extension or sub-extension, `display`, `comment`, reference, identifier
+outside the synthetic namespace, coded value outside the synthetic alphabet,
+name with no part, `data-absent-reason` coding on recorded sex or gender
+(the canonical concept has no presence state, so that system's `unknown` is
+never carried as the recorded value `unknown`), document over one MiB, or
+Patient carrying none of the concepts rejects the whole source with a code
+and a location; nothing is stripped, and a fixture per rejection class is
+committed and pinned. Two carriers of one concept are
+two observations, which the evaluator reports as ambiguous. The reader's
+choices are one versioned profile constant with `reviewed` fixed to false, and
+the accepted subset is published as a reference-only schema. B-023 is not
+closed: no interoperability reviewer (the 8h the row budgets) has examined the
+profile, and the elements chosen where the guide is uncertain (the `value`
+sub-extension form, `type` as the RSG context, the three `data-absent-reason`
+presence codes) are recorded as choices, not as conformance; sex parameter for
+clinical use is recognised by its extension URL and always rejects, because
+neither `Encounter` nor `ServiceRequest` is implemented as an order-context
+carrier and no allowlisted resource can carry a supporting observation, so
+SPCU acceptance is deferred with the B-026 profile work; name periods
+(CTP-009), RSG jurisdiction and source document, and every other Gender
+Harmony sub-extension are not carried; the reader takes a file and never a
+FHIR endpoint (Architecture section 10 remains P1); the coding system of a
+recorded-sex-or-gender `value` is checked only against the presence system
+and is otherwise not carried, because the canonical model has no field for
+it, and which systems an RSG value may come from is a profile choice left
+for the reviewer; neither `diagnostics` nor the support bundle enumerates
+the importer registry's formats; and the receipt's limitation line still
+reads "does not ingest FHIR", a reviewed wording the maintainer decides.
+
 ## Phase 4 — review and receipts
 
 | ID | Trace | Deliverable and acceptance | Owner | Dependency | Estimate |
@@ -355,9 +393,11 @@ logging failure never changes the exit code of the command it logged.
 B-046 is not closed. RG-12 also expects governed cleanup at a design partner
 (B-047, B-049), and this cleanup enumerates a local workspace, not a partner's
 non-production environment. The bundle covers the surfaces that exist; a signing
-path (B-035), FHIR/HL7/LIS adapters (B-023–B-025), and a review surface
+path (B-035), HL7/LIS adapters (B-024, B-025), and a review surface
 (B-032) would each add sections, and each would need the same constructive
-treatment. No independent security review of the bundle contents has happened
+treatment; the FHIR reader (B-023) and the canonical importer (B-022) exist
+and add none, because neither the diagnostics nor the bundle enumerates the
+importer registry's formats. No independent security review of the bundle contents has happened
 (B-040).
 
 ## Phase 6 — pilot and v1

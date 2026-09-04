@@ -31,7 +31,9 @@ from contextsafe.jsonio import parse_json_bytes
 # a cycle. `identifier_hits` is re-exported here because that is the documented
 # extension point and where every caller already imports it from.
 __all__ = [
+    "CANONICAL_JSON_PROFILE",
     "MAX_EVIDENCE_BYTES",
+    "BoundaryProfile",
     "ScannedSource",
     "identifier_hits",
     "open_preflighted_source",
@@ -87,6 +89,53 @@ _SAFE_PATH_KEYS = frozenset(
         "value_code",
     }
 )
+
+
+@dataclass(frozen=True, slots=True)
+class BoundaryProfile:
+    """What one source format's boundary scan differs in from the canonical scan.
+
+    The scan is one set of rules for every format: size, regular file, no
+    final link, strict JSON, prohibited keys, Unicode controls, canaries, and
+    direct-identifier patterns. A format that has to carry something the
+    canonical rules name declares it here, as a delta from the canonical
+    profile rather than as a second rule set, so that what a format relaxes
+    is written down in one place and is exactly as long as the list below.
+
+    ``permitted_keys`` are prohibited keys the format carries by name and
+    bounds itself: a FHIR ``Patient`` cannot say who a person is to be called
+    without ``name``. Permitting the key does not permit its content; the
+    format's own closed parser decides what may be under it, and every
+    string under it is still scanned.
+
+    ``path_keys`` are the format's element names that may appear in an
+    error location, so a rejection can say where without echoing a key the
+    scan has not seen before.
+
+    ``published_constants`` are string values that are the format's own
+    published identifiers, such as an extension URL the standard defines.
+    They are not content, and the URL detector would otherwise reject every
+    one of them. A value is exempt only when it is equal to one of these
+    exactly; a value that merely starts like one is scanned in full.
+    """
+
+    permitted_keys: frozenset[str] = frozenset()
+    path_keys: frozenset[str] = frozenset()
+    published_constants: frozenset[str] = frozenset()
+
+    def prohibited_keys(self) -> frozenset[str]:
+        """The canonical prohibited keys, less the ones this format permits."""
+
+        return _PROHIBITED_KEYS - self.permitted_keys
+
+    def safe_path_keys(self) -> frozenset[str]:
+        """The canonical path keys plus this format's element names."""
+
+        return _SAFE_PATH_KEYS | self.path_keys
+
+
+CANONICAL_JSON_PROFILE = BoundaryProfile()
+"""The canonical envelope's scan: no key permitted, no constant exempt."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -333,31 +382,35 @@ def _normalized_key(value: str) -> str:
     return re.sub(r"[^a-z0-9]", "", normalized(value).casefold())
 
 
-def _boundary_scan(value: object) -> None:
+def _boundary_scan(value: object, profile: BoundaryProfile) -> None:
+    prohibited = profile.prohibited_keys()
+    safe_path_keys = profile.safe_path_keys()
     pending: list[tuple[object, str]] = [(value, "$")]
     while pending:
         item, path = pending.pop()
         if isinstance(item, dict):
             for key, child in item.items():
                 _reject_unsafe_string(key, path)
-                if _normalized_key(key) in _PROHIBITED_KEYS:
+                if _normalized_key(key) in prohibited:
                     raise ContextSafeError(
                         "prohibited_field",
                         path,
                         "a free-text or identifying field is prohibited",
                     )
-                child_path = f"{path}.{key}" if key in _SAFE_PATH_KEYS else path
+                child_path = f"{path}.{key}" if key in safe_path_keys else path
                 pending.append((child, child_path))
         elif isinstance(item, list):
             pending.extend(
                 (child, f"{path}[{index}]") for index, child in enumerate(item)
             )
-        elif isinstance(item, str):
+        elif isinstance(item, str) and item not in profile.published_constants:
+            # The exemption is by exact equality at any position, by design: a
+            # published identifier is not content wherever the format puts it.
             _reject_unsafe_string(item, path)
 
 
 def _scan_open_descriptor(
-    file_descriptor: int,
+    file_descriptor: int, profile: BoundaryProfile
 ) -> tuple[_DescriptorMetadata, ScannedSource]:
     """Read, hash, parse, and boundary-scan one already-open descriptor."""
 
@@ -365,26 +418,31 @@ def _scan_open_descriptor(
     raw, raw_sha256 = _read_first_pass(file_descriptor)
     _assert_unchanged(file_descriptor, initial)
     parsed = parse_json_bytes(raw)
-    _boundary_scan(parsed)
+    _boundary_scan(parsed, profile)
     return initial, ScannedSource(
         raw_sha256=raw_sha256, raw_byte_count=len(raw), value=parsed
     )
 
 
-def scan_source(path: Path) -> ScannedSource:
+def scan_source(
+    path: Path, profile: BoundaryProfile = CANONICAL_JSON_PROFILE
+) -> ScannedSource:
     """Run the complete read-only boundary scan and close the descriptor.
 
     Opens the path once with the same no-follow, regular-file, and one MiB
     rules as a preflight, reads the whole first pass, and returns only what
     that pass established. It creates no workspace, copy, index, or log, and
     it does not bind the value to a plan scope: that is the caller's check,
-    made against whatever contract the caller is authorized to hold.
+    made against whatever contract the caller is authorized to hold. The
+    ``profile`` is the format's declared delta from the canonical scan; the
+    size, link, JSON, Unicode, canary, and detector rules are not part of it
+    and apply to every format alike.
     """
 
     file_descriptor = _open_source(path)
     primary_error: BaseException | None = None
     try:
-        _initial, scanned = _scan_open_descriptor(file_descriptor)
+        _initial, scanned = _scan_open_descriptor(file_descriptor, profile)
         return scanned
     except BaseException as exc:
         primary_error = exc
@@ -402,7 +460,9 @@ def open_preflighted_source(
     file_descriptor = _open_source(path)
     primary_error: BaseException | None = None
     try:
-        initial, scanned = _scan_open_descriptor(file_descriptor)
+        initial, scanned = _scan_open_descriptor(
+            file_descriptor, CANONICAL_JSON_PROFILE
+        )
         parse_evidence_source(scanned.value, scope=scope)
         yield PreflightedSource(
             file_descriptor=file_descriptor,

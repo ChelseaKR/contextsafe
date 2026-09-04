@@ -320,6 +320,49 @@ arrive without the supporting-observation link the concept needs, and the
 result's counts and warnings stay in process because the observation-set
 contract has no field for them.
 
+### B-023: FHIR R4 JSON reader
+
+`contextsafe import --format fhir-r4-json --source PATIENT.json --case CASE.json
+--checkpoint ehr --output observations.json` reads one FHIR R4 JSON
+`Patient` -- alone, or as the only entry of a `collection` or `searchset`
+`Bundle` -- through the same boundary scan as every other format and an exact
+element allowlist, and emits the observation-set document `evaluate` accepts.
+The HL7 Gender Harmony extensions map to the canonical concepts by name:
+`individual-genderIdentity` to gender identity, `individual-pronouns` to
+pronouns, `individual-recordedSexOrGender` to recorded sex or gender with its
+`type` sub-extension as the context, and the `HumanName` whose `use` is
+`usual` to name to use. Every observation carries the source digest, the
+profile version, and an RFC 6901 JSON Pointer to the element it was read from.
+Two gender-identity extensions, or two usual names, are two observations, and
+the evaluator reports them as ambiguous. The packaged reference set carries
+[`fhir-patient.json`](src/contextsafe/fixtures/reference/fhir-patient.json),
+the accepting synthetic Patient for CTP-I01; the accepted subset is published
+as the reference-only
+[FHIR R4 source profile](schemas/contextsafe-fhir-r4-source-v0.1.schema.json).
+
+What it does not claim. The conversion is whole or nothing and strips
+nothing: a narrative, a contained resource, any element outside the allowlist
+(`gender`, `meta`, `telecom`, `address`, `birthDate` included), any extension
+or sub-extension outside the profile (`comment`, `period`), a `display`, a
+reference, an identifier outside `urn:contextsafe:synthetic` / `CSYN-`, a
+coded value or name part outside the synthetic alphabet, a name with no part,
+a `data-absent-reason` coding on recorded sex or gender (the canonical
+concept has no presence state, so that system's `unknown` is never read as
+the recorded value `unknown`), a document over one MiB, or a Patient carrying
+none of the concepts rejects the whole source with a code and a location, and
+a fixture per class is committed under `tests/fixtures/fhir-r4-json/`. Values are the coding's own tokens, verbatim,
+so evaluating the reference Patient against the reference rules passes the
+name-to-use rule (the token is identical), reports `semantic_mismatch` for
+the unbound gender-identity and pronoun tokens, and leaves the two rules at
+other checkpoints indeterminate. Sex parameter for clinical use comes only
+from its own extension and this iteration does not carry it: no allowlisted
+resource carries an order context or a supporting observation, so the
+extension rejects. The reader's choices where the implementation guide is
+uncertain are one versioned profile constant whose `reviewed` field is false
+and cannot be set; no interoperability, clinical, or community reviewer has
+examined it, it is not a FHIR conformance profile, and it reads a file, never
+an endpoint.
+
 The durable evidence store has no CLI import route; `contextsafe import` writes
 only an observation-set document and never an evidence record. Every iteration-3 evidence record says
 `authorization_status: not_verified_internal_test_only` and
@@ -336,10 +379,11 @@ real clinical or community review occurred. The committed
 no approvals, and must fail compilation. Tests construct visibly test-only approval
 declarations in memory solely to exercise the state machine.
 
-These slices have no signatures, FHIR/HL7/LIS adapters, clinical oracle, HTML report,
+These slices have no signatures, HL7/LIS adapters, clinical oracle, HTML report,
 network access, authorized evidence-import command, hosted service, or approved
 patient-data pathway. Iteration 3 contains internal-test-only local persistence, but
-none of its records can authorize execution or support a receipt.
+none of its records can authorize execution or support a receipt. The FHIR R4
+reader converts one synthetic file and is not an adapter to any system.
 Patient data is prohibited, but bounded checks cannot prove an input is synthetic.
 Its fixture rules use invented tokens and are not medical guidance. It was built
 ahead of the plan's discovery and governance gates as internal risk-reduction work,

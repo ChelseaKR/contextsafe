@@ -1,0 +1,53 @@
+{
+  "resourceType": "Patient",
+  "id": "CSYN-CTP-I01",
+  "identifier": [
+    {
+      "system": "urn:contextsafe:synthetic",
+      "value": "CSYN-CTP-I01"
+    }
+  ],
+  "name": [
+    {
+      "use": "usual",
+      "family": "ZZZTESTCONTEXTSAFE",
+      "given": [
+        "CSYN-ASTER"
+      ]
+    }
+  ],
+  "extension": [
+    {
+      "url": "http://hl7.org/fhir/StructureDefinition/individual-genderIdentity",
+      "extension": [
+        {
+          "url": "value",
+          "valueCodeableConcept": {
+            "coding": [
+              {
+                "system": "http://terminology.hl7.org/CodeSystem/data-absent-reason",
+                "code": "asked-declined"
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "url": "http://hl7.org/fhir/StructureDefinition/individual-pronouns",
+      "extension": [
+        {
+          "url": "value",
+          "valueCodeableConcept": {
+            "coding": [
+              {
+                "system": "http://terminology.hl7.org/CodeSystem/data-absent-reason",
+                "code": "not-asked"
+              }
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}

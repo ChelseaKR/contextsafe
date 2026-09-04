@@ -1,0 +1,43 @@
+{
+  "resourceType": "Patient",
+  "id": "CSYN-CTP-I01",
+  "identifier": [
+    {
+      "system": "urn:contextsafe:synthetic",
+      "value": "CSYN-CTP-I01"
+    }
+  ],
+  "name": [
+    {
+      "use": "usual",
+      "family": "ZZZTESTCONTEXTSAFE",
+      "given": [
+        "CSYN-ASTER"
+      ]
+    }
+  ],
+  "extension": [
+    {
+      "url": "http://hl7.org/fhir/StructureDefinition/individual-genderIdentity",
+      "extension": [
+        {
+          "url": "value",
+          "valueCodeableConcept": {
+            "coding": [
+              {
+                "system": "urn:contextsafe:fixture",
+                "code": "CSYN-GENDER-1"
+              }
+            ]
+          }
+        }
+      ]
+    }
+  ],
+  "contained": [
+    {
+      "resourceType": "Organization",
+      "id": "CSYN-ORG-1"
+    }
+  ]
+}

@@ -22,6 +22,7 @@ from contextsafe.importers.base import (
     import_error,
 )
 from contextsafe.importers.canonical_json import CANONICAL_JSON_IMPORTER
+from contextsafe.importers.fhir_r4_json import FHIR_R4_JSON_IMPORTER
 from contextsafe.models import Checkpoint, SyntheticCase
 
 __all__ = [
@@ -37,7 +38,10 @@ __all__ = [
 ]
 
 REGISTRY: Mapping[str, Importer] = MappingProxyType(
-    {CANONICAL_JSON_IMPORTER.format_name: CANONICAL_JSON_IMPORTER}
+    {
+        CANONICAL_JSON_IMPORTER.format_name: CANONICAL_JSON_IMPORTER,
+        FHIR_R4_JSON_IMPORTER.format_name: FHIR_R4_JSON_IMPORTER,
+    }
 )
 """Every registered format, by the name ``--format`` selects it with."""
 

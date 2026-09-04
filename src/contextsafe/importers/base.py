@@ -79,6 +79,27 @@ class ImportErrorCode(StrEnum):
     CHECKPOINT_MISMATCH = "import_checkpoint_mismatch"
     """The source names a checkpoint other than the one requested."""
 
+    RESOURCE_UNSUPPORTED = "import_resource_unsupported"
+    """A resource, segment, or document kind is outside the format's allowlist."""
+
+    ELEMENT_UNSUPPORTED = "import_element_unsupported"
+    """An element is outside the format's allowlist; nothing was stripped."""
+
+    EXTENSION_UNKNOWN = "import_extension_unknown"
+    """An extension or sub-extension name has no entry in the format's profile."""
+
+    IDENTIFIER_NOT_SYNTHETIC = "import_identifier_not_synthetic"
+    """An identifier or resource id is outside the synthetic namespace."""
+
+    VALUE_UNSUPPORTED = "import_value_unsupported"
+    """A coded value or name part is outside the closed alphabet the profile admits."""
+
+    REFERENCE_OUTSIDE_DOCUMENT = "import_reference_outside_document"
+    """A reference points at something the document does not carry."""
+
+    CARDINALITY_UNSUPPORTED = "import_cardinality_unsupported"
+    """A count the profile fixes (exactly one, at least one, at most N) was not met."""
+
 
 class ImportWarningCode(StrEnum):
     """Everything an importer may say about a conversion beyond its output."""
@@ -88,6 +109,26 @@ class ImportWarningCode(StrEnum):
 
     MAPPING_PROFILE_NOT_BOUND = "mapping_profile_not_bound"
     """Values are carried as source tokens; no profile has bound them."""
+
+    CHECKPOINT_ASSERTED_BY_CALLER = "checkpoint_asserted_by_caller"
+    """The source names no checkpoint; the one recorded is the caller's claim."""
+
+
+UNBOUND_CODE_SYSTEM = "urn:contextsafe:unbound-code-system"
+"""Gender identity's ``code_system`` when the source names none.
+
+A source that carries a code and no code system has not said where the code
+came from. A profile binds a token to the system it belongs to; until one
+does, the observation says the system is unbound rather than claiming one.
+"""
+
+UNBOUND_SOURCE = "urn:contextsafe:unbound-source"
+"""Recorded sex or gender's ``source`` when the source names none.
+
+The recording context of an RSG value is a property of the system that
+recorded it, not of the checkpoint it was observed at, so the checkpoint is
+never written here in its place.
+"""
 
 
 def import_error(code: ImportErrorCode, path: str, message: str) -> ContextSafeError:

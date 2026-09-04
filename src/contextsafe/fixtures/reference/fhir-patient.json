@@ -1,0 +1,84 @@
+{
+  "resourceType": "Patient",
+  "id": "CSYN-CTP-I01",
+  "identifier": [
+    {
+      "system": "urn:contextsafe:synthetic",
+      "value": "CSYN-CTP-I01"
+    }
+  ],
+  "active": true,
+  "name": [
+    {
+      "use": "usual",
+      "family": "ZZZTESTCONTEXTSAFE",
+      "given": ["CSYN-ASTER"]
+    },
+    {
+      "use": "official",
+      "family": "ZZZTESTCONTEXTSAFE",
+      "given": ["CSYN-LEGAL-GIVEN-1"]
+    }
+  ],
+  "extension": [
+    {
+      "url": "http://hl7.org/fhir/StructureDefinition/individual-genderIdentity",
+      "extension": [
+        {
+          "url": "value",
+          "valueCodeableConcept": {
+            "coding": [
+              {
+                "system": "urn:contextsafe:fixture",
+                "code": "CSYN-GENDER-1"
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "url": "http://hl7.org/fhir/StructureDefinition/individual-pronouns",
+      "extension": [
+        {
+          "url": "value",
+          "valueCodeableConcept": {
+            "coding": [
+              {
+                "system": "urn:contextsafe:fixture",
+                "code": "CSYN-PRONOUN-THEY-THEM"
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "url": "http://hl7.org/fhir/StructureDefinition/individual-recordedSexOrGender",
+      "extension": [
+        {
+          "url": "value",
+          "valueCodeableConcept": {
+            "coding": [
+              {
+                "system": "urn:contextsafe:fixture",
+                "code": "X"
+              }
+            ]
+          }
+        },
+        {
+          "url": "type",
+          "valueCodeableConcept": {
+            "coding": [
+              {
+                "system": "urn:contextsafe:fixture",
+                "code": "CSYN-GOVERNMENT-ID"
+              }
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}

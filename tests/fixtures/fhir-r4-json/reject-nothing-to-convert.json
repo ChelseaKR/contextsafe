@@ -1,0 +1,19 @@
+{
+  "resourceType": "Patient",
+  "id": "CSYN-CTP-I01",
+  "identifier": [
+    {
+      "system": "urn:contextsafe:synthetic",
+      "value": "CSYN-CTP-I01"
+    }
+  ],
+  "name": [
+    {
+      "use": "official",
+      "family": "ZZZTESTCONTEXTSAFE",
+      "given": [
+        "CSYN-LEGAL-GIVEN-1"
+      ]
+    }
+  ]
+}

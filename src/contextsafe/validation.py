@@ -35,7 +35,18 @@ _OBSERVATION_ID = re.compile(r"^OBS-[A-Z0-9-]{3,48}$")
 _RULE_ID = re.compile(r"^A-I[0-9]{2}$")
 _SEMVER = re.compile(r"^(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)$")
 _SHA256 = re.compile(r"^[0-9a-f]{64}$")
-_SOURCE_POINTER = re.compile(r"^\$[.\[\]A-Za-z0-9_-]{1,127}$")
+_SOURCE_POINTER = re.compile(
+    r"^(?:\$[.\[\]A-Za-z0-9_-]{1,127}|(?:/[A-Za-z0-9_.-]+){1,16})$"
+)
+"""Where in its source an observation was read from.
+
+Two grammars, one field. The first is the ``$``-rooted path every ContextSafe
+document has always used. The second is an RFC 6901 JSON Pointer, which is
+how a FHIR document names an element; it is admitted since the FHIR R4 reader
+(B-023) with unescaped alphanumeric reference tokens only, because every
+element name the reader accepts is one, and at most sixteen deep. Both are
+structural: neither can carry a value from the source.
+"""
 _SAFE_TOKEN = re.compile(r"^[A-Za-z0-9:/_.-]{1,96}$")
 _ORDER_CONTEXT_TOKEN = re.compile(r"^ORDER-CSYN-[A-Za-z0-9:/_.-]+$")
 _SUPPORT_OBSERVATION_TOKEN = re.compile(r"^SUP-CSYN-[A-Za-z0-9:/_.-]+$")

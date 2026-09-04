@@ -50,6 +50,7 @@ from contextsafe.importers.canonical_json import (
     UNBOUND_SOURCE,
     convert_scanned,
 )
+from contextsafe.importers.fhir_r4_json import FHIR_R4_FORMAT
 from contextsafe.jsonio import parse_json_bytes
 from contextsafe.models import Checkpoint, ConceptKind, SyntheticCase
 from contextsafe.preflight import MAX_EVIDENCE_BYTES, ScannedSource
@@ -761,7 +762,7 @@ def test_cli_unknown_format_is_a_usage_error_before_any_file_opens(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
     args = _import_args(tmp_path / "absent.json", tmp_path / "absent-case.json")
-    args[2] = "fhir-r4-json"
+    args[2] = "hl7-v2-er7"
     with pytest.raises(SystemExit) as raised:
         main(args)
     assert raised.value.code == EXIT_USAGE_ERROR
@@ -813,14 +814,14 @@ def test_cli_reports_output_failure(
 
 
 def test_registry_is_read_only_and_names_the_command_line_choices() -> None:
-    assert available_formats() == (CANONICAL_JSON_FORMAT,)
+    assert available_formats() == (CANONICAL_JSON_FORMAT, FHIR_R4_FORMAT)
     importer = importer_for(CANONICAL_JSON_FORMAT)
     assert importer is REGISTRY[CANONICAL_JSON_FORMAT]
     assert importer.format_name == CANONICAL_JSON_FORMAT
     assert importer.mapping_version == CANONICAL_JSON_MAPPING_VERSION
     with pytest.raises(TypeError):
-        REGISTRY["fhir-r4-json"] = REGISTRY[CANONICAL_JSON_FORMAT]  # type: ignore[index]
-    for name in ("fhir-r4-json", "", None, 1):
+        REGISTRY["hl7-v2-er7"] = REGISTRY[CANONICAL_JSON_FORMAT]  # type: ignore[index]
+    for name in ("hl7-v2-er7", "", None, 1):
         with pytest.raises(ContextSafeError) as raised:
             importer_for(name)
         assert raised.value.code in {

@@ -105,6 +105,115 @@ rather than after it.
   laboratory, interoperability, or community reviewer has approved it, and
   nothing it emits can authorize execution or relabel an unsigned artifact.
 
+- **`contextsafe import --format fhir-r4-json`, a read-only FHIR R4 JSON
+  reader for one synthetic Patient (B-023).** The second format registered
+  through the B-022 importer registry, with no change to `cli.py`. It opens
+  one FHIR R4 JSON document -- a `Patient`, or a `Bundle` of type
+  `collection` or `searchset` whose only entry is a `Patient` -- through the
+  same evidence boundary scan as every other format (one descriptor,
+  no-follow, one MiB, prohibited fields, Unicode controls, PHI canaries,
+  direct-identifier patterns), reads it against an exact element allowlist,
+  and emits the observation-set document `evaluate --observations` accepts.
+  The HL7 Gender Harmony extensions map to the canonical concepts by an
+  identity over concept names: `individual-genderIdentity` to gender
+  identity, `individual-pronouns` to pronouns,
+  `individual-recordedSexOrGender` to recorded sex or gender (its `type`
+  sub-extension is the canonical context), and the `HumanName` with `use`
+  equal to `usual` to name to use. Every observation carries the source
+  digest, the profile version as `mapping.mapping_version`, and an RFC 6901
+  JSON Pointer to the element it was read from (`/extension/0`,
+  `/entry/0/resource/name/0`). Values are the coding's own code and system,
+  verbatim. Two gender-identity extensions or two usual names become two
+  observations, which the evaluator already reports as `ambiguous_evidence`.
+  The packaged reference set gains `fhir-patient.json`, the accepting
+  synthetic Patient for CTP-I01 with CSYN tokens only; `fixtures export`
+  carries it, and the three-run determinism matrix pins its import digest.
+
+  Rejections are whole-source, with a code and a location and never the
+  content, and nothing is stripped. Before the reader runs, the boundary
+  scan rejects any narrative (`text`, with its `div`), any `contained`
+  resource, any `note`, `comment`, `telecom`, `address`, or `birthDate`
+  key, and any URL that is not one of the five published constants (the
+  four Gender Harmony extension URLs and the `data-absent-reason` code
+  system), which are exempt from the URL detector by exact equality only.
+  The reader then rejects any element outside its allowlist (`gender`,
+  `meta`, `photo`, and the rest of `Patient` included), any extension or
+  sub-extension outside the profile (`comment`, `period`), any `display` on
+  a coding, more than one coding on a value, any identifier or resource id
+  outside `urn:contextsafe:synthetic` / `CSYN-`, a Patient that does not
+  carry the case document's token, any `managingOrganization`,
+  `generalPractitioner`, or `link` reference (no other resource can be in
+  the document for it to resolve to), any resource type other than
+  `Patient`, more or fewer than one Patient, a name without a declared
+  `use`, a name with no `given` or `family` part, a usual name with other
+  than one `given` token, a name part or coded value outside the synthetic
+  alphabet, a `Bundle.total` that is not the integer one, and a Patient
+  carrying none of the concepts. A recorded-sex-or-gender code outside the
+  contract's closed alphabet reaches the observation contract and is
+  rejected there with its own code, never normalized to the closest value
+  (A-033). Recorded sex or gender carries no presence state: the canonical
+  concept has a value and a context and no status, so a `value` or `type`
+  coding in the `data-absent-reason` system rejects with
+  `import_concept_not_convertible` rather than arriving as a recorded value;
+  in particular that system's `unknown` ("not recorded") never becomes the
+  contract's `unknown` ("recorded as unknown"), which a rule expecting a
+  recorded value would otherwise match. One
+  fixture per rejection class is committed under
+  `tests/fixtures/fhir-r4-json/`, and a test requires every committed
+  fixture to be pinned to its code and location.
+
+  Sex parameter for clinical use comes only from the
+  `patient-sexParameterForClinicalUse` extension, and this iteration does
+  not carry it: the canonical concept needs an order context and a
+  supporting-observation link, neither `Encounter` nor `ServiceRequest` is
+  implemented as a carrier, and the extension rejects with
+  `import_concept_not_convertible` rather than arriving without them.
+  Nothing derives SPCU from any other concept.
+
+  The reader's choices are one versioned constant, `FHIR_R4_PROFILE`
+  (0.1.0), whose docstring names each choice the implementation guide left
+  uncertain -- the `value` sub-extension form, `type` as the RSG context,
+  the three `data-absent-reason` presence codes, one `given` as the name to
+  use -- and whose `reviewed` field is `False` and cannot be set. The
+  accepted subset is published as
+  `schemas/contextsafe-fhir-r4-source-v0.1.schema.json`, a closed,
+  reference-only contract that is not a FHIR conformance profile; a test
+  holds the schema and the runtime to the same verdict on every committed
+  fixture and lists the four rejections only the runtime can see (a
+  canary, a direct-identifier pattern, the case-token cross-check, and the
+  count over concepts); which coding shape each sub-extension admits is
+  written into the schema per extension, so a presence code where the
+  concept has no state, an alphabet code where a synthetic token is
+  required, and a recorded-sex-or-gender value outside the closed alphabet
+  fail the schema and the runtime alike. The
+  boundary scan now takes a `BoundaryProfile`, a format's declared delta
+  from the canonical scan (`name` permitted, FHIR element names as safe
+  location keys, the five constants); the canonical profile permits nothing
+  and `evidence preflight` is unchanged. `src/contextsafe/importers/fhir_r4_json.py`
+  is a declared safety module.
+
+  One published contract widened: the observation-set v0.1
+  `evidence.source_pointer` pattern, and the runtime rule behind it, now
+  admit an RFC 6901 JSON Pointer with unescaped alphanumeric reference
+  tokens alongside the `$`-rooted path. Every previously valid document is
+  still valid, no schema version moved, and the pinned reference-receipt
+  digest is unchanged; a `$comment` on the property names the date and the
+  item, because a consumer holding the earlier copy of the file rejects
+  every `fhir-r4-json` output. The two Hypothesis suites that draw an
+  element name or an identifier for the reader assert value-free rejection
+  the way the B-022 suites do: the whole error object is a member of a
+  closed set of fixed sentences at a location built only from the profile's
+  own element names, and the short draws a substring check would fail on
+  are pinned as explicit examples. The import-side warning vocabulary gains
+  `checkpoint_asserted_by_caller`, because a FHIR document names no
+  checkpoint and the one recorded is the caller's claim. What this does
+  not claim: no interoperability, clinical, laboratory, or community
+  reviewer has approved the profile; nothing here reads a FHIR server,
+  persists, indexes, or logs a source, or authorizes execution; the
+  receipt's own limitation text is unchanged and still says this iteration
+  does not ingest FHIR, which remains true of evidence import and is a
+  wording the maintainer, not this change, decides.
+
 ## [0.1.0] - 2026-09-02
 
 ### Fixed

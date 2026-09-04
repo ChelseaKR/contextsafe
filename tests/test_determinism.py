@@ -61,6 +61,16 @@ byte of it would change every receipt downstream. It moves only with the
 reference source, the case document, or the importer's mapping version.
 """
 
+IMPORTED_FHIR_OBSERVATIONS_SHA256 = (
+    "ab739138a46ba7f62216f889950578c5df262660240731bdd8884d38c938b760"
+)
+"""SHA-256 of ``import --format fhir-r4-json`` over the reference Patient.
+
+Pinned for the same reason as the canonical import digest. It moves only
+with the reference Patient fixture, the case document, or the FHIR reader's
+profile version.
+"""
+
 _ENVIRONMENTS: tuple[dict[str, str], ...] = (
     {
         "TZ": "UTC",
@@ -439,6 +449,74 @@ def test_import_rejection_is_deterministic(tmp_path: Path) -> None:
     _assert_canonical_line(runs[0].stderr)
     assert json.loads(runs[0].stderr.decode("utf-8"))["error"]["code"] == (
         "import_checkpoint_mismatch"
+    )
+
+
+@pytest.mark.skipif(os.name == "nt", reason=_WINDOWS_UNSUPPORTED)
+def test_fhir_import_observation_set_is_deterministic_and_pinned(
+    tmp_path: Path,
+) -> None:
+    """The FHIR reader is byte-stable, and its digest is one constant.
+
+    Every pointer is an RFC 6901 path into the document and every digest is
+    the digest of the reference bytes, so the artifact cannot depend on the
+    directory the source was read from or on anything in the environment.
+    """
+
+    runs = _three_runs(
+        tmp_path,
+        lambda reference: [
+            "import",
+            "--format",
+            "fhir-r4-json",
+            "--source",
+            str(reference / "fhir-patient.json"),
+            "--case",
+            str(reference / "case.json"),
+            "--checkpoint",
+            "ehr",
+        ],
+        with_output=True,
+    )
+    _assert_identical(runs)
+    assert runs[0].returncode == 0
+    assert runs[0].stdout == b""
+    assert runs[0].stderr == b""
+    artifact = runs[0].artifact
+    assert artifact is not None
+    _assert_canonical_line(artifact)
+    assert hashlib.sha256(artifact).hexdigest() == IMPORTED_FHIR_OBSERVATIONS_SHA256
+    for fragment in (str(tmp_path), str(ROOT), "Kiritimati", "en_US", "inputs-b"):
+        assert fragment.encode("utf-8") not in artifact
+
+
+@pytest.mark.skipif(os.name == "nt", reason=_WINDOWS_UNSUPPORTED)
+def test_fhir_import_rejection_is_deterministic(tmp_path: Path) -> None:
+    """A rejected FHIR document is the same one-line error object on every run."""
+
+    rejected = (
+        ROOT / "tests" / "fixtures" / "fhir-r4-json" / "reject-spcu-extension.json"
+    )
+    runs = _three_runs(
+        tmp_path,
+        lambda reference: [
+            "import",
+            "--format",
+            "fhir-r4-json",
+            "--source",
+            str(rejected),
+            "--case",
+            str(reference / "case.json"),
+            "--checkpoint",
+            "ehr",
+        ],
+    )
+    _assert_identical(runs)
+    assert runs[0].returncode == 2
+    assert runs[0].stdout == b""
+    _assert_canonical_line(runs[0].stderr)
+    assert json.loads(runs[0].stderr.decode("utf-8"))["error"]["code"] == (
+        "import_concept_not_convertible"
     )
 
 

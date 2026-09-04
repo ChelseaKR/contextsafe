@@ -31,6 +31,8 @@ from pathlib import Path
 
 from contextsafe.evidence import BoundaryRecord, parse_evidence_envelope
 from contextsafe.importers.base import (
+    UNBOUND_CODE_SYSTEM,
+    UNBOUND_SOURCE,
     ImportErrorCode,
     ImportResult,
     ImportWarningCode,
@@ -67,21 +69,15 @@ the table below, to the unbound tokens, or to the presence rules is a change
 to this number.
 """
 
-UNBOUND_CODE_SYSTEM = "urn:contextsafe:unbound-code-system"
-"""Gender identity's ``code_system`` when the source names none.
-
-The canonical envelope carries a ``value_code`` and no code system. A profile
-binds a token to the system it came from; until one does, the observation
-says the system is unbound rather than claiming one.
-"""
-
-UNBOUND_SOURCE = "urn:contextsafe:unbound-source"
-"""Recorded sex or gender's ``source`` when the source names none.
-
-The recording context of an RSG value is a property of the system that
-recorded it, not of the checkpoint it was observed at, so the checkpoint is
-not written here in its place.
-"""
+__all__ = [
+    "CANONICAL_JSON_FORMAT",
+    "CANONICAL_JSON_IMPORTER",
+    "CANONICAL_JSON_MAPPING_VERSION",
+    "UNBOUND_CODE_SYSTEM",
+    "UNBOUND_SOURCE",
+    "CanonicalJsonImporter",
+    "convert_scanned",
+]
 
 _FIELD_CODE_CONCEPTS: Mapping[str, ConceptKind] = {
     "gender_identity": ConceptKind.GENDER_IDENTITY,

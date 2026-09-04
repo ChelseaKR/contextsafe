@@ -341,20 +341,32 @@ def test_the_rule_lapses_if_the_makefile_goes_back_to_frozen(repo: Path) -> None
 
 
 def test_a_new_contract_missing_from_the_schema_readme_is_a_finding(repo: Path) -> None:
+    """One more contract than the README states is a finding naming both.
+
+    The expected count is derived from the scaffold rather than written as a
+    literal, so this test moves with the repository instead of pinning the
+    number of contracts that happened to exist when it was written.
+    """
+
+    later = len(gate.schema_contracts(repo)) + 1
     (repo / "schemas" / "contextsafe-later-v1.schema.json").write_text("{}\n", "utf-8")
     findings = gate.run_gate(repo)
     assert _checks(findings) == {"schema-contracts"}
-    assert any("twelve contracts" in f.detail for f in findings)
+    word = gate.NUMBER_WORDS.get(later, str(later))
+    assert any(f"{word} contracts" in f.detail for f in findings)
     assert any("contextsafe-later-v1.schema.json" in f.detail for f in findings)
 
 
 def test_a_count_beyond_the_number_words_is_reported_in_digits(repo: Path) -> None:
-    for index in range(3):
+    beyond = max(gate.NUMBER_WORDS) + 1
+    extra = beyond - len(gate.schema_contracts(repo))
+    assert extra > 0
+    for index in range(extra):
         (repo / "schemas" / f"contextsafe-extra{index}-v1.schema.json").write_text(
             "{}\n", encoding="utf-8"
         )
     findings = [f for f in gate.run_gate(repo) if "contracts'" in f.detail]
-    assert findings and "'14 contracts'" in findings[0].detail
+    assert findings and f"'{beyond} contracts'" in findings[0].detail
 
 
 def test_an_empty_schemas_directory_cannot_be_examined(repo: Path) -> None:

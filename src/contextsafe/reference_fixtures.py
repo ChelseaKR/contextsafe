@@ -1,6 +1,6 @@
 """The packaged synthetic reference fixtures, and the command that exports them.
 
-The five reference inputs under ``fixtures/reference`` beside this module are
+The six reference inputs under ``fixtures/reference`` beside this module are
 package data, so an installed wheel carries them exactly as a checkout does.
 Every documented quickstart names them by the relative path
 ``fixtures/reference/<name>``; ``contextsafe fixtures export`` writes them to
@@ -32,6 +32,7 @@ REFERENCE_ROOT = Path(__file__).parent / "fixtures" / "reference"
 REFERENCE_FILES: tuple[str, ...] = (
     "case.json",
     "evidence-source.json",
+    "fhir-patient.json",
     "observations.json",
     "pack-draft.json",
     "rules.json",

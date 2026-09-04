@@ -5,7 +5,7 @@ document shape. They are the published half of the fail-closed boundary: the
 runtime has no dependencies and does not validate its own output at run time,
 so these files are what a consumer validates against, and
 `tests/test_contracts.py` and `tests/test_receipt_schema.py` are what keep them
-in agreement with the code.
+in agreement with the code. There are twelve contracts:
 
 | Contract | Shape |
 | --- | --- |
@@ -14,6 +14,7 @@ in agreement with the code.
 | `contextsafe-observation-v1.schema.json` | one ambiguity-preserving observation |
 | `contextsafe-evidence-v1.schema.json` | an accepted evidence record |
 | `contextsafe-evidence-source-v1.schema.json` | the canonical JSON evidence boundary envelope |
+| `contextsafe-fhir-r4-source-v0.1.schema.json` | the FHIR R4 JSON subset the `fhir-r4-json` importer reads; reference-only, not a conformance profile |
 | `contextsafe-pack-v1.schema.json` | a test-pack envelope |
 | `contextsafe-compiled-pack-v1.schema.json` | the unsigned compiled pack |
 | `contextsafe-engagement-v1.schema.json` | an engagement declaration |
@@ -35,7 +36,7 @@ contract — and nothing here is dereferenced: no code in this repository fetche
 a schema over the network, and the `$ref`s inside these files are all local
 (`#/$defs/...`).
 
-This was not always consistent. Five of the eleven contracts previously claimed
+This was not always consistent. Five of the eleven that existed then claimed
 `$id` under `contextsafe.dev`, a domain nobody had registered. That is a real
 defect on a public repository rather than a cosmetic one: an unregistered
 domain in a published contract identity is squattable, and whoever registers it

@@ -180,7 +180,10 @@
             "source_sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
             "source_pointer": {
               "type": "string",
-              "pattern": "^\\$[.\\[\\]A-Za-z0-9_-]{1,127}$"
+              "maxLength": 128,
+              "pattern": "^(\\$[.\\[\\]A-Za-z0-9_-]{1,127}|(/[A-Za-z0-9_.-]+){1,16})$",
+              "$comment": "Widened on 2026-09-04 by B-023 to admit the JSON Pointer alternative without a version bump: every document valid under the earlier pattern is still valid, but a consumer holding the earlier copy of this file rejects every fhir-r4-json output.",
+              "description": "A $-rooted ContextSafe path, or an RFC 6901 JSON Pointer with unescaped alphanumeric reference tokens as emitted by the FHIR R4 reader. Structural only; never a source value."
             }
           }
         },
