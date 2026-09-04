@@ -41,14 +41,74 @@ _SHA256 = re.compile(r"^[0-9a-f]{64}$")
 _SOURCE_POINTER = re.compile(
     r"^(?:\$[.\[\]A-Za-z0-9_-]{1,127}|(?:/[A-Za-z0-9_.-]+){1,16})$"
 )
-"""Where in its source an observation was read from.
+"""Where in its source an observation was read from: the alphabet.
 
 Two grammars, one field. The first is the ``$``-rooted path every ContextSafe
-document has always used. The second is an RFC 6901 JSON Pointer, which is
-how a FHIR document names an element; it is admitted since the FHIR R4 reader
-(B-023) with unescaped alphanumeric reference tokens only, because every
-element name the reader accepts is one, and at most sixteen deep. Both are
-structural: neither can carry a value from the source.
+document has always used; the HL7 v2 reader (B-024) writes its
+``$.SEG[n]-field.rep.comp`` pointers in it. The second is an RFC 6901 JSON
+Pointer, which is how a FHIR document names an element; it is admitted since
+the FHIR R4 reader (B-023) with unescaped alphanumeric reference tokens only,
+because every element name the reader accepts is one, and at most sixteen
+deep. Both are structural: neither can carry a value from the source. This
+pattern bounds the alphabet; ``_structural_pointer`` bounds the words.
+"""
+_POINTER_SEGMENT = re.compile(r"\.([A-Za-z0-9_-]+)|\[(0|[1-9][0-9]*)\]")
+_HL7_POINTER = re.compile(
+    r"^\$\.([A-Z][A-Z0-9]{2})\[(?:0|[1-9][0-9]*)\]-(?:0|[1-9][0-9]*)"
+    r"\.(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)$"
+)
+_POINTER_INDEX = re.compile(r"^(?:0|[1-9][0-9]*)$")
+STRUCTURAL_POINTER_SEGMENTS: frozenset[str] = frozenset(
+    {
+        # the canonical case manifest and the canonical JSON evidence envelope
+        "concepts",
+        "gender_identity",
+        "recorded_sex_or_gender",
+        "sex_parameter_for_clinical_use",
+        "name_to_use",
+        "pronouns",
+        "status",
+        "value",
+        "code_system",
+        "context",
+        "source",
+        "context_id",
+        "supporting_observation_ids",
+        "use",
+        "records",
+        "field_code",
+        "value_code",
+        "context_code",
+        # the FHIR R4 reader (B-023): the element names on the path to a carrier
+        "entry",
+        "resource",
+        "name",
+        "extension",
+        # the HL7 v2 ER7 reader (B-024): its segment allowlist
+        "MSH",
+        "PID",
+        "GSP",
+        "OBR",
+        "OBX",
+        # the LIS export readers (B-025): the row array and the identity columns
+        "rows",
+        "sex",
+    }
+)
+"""The closed vocabulary a source pointer may be built from (B-031, A-035).
+
+A pointer names where in a source a value was read, and the receipt trace
+carries it verbatim, so it must be a structural path and nothing else. Three
+dialects are admitted, each over this one vocabulary: the ``$``-rooted path of
+the canonical case manifest, the canonical JSON evidence envelope, and the LIS
+export readers, joined by ``.`` and indexed by ``[n]``; the RFC 6901 JSON
+Pointer the FHIR R4 reader emits, whose reference tokens are element names or
+indices; and the HL7 v2 reader's ``$.SEG[n]-field.rep.comp``, whose only word
+is the segment name. A word outside this set is free text where none is
+allowed, and the whole observation set is refused rather than the segment
+being carried, hashed, or dropped. A source profile that needs more names
+extends this set under review, not by widening a grammar.
+"""
 """
 _SAFE_TOKEN = re.compile(r"^[A-Za-z0-9:/_.-]{1,96}$")
 _ORDER_CONTEXT_TOKEN = re.compile(r"^ORDER-CSYN-[A-Za-z0-9:/_.-]+$")
@@ -163,6 +223,49 @@ def _string(value: object, path: str, *, pattern: re.Pattern[str] | None = None)
             "invalid_format", path, "string does not match the required format"
         )
     return value
+
+
+def _structural_pointer(value: object, path: str) -> str:
+    """Return a source pointer built only from structural segments.
+
+    ``_SOURCE_POINTER`` bounds the alphabet; this bounds the words, in whichever
+    of the three dialects the pointer is written. ``$`` alone is not a location,
+    so at least one segment is required, and the segments must account for
+    every character after the root.
+    """
+
+    pointer = _string(value, path, pattern=_SOURCE_POINTER)
+    if pointer.startswith("/"):
+        structural = all(
+            _POINTER_INDEX.fullmatch(token) is not None
+            or token in STRUCTURAL_POINTER_SEGMENTS
+            for token in pointer[1:].split("/")
+        )
+    elif (hl7 := _HL7_POINTER.fullmatch(pointer)) is not None:
+        structural = hl7.group(1) in STRUCTURAL_POINTER_SEGMENTS
+    else:
+        structural = _walks_the_vocabulary(pointer[1:])
+    if not structural:
+        raise _error(
+            "non_structural_pointer",
+            path,
+            "source pointer must be a path of structural segments only",
+        )
+    return pointer
+
+
+def _walks_the_vocabulary(body: str) -> bool:
+    """True when ``body`` is wholly ``.word`` and ``[n]`` segments over the set."""
+
+    position = 0
+    for match in _POINTER_SEGMENT.finditer(body):
+        if match.start() != position:
+            return False
+        name = match.group(1)
+        if name is not None and name not in STRUCTURAL_POINTER_SEGMENTS:
+            return False
+        position = match.end()
+    return position == len(body)
 
 
 def _nullable_string(value: object, path: str) -> str | None:
@@ -530,10 +633,8 @@ def _observation(value: object, path: str) -> Observation:
             f"{path}.evidence.source_sha256",
             pattern=_SHA256,
         ),
-        source_pointer=_string(
-            evidence_data["source_pointer"],
-            f"{path}.evidence.source_pointer",
-            pattern=_SOURCE_POINTER,
+        source_pointer=_structural_pointer(
+            evidence_data["source_pointer"], f"{path}.evidence.source_pointer"
         ),
     )
     return Observation(

@@ -34,6 +34,9 @@ keep each in agreement with the runtime's allowlists and grammars. Neither
 is a claim that any laboratory system exports this shape or that any
 interoperability reviewer has approved a mapping.
 
+| `contextsafe-rule-set-v0.2.schema.json` | a deterministic fixture rule set whose rules may name a closed, reference-only predicate; the exact-only 0.1.0 shape has no separate schema and is still accepted by the runtime |
+| `contextsafe-receipt-v0.3.schema.json` | the receipt document: deterministic payload plus untrusted envelope; 0.2 widened the closed outcome-reason set for the rule-set predicates, and 0.3 adds the first-observed-divergence section and the per-outcome evidence trace with a closed structural-pointer grammar |
+
 ## Why every `$id` is under a domain that will never resolve
 
 Each schema's `$id` is `https://contextsafe.invalid/schemas/<filename>`.
@@ -81,6 +84,7 @@ with it: the `schema_version` constant the runtime emits, the filename, and the
 The receipt contract went from 0.1 to 0.2 this way when the rule-set predicates
 added outcome reasons, so a consumer pinned to the 0.1 `$id` rejects a 0.2
 receipt on its `schema_version` rather than accepting a reason it has never
-seen. The rule-set contract's 0.1.0 shape is the one exception to "one file per
+seen, and from 0.2 to 0.3 when the divergence section and the outcome trace
+were added as required fields. The rule-set contract's 0.1.0 shape is the one exception to "one file per
 contract": it predates the published schemas, is still accepted unchanged by
 the runtime and pinned by the pack contract, and has no file here.

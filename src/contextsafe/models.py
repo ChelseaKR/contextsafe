@@ -26,7 +26,12 @@ rule that uses them.
 SUPPORTED_RULE_SET_SCHEMA_VERSIONS = frozenset(
     {RULE_SET_SCHEMA_VERSION, PREDICATE_RULE_SET_SCHEMA_VERSION}
 )
-RECEIPT_SCHEMA_VERSION = "contextsafe.receipt/0.2.0"
+RECEIPT_SCHEMA_VERSION = "contextsafe.receipt/0.3.0"
+"""The receipt payload shape.
+
+0.3 adds the first-observed-divergence section and the per-outcome evidence
+trace (B-031, A-034 and A-035) and changes nothing that 0.2 carried.
+"""
 RECEIPT_DOCUMENT_SCHEMA_VERSION = "contextsafe.receipt-document/0.1.0"
 
 
@@ -50,12 +55,71 @@ class ValueStatus(StrEnum):
 
 
 class Checkpoint(StrEnum):
-    """Observed boundaries in the bounded reference workflow."""
+    """Observed boundaries in the bounded reference workflow.
+
+    Declared in pathway order: a value enters at registration, is stored in
+    the EHR, crosses the interface, and returns from the laboratory. The
+    first-observed-divergence computation walks members in this order.
+    """
 
     REGISTRATION = "registration"
     EHR = "ehr"
     INTERFACE = "interface"
     LIS_RETURN = "lis_return"
+
+
+PATHWAY: tuple[Checkpoint, ...] = tuple(Checkpoint)
+"""The checkpoints in pathway order, which is their declaration order."""
+
+
+class EvidenceState(StrEnum):
+    """What the observation set holds for one concept at one checkpoint.
+
+    ``unobserved`` is the absence of evidence and nothing more: it is never
+    agreement, never divergence, and never blamed (A-032, A-034).
+    """
+
+    OBSERVED = "observed"
+    """Evidence that reads as one state of the concept at this boundary."""
+
+    UNOBSERVED = "unobserved"
+    """No observation at this boundary; nothing is known about it."""
+
+    AMBIGUOUS = "ambiguous"
+    """Evidence that cannot be read as one state: more than one observation
+    of a single-valued concept, or the same record captured twice."""
+
+
+class DivergenceStatus(StrEnum):
+    """The closed set of things a divergence entry may say (A-034).
+
+    A divergence is located only at an observed boundary. An unobserved
+    boundary between two observed ones leaves the divergence located between
+    those two, and no status here can name the unobserved one.
+    """
+
+    DIVERGED = "diverged"
+    """The first observed boundary whose value hashes differ."""
+
+    AGREED_WHERE_OBSERVED = "agreed_where_observed"
+    """Every observed boundary agreed; unobserved boundaries said nothing."""
+
+    INDETERMINATE = "indeterminate"
+    """An ambiguous boundary was reached before any divergence was found."""
+
+    UNOBSERVED = "unobserved"
+    """Too few observed boundaries to compare anything at all."""
+
+
+SINGLE_VALUED_CONCEPTS: frozenset[ConceptKind] = frozenset(
+    {ConceptKind.GENDER_IDENTITY, ConceptKind.NAME_TO_USE, ConceptKind.PRONOUNS}
+)
+"""Concepts the case manifest declares exactly once.
+
+More than one observation of one of these at one boundary is ambiguous
+evidence. Recorded sex or gender and SPCU are record lists, so several
+distinct records at one boundary are one observed state.
+"""
 
 
 class OutcomeStatus(StrEnum):

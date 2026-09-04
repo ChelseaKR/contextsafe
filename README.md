@@ -23,7 +23,8 @@ It evaluates five checkpoints — gender identity at the EHR, recorded sex or
 gender at registration, sex parameter for clinical use at the interface, name to
 use and pronouns at the EHR — comparing an expected SHA-256 against what was
 observed. Below is that command's real output, pretty-printed, with four of the
-five result objects elided where marked:
+five result objects and four of the five divergence entries elided where
+marked:
 
 ```jsonc
 {
@@ -34,9 +35,36 @@ five result objects elided where marked:
   },
   "payload": {
     "case_id": "CTP-I01",
+    "divergence": {
+      "concepts": [
+        {
+          "checkpoints": [
+            { "checkpoint": "registration", "state": "unobserved", "value_sha256s": [] },
+            {
+              "checkpoint": "ehr",
+              "state": "observed",
+              "value_sha256s": [
+                "4b586a13d46580ed0a2126fcd4aedf4bfa89d5956d6baad6aaf9e59455c88df8"
+              ]
+            },
+            { "checkpoint": "interface", "state": "unobserved", "value_sha256s": [] },
+            { "checkpoint": "lis_return", "state": "unobserved", "value_sha256s": [] }
+          ],
+          "concept": "gender_identity",
+          "expected_sha256s": [
+            "4b586a13d46580ed0a2126fcd4aedf4bfa89d5956d6baad6aaf9e59455c88df8"
+          ],
+          "from_expected": { "at": null, "status": "agreed_where_observed" },
+          "from_previous": { "after": null, "at": null, "status": "unobserved" }
+        }
+        // four more entries elided: recorded_sex_or_gender, sex_parameter_for_clinical_use,
+        // name_to_use, pronouns — each observed at one boundary and unobserved at the rest
+      ],
+      "pathway": ["registration", "ehr", "interface", "lis_return"]
+    },
     "hashes": {
       "input_sha256": "d9db15f2b90278df25c15cddbc6464c0c410451e690b96b6e94ce29a823c0920",
-      "result_sha256": "f7abf85fddb937681d095ab353f264fa79bfce7ea8224769c0e87e2641170096",
+      "result_sha256": "415c2718630845efc56493433368a7854d0d55268a4eda14b10b22980d6d55e2",
       "rule_set_sha256": "aa81475440694f69bf6a819e9119678bcae6e8ff25adf9b8f4f69a7efc8d5b12"
     },
     "limitations": [
@@ -60,13 +88,27 @@ five result objects elided where marked:
         "reason": "affirmative_evidence_match",
         "rule_id": "A-I01",
         "rule_version": "0.1.0",
-        "status": "pass"
+        "status": "pass",
+        "trace": {
+          "mappings": [
+            {
+              "mapping_sha256": "6cc9116756a5ffc9f895697ddb1a41858c2a88a0af116013d2c834ef5cd61aed",
+              "mapping_version": "0.1.0"
+            }
+          ],
+          "sources": [
+            {
+              "source_pointer": "$.concepts.gender_identity",
+              "source_sha256": "1917d730c88ed0f6fd76487c7aeaf58635effb03dfd688d74d423fbcbd510b5a"
+            }
+          ]
+        }
       }
       // four more result objects elided: recorded_sex_or_gender at registration,
       // sex_parameter_for_clinical_use at interface, name_to_use and pronouns at ehr
     ],
     "runner_version": "0.1.0",
-    "schema_version": "contextsafe.receipt/0.2.0",
+    "schema_version": "contextsafe.receipt/0.3.0",
     "scope": {
       "clinical_oracle_approved": false,
       "patient_data_allowed": false,
@@ -80,7 +122,7 @@ five result objects elided where marked:
       "pass": 5
     }
   },
-  "payload_sha256": "d3724d57b33d9db641a31fac56f51276905db0329112643cdb3843c8e2cae64a",
+  "payload_sha256": "07de843716235b50f940400b07d47ff7733c980aa62f1d76a180d74ff123ecf5",
   "schema_version": "contextsafe.receipt-document/0.1.0"
 }
 ```
@@ -88,10 +130,11 @@ five result objects elided where marked:
 The `scope` and `limitations` blocks are part of the result, not small print
 around it. Every receipt says in its own payload that it is `not_signed`, that
 no approved clinical oracle stands behind it, that patient data is not allowed,
-and that the fixture is synthetic — and the payload carries hashes, statuses and
-counts rather than the identity values themselves. Those fields are pinned by
+and that the fixture is synthetic — and the payload carries hashes, statuses,
+counts, and structural source pointers rather than the identity values
+themselves. Those fields are pinned by
 the published
-[receipt contract](schemas/contextsafe-receipt-v0.2.schema.json): the disclosure
+[receipt contract](schemas/contextsafe-receipt-v0.3.schema.json): the disclosure
 set is mandated wording in a fixed order, the unsigned envelope constants are
 closed, and a future signing layer may not relabel these documents. A tool on
 this subject that could not state its own boundaries would not be safe to run,
@@ -215,7 +258,7 @@ payload/envelope and B-033 receipt-schema slices):
   when evaluation ran, and a future signing layer may not relabel these
   unsigned documents;
 - the document has a published
-  [receipt contract](schemas/contextsafe-receipt-v0.2.schema.json), the pre-1.0
+  [receipt contract](schemas/contextsafe-receipt-v0.3.schema.json), the pre-1.0
   shape of the receipt schema in [Architecture §8](docs/04-ARCHITECTURE.md).
   Every object is closed, the unsigned envelope constants are pinned, the
   payload may carry only hashes, statuses, counts, and the mandated disclosure
@@ -546,8 +589,52 @@ refused as a pack component by name. The seeded faults this slice can detect —
 F-004, F-005, F-006, F-007, F-008, F-010, F-031 from
 [Test and evaluation §4](docs/09-TEST-AND-EVALUATION.md) — live as complete
 synthetic inputs under `tests/fixtures/seeded-faults/`, each proved to be
-reported as `fail` with its own reason and never as `pass`; the other
-twenty-nine are not detectable by anything here.
+reported as `fail` with its own reason and never as `pass`; of the other
+twenty-nine, F-023 and F-025 are the B-031 slice's below, and twenty-seven
+are not detectable by anything here.
+
+### B-031
+
+A receipt now says where a value first went wrong, and only where it was
+seen going wrong. The payload's `divergence` section, computed by
+`src/contextsafe/divergence.py` from the case and the observations alone,
+walks the four checkpoints in pathway order for each of the five concepts
+and reports the state of every boundary (`observed`, `unobserved`, or
+`ambiguous`, with the value hashes seen there), the first observed boundary
+whose hashes depart from the manifest's (`from_expected`), and the first
+observed boundary whose hashes depart from the previous observed one
+(`from_previous`, which names both sides). An unobserved boundary is never a
+location: when the EHR was not observed and the interface differs from
+registration, the divergence is `at` the interface and `after` registration,
+and the closed contract has no field in which the EHR could be blamed
+(A-034). Absence is never agreement: `agreed_where_observed` speaks only for
+boundaries with evidence, a concept with none is `unobserved`, and a boundary
+that cannot be read as one state is `ambiguous` and the concept
+`indeterminate` from there (A-032). Every outcome also carries a `trace` —
+the source hash and structural source pointer of each observation the
+predicate read and the version and hash of each mapping they came through
+(A-035) — and `parse_observations` now refuses a pointer with any segment
+outside a closed structural vocabulary, so a pointer can locate a field but
+cannot carry a name. The rendered page shows the section in `en-US` and
+machine-translated `es-US`, with the sentence that says what is never blamed
+beside its original. F-023 and F-025 from
+[Test and evaluation §4](docs/09-TEST-AND-EVALUATION.md) join the seeded-fault
+library, and property tests hold that reordering observations never changes
+the section and that deleting an observed checkpoint never names the deleted
+boundary and never blames a boundary that agreed with its observed
+predecessor.
+
+Its limits: the section compares value hashes and does not say which value
+was right; it is a location, not a finding, and carries no severity (B-032);
+the trace names assertion, mapping, source, and runner but no oracle or pack,
+because none exists to name; A-033 rests on the existing fail-closed
+validators because no normalizer exists yet (B-022 to B-026); `ambiguous` is
+decided by observation count and hash repetition, not by the iteration-3
+ambiguity-preserving observation contract, which has no route into
+evaluation; and the pointer vocabulary is the canonical manifest and evidence
+envelope only, so FHIR and HL7 paths need it extended under review. The
+receipt contract moved to 0.3 for the section and the trace, and no clinical,
+laboratory, or community review has looked at any of it.
 
 The durable evidence store has no CLI import route; `contextsafe import` writes
 only an observation-set document and never an evidence record. Every iteration-3 evidence record says

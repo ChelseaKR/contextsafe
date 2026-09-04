@@ -46,27 +46,32 @@ ROOT = Path(__file__).resolve().parents[1]
 REFERENCE = REFERENCE_ROOT
 
 RECEIPT_DOCUMENT_SHA256 = (
-    "bf4d6b8592d6a9c42cf87fe9e5b9c34fa86d5a09623ee88bd21da5c00c2216fc"
+    "b3fbedaed8158d6c627543d4bf690255ec9b7c2faa7bc7b55222833c89ff2537"
 )
 """SHA-256 of the reference ``evaluate`` document, terminal newline included.
 
-Moved once, on 2026-09-04, when the receipt contract went from 0.1 to 0.2 for
-the B-028 predicate reasons: the payload's ``schema_version`` is inside the
-hashed payload, so the document digest moved with it while ``input_sha256``,
-``result_sha256``, and ``rule_set_sha256`` did not.
+Moved on 2026-09-04, when the receipt contract went from 0.1 to 0.2 for the
+B-028 predicate reasons: the payload's ``schema_version`` is inside the hashed
+payload, so the document digest moved with it while ``input_sha256``,
+``result_sha256``, and ``rule_set_sha256`` did not. Moved again the same day
+for 0.3 (B-031): every outcome gained a ``trace`` and the payload gained a
+``divergence`` section, so ``result_sha256`` moved with the digest;
+``input_sha256`` and ``rule_set_sha256`` did not, and the fixtures did not
+change.
 """
 
 PREDICATE_RECEIPT_DOCUMENT_SHA256 = (
-    "c1bdb5827fa94e23cdf54ca03f7a2db9daefcda379e421fa5670ea483058e2f4"
+    "5456e60084b7d01ed4a893b43508c48cbd2380185124a6ee838374742b8994e7"
 )
 """SHA-256 of the ``evaluate`` document for the packaged predicate pair.
 
 ``rules-predicates.json`` against ``observations-predicates.json``: every
 predicate in the 0.2.0 rule-set contract, evaluated once, pinned to the same
-standard as the exact-only reference receipt. Moved once, on 2026-09-04, when
-the pair gained A-I09, the ``exact`` rule beside its ``not_coerced`` rule, so
+standard as the exact-only reference receipt. Moved on 2026-09-04, when the
+pair gained A-I09, the ``exact`` rule beside its ``not_coerced`` rule, so
 ``rule_set_sha256`` and the outcome list changed; the observation set and the
-case did not.
+case did not. Moved again the same day for receipt contract 0.3 (B-031), for
+the same reason as the reference digest above.
 """
 
 IMPORTED_OBSERVATIONS_SHA256 = (

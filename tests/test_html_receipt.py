@@ -9,6 +9,7 @@ page reaches the network or runs.
 
 from __future__ import annotations
 
+import json
 import os
 import re
 import subprocess
@@ -24,9 +25,11 @@ from contextsafe.errors import ContextSafeError
 from contextsafe.evaluator import evaluate
 from contextsafe.html_receipt import PAGE_KIND, render_receipt_page
 from contextsafe.i18n import SOURCE_LOCALE, load_catalog, source_catalog
-from contextsafe.models import OutcomeReason
+from contextsafe.models import DivergenceStatus, EvidenceState, OutcomeReason
 from contextsafe.receipt import build_receipt_document
 from contextsafe.validation import parse_bundle
+
+FAULTS = Path(__file__).resolve().parent / "fixtures" / "seeded-faults"
 
 _STATUSES = ("pass", "fail", "indeterminate", "blocked", "not_applicable")
 
@@ -367,3 +370,199 @@ def test_every_published_reason_has_a_label_in_every_shipped_locale(
     label = load_catalog(locale).message(f"reason.{reason.value}").text
     assert escape(label) in page
     assert reason.value not in page
+
+
+# --- the divergence section (B-031) -----------------------------------------
+
+
+def _fault_document(name: str) -> dict[str, Any]:
+    raw = json.loads((FAULTS / f"{name}.json").read_text(encoding="utf-8"))
+    bundle = parse_bundle(raw["case"], raw["observations"], raw["rules"])
+    return build_receipt_document(bundle, evaluate(bundle))
+
+
+def _divergence_section(page: str) -> str:
+    start = page.index('<section aria-labelledby="divergence">')
+    return page[start : page.index("</section>", start)]
+
+
+def test_the_divergence_section_renders_every_field_and_boundary(
+    document: dict[str, Any],
+) -> None:
+    """One row per concept in each table, one evidence cell per boundary."""
+
+    section = _divergence_section(render_receipt_page(document))
+    catalog = source_catalog()
+    assert catalog.message("section.divergence.heading").text in section
+    assert catalog.message("divergence.explainer").text in section
+    assert section.count("<tr>") == 2 * 5 + 2
+    assert section.count("data-cs-evidence=") == 20
+    assert section.count("data-cs-divergence=") == 10
+    for checkpoint in ("registration", "ehr", "interface", "lis_return"):
+        assert catalog.message(f"checkpoint.{checkpoint}").text in section
+    for concept in document["payload"]["divergence"]["concepts"]:
+        assert catalog.message(f"concept.{concept['concept']}").text in section
+    assert 'data-cs-evidence="observed"' in section
+    assert 'data-cs-evidence="unobserved"' in section
+    assert 'data-cs-divergence="agreed_where_observed"' in section
+    assert 'data-cs-divergence="unobserved"' in section
+
+
+def test_an_unobserved_boundary_is_never_named_on_the_page() -> None:
+    """F-025 rendered: the divergence reads as between the observed sides."""
+
+    page = render_receipt_page(_fault_document("F-025"))
+    section = _divergence_section(page)
+    catalog = source_catalog()
+    registration = catalog.message("checkpoint.registration").text
+    interface = catalog.message("checkpoint.interface").text
+    ehr = catalog.message("checkpoint.ehr").text
+    assert f"Diverged at {interface}" in section
+    assert f"Diverged between {registration} and {interface}" in section
+    assert f"Diverged at {ehr}" not in section
+    assert f"between {ehr}" not in section
+    assert f"and {ehr}" not in section
+    first_table = section[section.index('data-cs-divergence="') - 400 :]
+    assert 'data-cs-divergence="diverged"' in first_table
+
+
+def test_an_omitted_boundary_reads_as_not_observed_never_as_agreement() -> None:
+    """F-023 rendered: the laboratory return is not observed, and says so."""
+
+    page = render_receipt_page(_fault_document("F-023"))
+    section = _divergence_section(page)
+    catalog = source_catalog()
+    assert catalog.message("evidence.unobserved").text in section
+    assert (
+        catalog.message("divergence.from_expected.agreed_where_observed").text
+        in section
+    )
+    lis = catalog.message("checkpoint.lis_return").text
+    assert f"Diverged at {lis}" not in section
+    assert f"and {lis}" not in section
+
+
+def test_an_ambiguous_boundary_renders_as_indeterminate(
+    document: dict[str, Any],
+) -> None:
+    entry = document["payload"]["divergence"]["concepts"][0]
+    entry["checkpoints"][1]["state"] = "ambiguous"
+    entry["from_expected"] = {"at": "ehr", "status": "indeterminate"}
+    entry["from_previous"] = {"after": None, "at": "ehr", "status": "indeterminate"}
+    section = _divergence_section(render_receipt_page(document))
+    catalog = source_catalog()
+    ehr = catalog.message("checkpoint.ehr").text
+    assert catalog.message("evidence.ambiguous").text in section
+    assert (
+        catalog.message(
+            "divergence.indeterminate.at",
+        ).text.replace("{checkpoint}", ehr)
+        in section
+    )
+    entry["from_previous"] = {
+        "after": "registration",
+        "at": "ehr",
+        "status": "indeterminate",
+    }
+    section = _divergence_section(render_receipt_page(document))
+    assert 'data-cs-divergence="indeterminate"' in section
+    assert f"and {ehr}" in section
+
+
+def test_the_divergence_explainer_shows_its_original_when_unreviewed(
+    document: dict[str, Any],
+) -> None:
+    """The sentence that says what is never blamed is safety text."""
+
+    section = _divergence_section(render_receipt_page(document, locale="es-US"))
+    assert load_catalog("es-US").message("divergence.explainer").text in section
+    assert source_catalog().message("divergence.explainer").text in section
+    assert 'class="source-text"' in section
+    assert section.count('data-cs-review="machine"') > 20
+
+
+@pytest.mark.parametrize("locale", ["en-US", "es-US"])
+def test_every_evidence_state_and_divergence_status_has_a_label(
+    document: dict[str, Any], locale: str
+) -> None:
+    """The renderer refuses an unlabelled value, so every published one needs one."""
+
+    catalog = load_catalog(locale)
+    entry = document["payload"]["divergence"]["concepts"][0]
+    for state in EvidenceState:
+        entry["checkpoints"][0]["state"] = state.value
+        page = render_receipt_page(document, locale=locale)
+        assert escape(catalog.message(f"evidence.{state.value}").text) in page
+    for status in DivergenceStatus:
+        located = status in (DivergenceStatus.DIVERGED, DivergenceStatus.INDETERMINATE)
+        entry["from_expected"] = {
+            "at": "interface" if located else None,
+            "status": status.value,
+        }
+        entry["from_previous"] = {
+            "after": "registration" if located else None,
+            "at": "interface" if located else None,
+            "status": status.value,
+        }
+        page = render_receipt_page(document, locale=locale)
+        assert f'data-cs-divergence="{status.value}"' in page
+
+
+@pytest.mark.parametrize(
+    ("mutate", "code"),
+    [
+        (
+            lambda entry: entry["checkpoints"][0].update({"state": "assumed"}),
+            "invalid_receipt_document",
+        ),
+        (
+            lambda entry: entry["checkpoints"][0].update({"state": "agreed"}),
+            "invalid_receipt_document",
+        ),
+        (
+            lambda entry: entry["from_expected"].update({"status": "passed"}),
+            "invalid_receipt_document",
+        ),
+        (
+            lambda entry: entry["from_previous"].update({"status": "inferred"}),
+            "invalid_receipt_document",
+        ),
+        (
+            lambda entry: entry["from_expected"].update({"at": "display"}),
+            "unknown_message_key",
+        ),
+        (
+            lambda entry: entry["from_previous"].update({"after": "gap"}),
+            "unknown_message_key",
+        ),
+        (lambda entry: entry["checkpoints"].reverse(), "invalid_receipt_document"),
+        (lambda entry: entry["checkpoints"].pop(), "invalid_receipt_document"),
+        (
+            lambda entry: entry.update({"checkpoints": "none"}),
+            "invalid_receipt_document",
+        ),
+        (
+            lambda entry: entry.update({"from_expected": None}),
+            "invalid_receipt_document",
+        ),
+    ],
+)
+def test_an_unpublished_divergence_value_fails_closed(
+    document: dict[str, Any], mutate: Any, code: str
+) -> None:
+    """The page never prints a state, status, or boundary it cannot name."""
+
+    mutate(document["payload"]["divergence"]["concepts"][0])
+    with pytest.raises(ContextSafeError) as excinfo:
+        render_receipt_page(document)
+    assert excinfo.value.code == code
+
+
+def test_a_receipt_without_a_divergence_section_is_refused(
+    document: dict[str, Any],
+) -> None:
+    del document["payload"]["divergence"]
+    with pytest.raises(ContextSafeError) as excinfo:
+        render_receipt_page(document)
+    assert excinfo.value.code == "invalid_receipt_document"
+    assert excinfo.value.path == "$.payload.divergence"

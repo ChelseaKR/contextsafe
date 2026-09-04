@@ -48,7 +48,7 @@ def test_document_has_exact_versioned_shape(
     assert document["envelope"]["claimed_generated_at"] == "2026-07-17T01:02:03Z"
     assert document["envelope"]["signature_status"] == "not_signed"
     assert document["envelope"]["trusted_time"] is False
-    assert document["payload"]["schema_version"] == "contextsafe.receipt/0.2.0"
+    assert document["payload"]["schema_version"] == "contextsafe.receipt/0.3.0"
 
 
 def test_envelope_never_changes_payload_or_its_hash(
@@ -110,9 +110,12 @@ def test_document_contains_no_semantic_or_source_values(
         "fixture-context-1",
         "they/them",
         "government-id",
-        "source_pointer",
     ):
         assert prohibited not in rendered
+    # Since 0.3 the trace carries structural source pointers (A-035); the
+    # value-minimisation claim is now that every pointer is built from the
+    # closed segment vocabulary, which test_evaluator and test_divergence hold.
+    assert '"source_pointer":"$.concepts.' in rendered
 
 
 @pytest.mark.parametrize(

@@ -112,6 +112,14 @@
       "review": "machine",
       "text": "Resultados"
     },
+    "column.from_expected": {
+      "review": "machine",
+      "text": "Respecto del valor esperado"
+    },
+    "column.from_previous": {
+      "review": "machine",
+      "text": "Respecto de la frontera observada anterior"
+    },
     "column.reason": {
       "review": "machine",
       "text": "Motivo"
@@ -144,6 +152,42 @@
       "review": "machine",
       "text": "Parámetro de sexo para uso clínico"
     },
+    "divergence.diverged.at": {
+      "review": "machine",
+      "text": "Divergió en {checkpoint}"
+    },
+    "divergence.diverged.between": {
+      "review": "machine",
+      "text": "Divergió entre {after} y {at}"
+    },
+    "divergence.explainer": {
+      "review": "machine",
+      "text": "Una divergencia se nombra solo en una frontera donde se observó evidencia. Una frontera sin evidencia se muestra como no observada: nunca se le atribuye la culpa y nunca se cuenta como concordancia. Cuando la frontera entre dos observadas no fue observada, la divergencia se ubica entre esas dos. Esta sección compara hashes de valores; no dice qué valor era el correcto."
+    },
+    "divergence.from_expected.agreed_where_observed": {
+      "review": "machine",
+      "text": "Concordó en todas las fronteras observadas"
+    },
+    "divergence.from_expected.unobserved": {
+      "review": "machine",
+      "text": "No observado en ninguna frontera"
+    },
+    "divergence.from_previous.agreed_where_observed": {
+      "review": "machine",
+      "text": "Concordó entre cada par de fronteras observadas"
+    },
+    "divergence.from_previous.unobserved": {
+      "review": "machine",
+      "text": "Menos de dos fronteras observadas, así que no hay nada que comparar"
+    },
+    "divergence.indeterminate.at": {
+      "review": "machine",
+      "text": "Indeterminado en {checkpoint}: la evidencia allí es ambigua"
+    },
+    "divergence.indeterminate.between": {
+      "review": "machine",
+      "text": "Indeterminado entre {after} y {at}: la evidencia en {at} es ambigua"
+    },
     "envelope.claimed_generated_at.absent": {
       "review": "machine",
       "text": "No declarada"
@@ -171,6 +215,18 @@
     "envelope.trusted_time.label": {
       "review": "machine",
       "text": "Hora confiable"
+    },
+    "evidence.ambiguous": {
+      "review": "machine",
+      "text": "Ambiguo"
+    },
+    "evidence.observed": {
+      "review": "machine",
+      "text": "Observado"
+    },
+    "evidence.unobserved": {
+      "review": "machine",
+      "text": "No observado"
     },
     "footer.determinism": {
       "review": "machine",
@@ -320,6 +376,10 @@
       "review": "machine",
       "text": "Solo casos sintéticos"
     },
+    "section.divergence.heading": {
+      "review": "machine",
+      "text": "Primera divergencia observada"
+    },
     "section.envelope.heading": {
       "review": "machine",
       "text": "Sobre, que no es confiable"
@@ -371,6 +431,14 @@
     "status.pass": {
       "review": "machine",
       "text": "Aprobado"
+    },
+    "table.divergence.first.caption": {
+      "review": "machine",
+      "text": "Dónde cada campo se apartó por primera vez del valor esperado y de la frontera observada anterior."
+    },
+    "table.divergence.observed.caption": {
+      "review": "machine",
+      "text": "Qué se observó para cada campo en cada frontera, en el orden del recorrido."
     },
     "table.results.caption": {
       "review": "machine",

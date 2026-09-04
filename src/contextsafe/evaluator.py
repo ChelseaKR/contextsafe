@@ -13,6 +13,13 @@ is the one predicate that reads several observations, and it decides count,
 not identity). Only a rule with exactly the evidence its predicate reads can
 pass or fail, so absence never becomes pass.
 
+Every outcome carries a trace (A-035): the source hash and structural
+source pointer of each observation the predicate read, and the version and
+hash of the mapping each one came through. The trace is built from the
+observations the predicate actually read, never re-matched afterwards, and
+the validator has already refused any pointer that is not a path of closed
+structural segments, so nothing identity-bearing has a way in.
+
 The predicates are a reference-only mechanism for the identity, name-to-use,
 pronoun, and recorded-sex-or-gender assertions in
 ``docs/05-DATA-AND-EVIDENCE.md`` section 5. No clinical, laboratory, or
@@ -27,7 +34,9 @@ from contextsafe.models import (
     Checkpoint,
     ConceptKind,
     EvaluationBundle,
+    EvidencePointer,
     GenderIdentity,
+    MappingDescriptor,
     NameToUse,
     Observation,
     OutcomeReason,
@@ -40,6 +49,69 @@ from contextsafe.models import (
     ValueStatus,
     coercion_key,
 )
+
+
+@dataclass(frozen=True, slots=True)
+class MappingTrace:
+    """The version and hash of one mapping an outcome's evidence came through."""
+
+    mapping_version: str
+    mapping_sha256: str
+
+    def to_dict(self) -> dict[str, JsonValue]:
+        """Return the canonical receipt representation."""
+
+        return {
+            "mapping_sha256": self.mapping_sha256,
+            "mapping_version": self.mapping_version,
+        }
+
+
+@dataclass(frozen=True, slots=True)
+class Trace:
+    """Where an outcome's evidence came from (A-035).
+
+    ``sources`` are the distinct source hash and structural pointer pairs of
+    the observations the predicate read; ``mappings`` are the distinct
+    mapping version and hash pairs they came through. Both are sorted, so the
+    trace is independent of observation order. The assertion, its version,
+    and the runner version are carried by the outcome and the payload.
+    """
+
+    sources: tuple[EvidencePointer, ...] = ()
+    mappings: tuple[MappingTrace, ...] = ()
+
+    def to_dict(self) -> dict[str, JsonValue]:
+        """Return the canonical receipt representation."""
+
+        return {
+            "mappings": [item.to_dict() for item in self.mappings],
+            "sources": [item.to_dict() for item in self.sources],
+        }
+
+
+def trace_of(read: tuple[Observation, ...]) -> Trace:
+    """Build the trace of the observations a predicate read."""
+
+    sources = {item.evidence for item in read}
+    mappings = {_mapping_trace(item.mapping) for item in read}
+    return Trace(
+        sources=tuple(
+            sorted(sources, key=lambda item: (item.source_sha256, item.source_pointer))
+        ),
+        mappings=tuple(
+            sorted(
+                mappings, key=lambda item: (item.mapping_version, item.mapping_sha256)
+            )
+        ),
+    )
+
+
+def _mapping_trace(mapping: MappingDescriptor) -> MappingTrace:
+    return MappingTrace(
+        mapping_version=mapping.mapping_version,
+        mapping_sha256=sha256_json(mapping.to_dict()),
+    )
 
 
 @dataclass(frozen=True, slots=True)
@@ -56,6 +128,7 @@ class Outcome:
     expected_sha256: str
     observed_sha256s: tuple[str, ...]
     evidence_sha256s: tuple[str, ...]
+    trace: Trace = Trace()
 
     def to_dict(self) -> dict[str, JsonValue]:
         """Return the deterministic, value-minimized receipt representation."""
@@ -71,17 +144,21 @@ class Outcome:
             "rule_id": self.rule_id,
             "rule_version": self.rule_version,
             "status": self.status.value,
+            "trace": self.trace.to_dict(),
         }
 
 
 @dataclass(frozen=True, slots=True)
 class _Verdict:
-    """What a predicate decided, before it is bound to a rule."""
+    """What a predicate decided, before it is bound to a rule.
+
+    ``read`` is every observation the predicate consulted, in the order it
+    consulted them; the outcome's hashes and trace are all derived from it.
+    """
 
     status: OutcomeStatus
     reason: OutcomeReason
-    observed_sha256s: tuple[str, ...]
-    evidence_sha256s: tuple[str, ...]
+    read: tuple[Observation, ...]
 
 
 def _matches(
@@ -117,8 +194,7 @@ def _decided(
     return _Verdict(
         status=OutcomeStatus.PASSED if passed else OutcomeStatus.FAIL,
         reason=affirmative if passed else failure,
-        observed_sha256s=_observed(matches),
-        evidence_sha256s=_evidence(matches),
+        read=matches,
     )
 
 
@@ -129,15 +205,10 @@ def _evidence_gate(matches: tuple[Observation, ...]) -> _Verdict | None:
     """
 
     if not matches:
-        return _Verdict(
-            OutcomeStatus.INDETERMINATE, OutcomeReason.MISSING_EVIDENCE, (), ()
-        )
+        return _Verdict(OutcomeStatus.INDETERMINATE, OutcomeReason.MISSING_EVIDENCE, ())
     if len(matches) > 1:
         return _Verdict(
-            OutcomeStatus.INDETERMINATE,
-            OutcomeReason.AMBIGUOUS_EVIDENCE,
-            _observed(matches),
-            _evidence(matches),
+            OutcomeStatus.INDETERMINATE, OutcomeReason.AMBIGUOUS_EVIDENCE, matches
         )
     return None
 
@@ -236,9 +307,7 @@ def _record_count(bundle: EvaluationBundle, rule: Rule) -> _Verdict:
 
     matches = _matches(bundle.observations, rule, rule.checkpoint)
     if not matches:
-        return _Verdict(
-            OutcomeStatus.INDETERMINATE, OutcomeReason.MISSING_EVIDENCE, (), ()
-        )
+        return _Verdict(OutcomeStatus.INDETERMINATE, OutcomeReason.MISSING_EVIDENCE, ())
     observed = _observed(matches)
     return _decided(
         rule.expected_count is not None
@@ -339,8 +408,7 @@ def _outcome(bundle: EvaluationBundle, rule: Rule) -> Outcome:
         verdict = _Verdict(
             OutcomeStatus.NOT_APPLICABLE,
             OutcomeReason.PREDECLARED_NOT_APPLICABLE,
-            _observed(matches),
-            _evidence(matches),
+            matches,
         )
     return Outcome(
         rule_id=rule.rule_id,
@@ -351,8 +419,9 @@ def _outcome(bundle: EvaluationBundle, rule: Rule) -> Outcome:
         status=verdict.status,
         reason=verdict.reason,
         expected_sha256=sha256_json(rule.expected.to_dict()),
-        observed_sha256s=verdict.observed_sha256s,
-        evidence_sha256s=verdict.evidence_sha256s,
+        observed_sha256s=_observed(verdict.read),
+        evidence_sha256s=_evidence(verdict.read),
+        trace=trace_of(verdict.read),
     )
 
 

@@ -32,7 +32,7 @@ of silently making the invariant above it vacuous.
 The same generated bundles also feed the property-layer half of the
 published receipt contract (B-033): every receipt document a generated
 bundle produces must validate against
-``schemas/contextsafe-receipt-v0.2.schema.json``.
+``schemas/contextsafe-receipt-v0.3.schema.json``.
 """
 
 import json
@@ -82,7 +82,7 @@ from contextsafe.validation import parse_bundle
 ROOT = Path(__file__).resolve().parents[1]
 REFERENCE = REFERENCE_ROOT
 RECEIPT_SCHEMA = json.loads(
-    (ROOT / "schemas" / "contextsafe-receipt-v0.2.schema.json").read_text(
+    (ROOT / "schemas" / "contextsafe-receipt-v0.3.schema.json").read_text(
         encoding="utf-8"
     )
 )

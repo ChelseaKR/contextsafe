@@ -430,6 +430,50 @@ declares only `contract_validation.py` and
 `identifiers.py`; extending that declaration to `evaluator.py` and
 `validation.py` is an ADR 0009 decision the maintainer has not taken.
 
+Implementation note (2026-09-04, B-031): the first observed divergence and
+the evidence trace of A-032 to A-035 exist as mechanism. `contextsafe.divergence`
+walks the checkpoints in pathway order (registration, EHR, interface,
+laboratory return) for every concept the manifest declares and reports, from
+the case and the observations alone, the first observed checkpoint whose value
+hashes depart from the manifest's and, separately, from the previous observed
+checkpoint. A checkpoint with no observation is `unobserved` and is never
+named as a location: a divergence found across an unobserved gap is located
+between the two observed sides, and the receipt shape has no field in which
+the gap could be blamed (A-034). Absence is never agreement: the section says
+`agreed_where_observed` only about boundaries that had evidence, marks every
+other boundary `unobserved`, and reports a boundary that cannot be read as one
+state (two observations of a single-valued concept, or one record captured
+twice) as `ambiguous` and the concept `indeterminate` from there (A-032).
+Every outcome now carries a `trace`: the source hash and structural pointer of
+each observation the predicate read and the version and hash of each mapping
+they came through (A-035); the validator refuses any observation whose pointer
+carries a segment outside a closed structural vocabulary
+(`non_structural_pointer`), and a property test holds that nothing but those
+words and integers can reach a receipt. The receipt contract moved to 0.3 for
+the section and the trace; the HTML page renders the section in `en-US` and
+machine-translated `es-US` with the explainer beside its original; and
+`tests/fixtures/seeded-faults/` carries F-023 (an omitted checkpoint reported
+as indeterminate and unobserved, never pass) and F-025 (a divergence across an
+unobserved EHR located at the interface and never at the EHR), with property
+tests that reordering observations never changes the section and that
+deleting an observed checkpoint never names the deleted boundary, never moves
+the located boundary when the deleted one was neither side, and never blames
+a boundary that agreed with its observed predecessor. B-031 is not closed:
+`unsupported source values remain explicit` (A-033) is enforced today only by
+the fail-closed validators of the one source profile that exists, and there is
+no normalizer that could normalize anything until B-022 to B-026 exist; the
+trace names assertion, mapping, source, and runner but no oracle or pack,
+because no governed oracle or pack exists to name (B-010, B-029, B-030);
+`ambiguous` is decided by observation count and hash repetition, not by the
+ambiguity-preserving observation contract of iteration 3, which has no route
+into evaluation yet; the section is not a finding and carries no severity,
+which is B-032; and the structural pointer vocabulary is the canonical
+manifest and evidence-envelope field names only, so a FHIR or HL7 source path
+needs the vocabulary extended under review when those importers arrive. The
+receipt contract file the B-028 note above and the B-033 note below name is
+now `schemas/contextsafe-receipt-v0.3.schema.json`; the 0.2 file is not kept
+beside it.
+
 ## Phase 4 — review and receipts
 
 | ID | Trace | Deliverable and acceptance | Owner | Dependency | Estimate |

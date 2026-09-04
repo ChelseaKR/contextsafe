@@ -562,6 +562,50 @@ rather than after it.
   no schema and no command emits it. No existing contract version moved, the
   pinned reference-receipt and canonical-import digests are unchanged, and
   no runtime dependency was added.
+
+- **B-031 slice: the first observed divergence and the evidence trace
+  (A-032 to A-035), as mechanism and nothing more.** The receipt payload has a
+  `divergence` section, computed by the new `contextsafe.divergence` module
+  from the case and the observations alone: for each of the five concepts,
+  the state of every checkpoint in pathway order (`observed`, `unobserved`,
+  or `ambiguous`, with the sorted value hashes seen there), the first observed
+  checkpoint whose hashes depart from the manifest's (`from_expected`), and
+  the first observed checkpoint whose hashes depart from the previous observed
+  one (`from_previous`, which names both sides). An unobserved checkpoint is
+  never a location: a divergence found across an unobserved gap is located
+  between the two observed sides, and the closed shape has no field in which
+  the gap could be blamed. `agreed_where_observed` says only that every
+  boundary with evidence agreed; a concept with no evidence is `unobserved`;
+  a boundary that cannot be read as one state (two observations of a
+  single-valued concept, or one record captured twice) is `ambiguous` and the
+  concept is `indeterminate` from there, never agreed. Every outcome carries a
+  `trace`: the distinct source hash and source pointer of each observation
+  the predicate read, and the distinct version and hash of each mapping they
+  came through, both sorted so observation order cannot reach the payload.
+  A source pointer is now a structural path and nothing else: `parse_observations`
+  refuses an observation whose pointer has any segment outside the closed
+  vocabulary in `contextsafe.validation.STRUCTURAL_POINTER_SEGMENTS`
+  (`non_structural_pointer`), the receipt contract publishes the same
+  vocabulary as a pattern, and a property test holds that a pointer drawn
+  from the pointer alphabet at random is either refused or made only of those
+  words and integers. The rendered page has a "First observed divergence"
+  section in `en-US` and machine-translated `es-US`, with the sentence that
+  says what is never blamed rendered beside its `en-US` original.
+  `tests/fixtures/seeded-faults/` gains F-023 (a checkpoint omitted: both
+  rules that read it are `indeterminate` with `missing_evidence`, the boundary
+  is `unobserved`, and nothing passes there) and F-025 (name to use faithful
+  at registration, unobserved at the EHR, changed after: located at the
+  interface and between registration and the interface, and the EHR is named
+  nowhere). Property tests hold that reordering observations never changes
+  the section and that deleting every observation at one checkpoint never
+  names the deleted boundary, never moves the located boundary when the
+  deleted one was neither side of it, and never blames a boundary that agreed
+  with its observed predecessor. What this does not do: it decides divergence
+  of value hashes, not which value was right; it is not a finding and carries
+  no severity (B-032); the trace names no oracle or pack because none exists
+  to name; A-033 is enforced only by the existing fail-closed validators,
+  because no normalizer exists yet; and no clinical, laboratory, or community
+  review has looked at any of it.
 - **B-028 slice: assertion predicates for identity, name to use, pronouns,
   and recorded sex or gender (A-005, A-008 to A-015), as mechanism and
   nothing more.** A rule used to be one expected value plus `required`, with
@@ -629,6 +673,37 @@ rather than after it.
 
 ### Changed
 
+- **The receipt contract is 0.3: `contextsafe.receipt/0.3.0`,
+  `schemas/contextsafe-receipt-v0.3.schema.json`.** The payload gains the
+  required `divergence` section and every outcome gains a required `trace`;
+  the closed `evidence_state` and `divergence_status` sets, the pinned
+  `pathway`, and the structural-pointer pattern are new definitions; nothing
+  0.2 carried changed. The 0.2 file is not kept beside it. Because the outcome
+  list now carries a trace, `result_sha256` moved for every receipt, and both
+  pinned reference digests in `tests/test_determinism.py` moved with it —
+  once, and only for that reason: `input_sha256` and `rule_set_sha256` are
+  byte-identical to 0.2, and no fixture changed. The README example receipt
+  was refreshed for the same fields. The `receipt-document` version is
+  unchanged: the envelope shape did not move.
+- **A receipt now carries source pointers, so the old rule that it carries
+  none is replaced by a stronger one.** Two tests used to assert that the
+  string `source_pointer` never appears in a receipt; since A-035 requires
+  the trace, they now assert that every pointer a receipt carries is a path
+  of closed structural segments, and `test_divergence.py` holds the same over
+  generated pointers. The value-minimisation claim is unchanged in substance:
+  a pointer is a location in a source, and no word that is not a canonical
+  field name can be in one.
+- **`parse_observations` is stricter.** A source pointer whose segments are
+  not all in the closed structural vocabulary is refused
+  (`non_structural_pointer`) where the pattern check alone used to accept any
+  word of the pointer alphabet. Every packaged fixture, seeded fault, and
+  property generator already used structural pointers, so nothing shipped
+  changed; an observation set that named a field outside the canonical
+  manifest or evidence envelope is now refused rather than carried.
+- Seventeen strings were added to both locale catalogs for the divergence
+  section. The `es-US` entries are machine translations marked `machine`,
+  like every other entry in that catalog: B-042 has not happened, and nothing
+  here claims it has.
 - **The receipt contract is 0.2: `contextsafe.receipt/0.2.0`,
   `schemas/contextsafe-receipt-v0.2.schema.json`.** The closed outcome-reason
   enum widened by the twelve predicate reasons, a `$comment` on

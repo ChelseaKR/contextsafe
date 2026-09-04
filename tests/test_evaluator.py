@@ -1,11 +1,19 @@
 """Determinism and safety invariants for evaluation and receipts."""
 
+import re
 from typing import Any
 
 from contextsafe.evaluator import evaluate
 from contextsafe.models import OutcomeStatus
 from contextsafe.receipt import build_receipt, render_receipt
-from contextsafe.validation import parse_bundle
+from contextsafe.validation import STRUCTURAL_POINTER_SEGMENTS, parse_bundle
+
+_STRUCTURAL = (
+    r"^\$(?:\.(?:"
+    + "|".join(sorted(STRUCTURAL_POINTER_SEGMENTS))
+    + r")|\[(?:0|[1-9][0-9]*)\])+$"
+)
+"""A source pointer the receipt may carry: structural segments and nothing else."""
 
 
 def _bundle(
@@ -109,9 +117,17 @@ def test_receipt_contains_hashes_but_no_semantic_or_source_values(
         "fixture-context-1",
         "they/them",
         "government-id",
-        "source_pointer",
     ):
         assert prohibited not in rendered
+    for outcome in receipt["results"]:
+        assert isinstance(outcome, dict)
+        trace = outcome["trace"]
+        assert isinstance(trace, dict)
+        sources = trace["sources"]
+        assert isinstance(sources, list)
+        for source in sources:
+            assert isinstance(source, dict)
+            assert re.fullmatch(_STRUCTURAL, str(source["source_pointer"]))
     assert receipt["summary"]["pass"] == 5
     assert receipt["scope"]["clinical_oracle_approved"] is False
     assert any("cannot prove" in item for item in receipt["limitations"])
