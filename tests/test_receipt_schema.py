@@ -270,6 +270,10 @@ def test_contract_pointer_grammar_is_the_runtime_segment_vocabulary() -> None:
         "$.concepts.gender_identity",
         "$.concepts.recorded_sex_or_gender[1]",
         "$.records[12].value_code",
+        "$.rows[0].sex",
+        "/name/0",
+        "/entry/0/resource/extension/1",
+        "$.PID[1]-5.1.1",
     ):
         assert compiled.fullmatch(accepted)
     for refused in (
@@ -280,6 +284,11 @@ def test_contract_pointer_grammar_is_the_runtime_segment_vocabulary() -> None:
         "$.records[01]",
         "$..concepts",
         "$.concepts.",
+        "/text/0",
+        "/name/x",
+        "$.ZZZ[1]-5.1.1",
+        "$.PID[1]-5.1",
+        "$.rows[0].patient",
     ):
         assert compiled.fullmatch(refused) is None
 

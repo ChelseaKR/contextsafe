@@ -80,14 +80,26 @@ from contextsafe.validation import (
 
 _WORDS = "|".join(sorted(STRUCTURAL_POINTER_SEGMENTS))
 _INDEX = r"(?:0|[1-9][0-9]*)"
-_STRUCTURAL = re.compile(
-    r"^(?:"
-    r"\$(?:\.(?:" + _WORDS + r")|\[" + _INDEX + r"\])+"
-    r"|\$\.(?:" + _WORDS + r")\[" + _INDEX + r"\]-" + _INDEX + r"\." + _INDEX + r"\." + _INDEX
-    + r"|(?:/(?:" + _WORDS + r"|" + _INDEX + r"))+"
-    r")$"
+_DOLLAR_BODY = (
+    r"(?:\.(?:" + _WORDS + r")|\[" + _INDEX + r"\])+"
+    r"|\.(?:"
+    + _WORDS
+    + r")\["
+    + _INDEX
+    + r"\]-"
+    + _INDEX
+    + r"\."
+    + _INDEX
+    + r"\."
+    + _INDEX
 )
-    + r")|\[(?:0|[1-9][0-9]*)\])+$"
+_STRUCTURAL = re.compile(
+    # The $-rooted dialects carry the alphabet pattern's own 128-character
+    # bound; without it this model calls a 129-character path structural while
+    # the validator refuses it, which is a difference in the safe direction for
+    # the runtime and a false failure here.
+    r"^(?:(?=.{2,128}$)\$(?:" + _DOLLAR_BODY + r")"
+    r"|(?:/(?:" + _WORDS + r"|" + _INDEX + r"))+)$"
 )
 
 _NAME_A = NameToUse(status=ValueStatus.SPECIFIED, value="CSYN-ASTER", use="usual")

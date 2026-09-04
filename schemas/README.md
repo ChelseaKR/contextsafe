@@ -20,7 +20,7 @@ in agreement with the code. There are sixteen contracts:
 | `contextsafe-engagement-v1.schema.json` | an engagement declaration |
 | `contextsafe-plan-v1.schema.json` | an execution plan |
 | `contextsafe-compiled-plan-v1.schema.json` | the unsigned compiled plan |
-| `contextsafe-receipt-v0.2.schema.json` | the receipt document: deterministic payload plus untrusted envelope; 0.2 widens the closed outcome-reason set for the rule-set predicates and changes nothing else |
+| `contextsafe-receipt-v0.3.schema.json` | the receipt document: deterministic payload plus untrusted envelope; 0.2 widened the closed outcome-reason set for the rule-set predicates, and 0.3 adds the first-observed-divergence section and the per-outcome evidence trace with a closed structural-pointer grammar |
 | `contextsafe-rule-set-v0.2.schema.json` | a deterministic fixture rule set whose rules may name a closed, reference-only predicate; the exact-only 0.1.0 shape has no separate schema and is still accepted by the runtime |
 | `contextsafe-lis-export-v0.1.schema.json` | the synthetic LIS export identity profile `import --format lis-json` reads; reference-only, ungoverned, result columns recognized but not observed |
 | `contextsafe-mapping-profile-v1.schema.json` | a versioned mapping profile: one importer format's token table, from source token to canonical concept and value; reference-only, the only review status is `not_reviewed`, and no row may reach SPCU from GI or RSG |
@@ -33,9 +33,6 @@ That is sixteen contracts. The LIS export profile and the mapping profile are
 keep each in agreement with the runtime's allowlists and grammars. Neither
 is a claim that any laboratory system exports this shape or that any
 interoperability reviewer has approved a mapping.
-
-| `contextsafe-rule-set-v0.2.schema.json` | a deterministic fixture rule set whose rules may name a closed, reference-only predicate; the exact-only 0.1.0 shape has no separate schema and is still accepted by the runtime |
-| `contextsafe-receipt-v0.3.schema.json` | the receipt document: deterministic payload plus untrusted envelope; 0.2 widened the closed outcome-reason set for the rule-set predicates, and 0.3 adds the first-observed-divergence section and the per-outcome evidence trace with a closed structural-pointer grammar |
 
 ## Why every `$id` is under a domain that will never resolve
 

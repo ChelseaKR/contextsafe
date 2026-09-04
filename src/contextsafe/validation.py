@@ -109,7 +109,6 @@ allowed, and the whole observation set is refused rather than the segment
 being carried, hashed, or dropped. A source profile that needs more names
 extends this set under review, not by widening a grammar.
 """
-"""
 _SAFE_TOKEN = re.compile(r"^[A-Za-z0-9:/_.-]{1,96}$")
 _ORDER_CONTEXT_TOKEN = re.compile(r"^ORDER-CSYN-[A-Za-z0-9:/_.-]+$")
 _SUPPORT_OBSERVATION_TOKEN = re.compile(r"^SUP-CSYN-[A-Za-z0-9:/_.-]+$")
