@@ -7,6 +7,10 @@ so these files are what a consumer validates against, and
 `tests/test_contracts.py` and `tests/test_receipt_schema.py` are what keep them
 in agreement with the code. There are sixteen contracts:
 
+`tests/test_contracts.py`, `tests/test_receipt_schema.py`, and
+`tests/test_receipt_delta_schema.py` are what keep them in agreement with the
+code.
+
 | Contract | Shape |
 | --- | --- |
 | `contextsafe-case-v0.1.schema.json` | a synthetic patient case |
@@ -34,6 +38,9 @@ keep each in agreement with the runtime's allowlists and grammars. Neither
 is a claim that any laboratory system exports this shape or that any
 interoperability reviewer has approved a mapping.
 
+| `contextsafe-receipt-v0.1.schema.json` | the receipt document: deterministic payload plus untrusted envelope |
+| `contextsafe-receipt-delta-v0.1.schema.json` | the envelope-free delta between two compatible receipt documents (reference-only, ungoverned) |
+
 ## Why every `$id` is under a domain that will never resolve
 
 Each schema's `$id` is `https://contextsafe.invalid/schemas/<filename>`.
@@ -49,6 +56,8 @@ a schema over the network, and the `$ref`s inside these files are all local
 (`#/$defs/...`).
 
 This was not always consistent. Five of the eleven that existed then claimed
+
+This was not always consistent. Five of the twelve contracts previously claimed
 `$id` under `contextsafe.dev`, a domain nobody had registered. That is a real
 defect on a public repository rather than a cosmetic one: an unregistered
 domain in a published contract identity is squattable, and whoever registers it

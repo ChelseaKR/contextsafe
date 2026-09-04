@@ -533,6 +533,36 @@ confined to plan enrolment, the 90-day overlap bound, and the rejection of an
 all-purpose key — await the maintainer's confirmation, and every artifact the
 tool emits still says `not_signed` or `not_verified`.
 
+Implementation note (2026-09-04, B-037): `contextsafe receipt diff --before
+A.json --after B.json --output delta.json` now exists, under a new `receipt`
+command group (`render` stays top-level for now and may move here later). The
+delta is the document named in [Architecture §7](04-ARCHITECTURE.md), published
+as `schemas/contextsafe-receipt-delta-v0.1.schema.json` and implemented in
+`src/contextsafe/receipt_delta.py`, a declared safety module. Compatibility is
+fail-closed: identical `case_id`, `rule_set_sha256`, receipt schema versions,
+concept and checkpoint sets, rule identifiers, and per-rule bindings, or exit 2
+with an `incompatible_receipts` error that names the field class and never a
+value. Each receipt is parsed strictly against the published shape first, its
+`payload_sha256` must cover its payload, and its summary must count its results.
+The delta lists per rule the status and reason in each receipt, a `changed`
+flag, an `evidence_sha256s_changed` flag, and a closed change code; counts of
+regressed, improved, unchanged, and changed_other that partition the rules; the
+two payload hashes; and a pinned limitation set. Property tests in
+`tests/test_receipt_delta.py` hold that `diff(A, A)` is all-unchanged, that the
+delta is invariant under reordering of results, and that swapping the inputs
+mirrors it; `tests/test_receipt_delta_schema.py` is the schema/runtime
+agreement gate, and the artifact is in the determinism matrix with a pinned
+digest. B-037 is not closed: its dependency B-036 does not exist, so the two
+receipts are unsigned and unverified and the delta proves nothing about which
+run came first — there is no trusted time, and `before` and `after` are the
+caller's labels, which the delta's own limitations say. Hash agreement is an
+internal-consistency check, not verification. The row's "compatible partner
+profiles" are not modelled, because no partner profile exists yet (B-016 and
+the plan's `partner_profile` field are ahead of this slice); compatibility is
+decided on the receipt fields that exist today. The contract is reference-only
+and ungoverned: no clinical, community, laboratory, legal, security, or
+accessibility review of it has happened, and none is claimed.
+
 ## Phase 5 — trust and operations
 
 | ID | Trace | Deliverable and acceptance | Owner | Dependency | Estimate |

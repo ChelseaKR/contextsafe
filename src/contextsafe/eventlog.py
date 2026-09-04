@@ -61,6 +61,7 @@ COMMANDS = frozenset(
         "validate",
         "evaluate",
         "render",
+        "receipt",
         "pack",
         "plan",
         "evidence",
