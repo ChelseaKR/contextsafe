@@ -563,6 +563,63 @@ rather than after it.
   pinned reference-receipt and canonical-import digests are unchanged, and
   no runtime dependency was added.
 
+- **B-048, the part that needs no external person: a committed answer for
+  every published seeded fault.** `tests/test_seeded_faults.py` carries a
+  36-row matrix over F-001 to F-036 from `docs/09-TEST-AND-EVALUATION.md`
+  section 4, and a dated status table under that section restates it row for
+  row; a test compares the two in both directions and another compares the
+  matrix's mutation and detector columns to the library table verbatim, so
+  neither document can drift from the other. Three new faults are exercised
+  as complete synthetic fixtures under `tests/fixtures/seeded-faults/`: F-001
+  (the name to use survives registration and reaches the EHR with status
+  `absent`: `value_not_present` and `value_changed_across_checkpoints`,
+  located at `ehr` after `registration`; removed entirely it is
+  `missing_evidence`, never pass), F-009 (the recorded sex or gender reaches
+  the EHR as X but with the boundary's own context and source in place of
+  the declared ones: `value_changed_across_checkpoints` and
+  `semantic_mismatch` at `ehr`, while the `not_coerced` rule beside them
+  passes because the value survived, so a receipt says which claim turned
+  and never reports a lost context as a rewritten value; the contract has no
+  way to carry a dropped descriptor and refuses one as `missing_field`), and
+  F-035 (the same faithful value through mapping version 0.2.0: both forms
+  pass, the trace names the version and mapping hash, and `input_sha256`,
+  `result_sha256`, and `payload_sha256` all move while `rule_set_sha256`
+  stays, so two mapping versions can never share a run identity). Every
+  exercised fault, the nine from B-028 and B-031 included, now has a
+  restated localization: the divergence section's `from_expected` and
+  `from_previous` for the fault's concept, a check that the detecting rule
+  reads the checkpoint the section locates, and a library-wide check that no
+  located boundary is ever an unobserved one. Five faults are refused before
+  evaluation and pinned under `seeded-faults/refused/` with their code and
+  structural path, in process and through the CLI (exit 2, no receipt
+  written, no value in the error object): F-015 and F-016 as a declared
+  GI-to-SPCU or RSG-to-SPCU mapping (`prohibited_spcu_mapping`), F-024 as an
+  unsupported recorded-sex-or-gender token (`invalid_rsg_value`) and, in a
+  variant, an unsupported status (`invalid_enum`), neither ever
+  nearest-matched, F-029 as a case identifier outside the synthetic
+  namespace (`invalid_synthetic_identifier`) and, in a variant, an
+  identifying field on the case or an observation (`prohibited_field`), and
+  F-032 as an observation naming another case (`case_mismatch`, reassigned
+  to neither case). F-028 and F-030 are refused by the pack validity and
+  receipt contract tests that already existed, and the matrix's pointers to
+  those tests are checked to resolve. `tests/test_receipt_schema.py` no
+  longer evaluates the `refused/` directory, since no receipt exists for a
+  refused input. What this does not do: it is not the 41-fault evaluation
+  B-048 defines. There is no hidden-fault set, no independent fault author
+  has reviewed the corpus, no independent QA has run it, and every fault was
+  written by the implementer of the mechanism that detects it, so 12 of 36
+  exercised, 7 refused, and 17 not yet exercisable is deterministic corpus
+  coverage and no population-sensitivity claim. The seventeen name what they
+  wait on from a closed vocabulary — laboratory results (B-011, B-025,
+  B-030), SPCU predicates awaiting clinical review (B-029), name contexts
+  and periods in the observation contract (B-019), the receipt verifier
+  (B-036), signatures (B-035), the review state machine (B-032), and the
+  presentation pass (B-038) — and none was stretched into an exercised row:
+  an absent SPCU is indistinguishable from an unobserved boundary under the
+  contract, a relinked support is only a changed value, and F-012 reads as
+  diverged in the divergence section without any predicate able to name the
+  order. No contract version moves, no enum widens, no source module
+  changes, and no pinned digest changes.
 - **B-031 slice: the first observed divergence and the evidence trace
   (A-032 to A-035), as mechanism and nothing more.** The receipt payload has a
   `divergence` section, computed by the new `contextsafe.divergence` module

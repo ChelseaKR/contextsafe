@@ -653,6 +653,45 @@ envelope only, so FHIR and HL7 paths need it extended under review. The
 receipt contract moved to 0.3 for the section and the trace, and no clinical,
 laboratory, or community review has looked at any of it.
 
+
+### B-048
+
+Every one of the 36 published seeded faults in
+[Test and evaluation §4](docs/09-TEST-AND-EVALUATION.md) now has a committed
+answer. `tests/test_seeded_faults.py` carries a matrix that says, for each
+fault, one of three things, and a dated table under §4 restates it row for
+row with a test holding the two together. Twelve are *exercised*: a complete
+synthetic fixture under `tests/fixtures/seeded-faults/` with exactly one fault
+applied, proved to be reported with the assertion's own reason and located in
+the divergence section at the observed checkpoint the fault touched — the
+nine from B-028 and B-031, plus F-001 (name to use dropped at the EHR), F-009
+(recorded sex or gender reaching the EHR with the boundary's own context and
+source in place of the declared ones, reported as a changed record while the
+`not_coerced` rule beside it still passes, because the X survived), and F-035
+(the same value through another mapping version: the trace names it and the
+run identity moves, so two mapping versions can never share a receipt). Seven
+are *refused*: the faulted input never reaches evaluation because a
+fail-closed gate refuses it whole with a named code at a structural path — a
+declared GI-to-SPCU or RSG-to-SPCU mapping (F-015, F-016), an unsupported
+value that is refused rather than nearest-matched (F-024), an identifier
+outside the synthetic namespace (F-029), an observation naming another case
+(F-032), and the pack validity and receipt contract gates that already exist
+(F-028, F-030); a refusal is detection without a receipt, so it is counted
+separately and never as localization. Seventeen are *not yet exercisable*,
+and each row names what it waits on from a closed vocabulary: the laboratory
+fixture and importer, the SPCU predicates and their clinical review, name
+contexts and periods in the observation contract, the receipt verifier,
+signatures, the review state machine, and the presentation pass.
+
+Its limits are the whole point of writing it down. This is not the 41-fault
+evaluation B-048 defines: there is no hidden-fault set, no independent fault
+author has reviewed the corpus, no independent QA has run it, and every fault
+here was written by the implementer of the mechanism that detects it. Twelve
+of 36 is deterministic corpus coverage over the published library — not a
+sensitivity estimate over faults the library does not contain, and not a
+population claim of any kind. Nothing here is governed content, and no
+clinical, laboratory, or community review has looked at any fixture.
+
 The durable evidence store has no CLI import route; `contextsafe import` writes
 only an observation-set document and never an evidence record. Every iteration-3 evidence record says
 `authorization_status: not_verified_internal_test_only` and

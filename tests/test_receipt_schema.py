@@ -448,7 +448,17 @@ def test_divergence_vocabulary_is_closed(
     assert not _validator().is_valid(document)
 
 
-_SEEDED = sorted((ROOT / "tests" / "fixtures" / "seeded-faults").rglob("*.json"))
+_SEEDED = sorted(
+    path
+    for path in (ROOT / "tests" / "fixtures" / "seeded-faults").rglob("*.json")
+    if path.parent.name != "refused"
+)
+"""Every seeded-fault fixture the runner can evaluate.
+
+``refused/`` holds faults a fail-closed gate stops before evaluation, so no
+receipt exists for them to validate; ``tests/test_seeded_faults.py`` pins
+each refusal and holds that directory to exactly the faults it names.
+"""
 
 
 @pytest.mark.parametrize("path", _SEEDED, ids=[path.stem for path in _SEEDED])

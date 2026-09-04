@@ -664,6 +664,53 @@ and add none, because neither the diagnostics nor the bundle enumerates the
 importer registry's formats. No independent security review of the bundle contents has happened
 (B-040).
 
+Implementation note (2026-09-04, B-048): the part of the seeded-fault
+corpus that needs no external person is committed. For every one of F-001 to
+F-036 in [Test and evaluation §4](09-TEST-AND-EVALUATION.md),
+`tests/test_seeded_faults.py` carries a matrix row saying one of three things,
+and the dated table under §4 restates it row for row with a test holding the
+two together. Twelve faults are exercised at receipt level — the nine from
+B-028 and B-031 plus F-001 (name to use dropped at the EHR: `value_not_present`
+and `value_changed_across_checkpoints`), F-009 (recorded sex or gender
+reaching the EHR with the boundary's own context and source in place of the
+declared ones: a changed record, and the `not_coerced` rule beside it still
+passes because the X itself survived), and F-035 (the same faithful value
+through mapping version 0.2.0: the trace names the version and mapping hash
+and `input_sha256`, `result_sha256`, and `payload_sha256` all move, so two
+mapping versions can never share a run identity) — each as a complete
+synthetic fixture with exactly one fault applied, proved to be reported with
+the assertion's own reason and located in the divergence section at the
+observed checkpoint the fault touched, with a test over the whole library
+that no located boundary is ever an unobserved one and that the detecting
+rule reads the checkpoint the section locates. Seven are refused before
+evaluation by a fail-closed gate with a named code at a structural path, and
+counted separately because a refusal is detection without a receipt: F-015
+and F-016 as a declared GI-to-SPCU or RSG-to-SPCU mapping
+(`prohibited_spcu_mapping`), F-024 as an unsupported recorded-sex-or-gender
+token (`invalid_rsg_value`, never nearest-matched), F-029 as a case
+identifier outside the synthetic namespace (`invalid_synthetic_identifier`,
+beside the preflight canary suite), F-032 as an observation naming another
+case (`case_mismatch`), and F-028 and F-030 by the pack validity and receipt
+contract tests that already exist; each fixture also exits 2 through the CLI
+with no receipt written and no value in the error object. Seventeen are not
+yet exercisable, and every row names what it waits on from a closed
+vocabulary: seven laboratory rows (F-017 to F-022, F-033) on the laboratory
+fixture and importer (B-011, B-025, B-030); F-011 to F-014 on the SPCU
+predicates and the clinical review they need (B-029); F-002 and F-003 on name
+contexts and periods the observation contract does not carry; F-026 on the
+receipt verifier (B-036); F-027 on the evidence-minimized presentation pass
+(B-038); F-034 on signatures (B-035); F-036 on the review state machine
+(B-032). B-048 is not closed, and this note is not evidence toward its
+acceptance statement: there is no hidden-fault set; no independent fault
+author has reviewed the corpus and no independent QA has run it, because both
+are people (B-004, B-013, and the 16 QA hours the row budgets) and neither
+exists yet; every fault here was written by the implementer of the mechanism
+that detects it; 12 of 36 is deterministic corpus coverage over the published
+library and makes no population-sensitivity claim; and the 41/41 detection
+and localization figure the row requires cannot be computed until the
+seventeen waiting rows have a mechanism and the five hidden faults have an
+author.
+
 ## Phase 6 — pilot and v1
 
 | ID | Trace | Deliverable and acceptance | Owner | Dependency | Estimate |
