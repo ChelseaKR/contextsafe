@@ -599,13 +599,34 @@ rather than after it.
   nowhere). Property tests hold that reordering observations never changes
   the section and that deleting every observation at one checkpoint never
   names the deleted boundary, never moves the located boundary when the
-  deleted one was neither side of it, and never blames a boundary that agreed
-  with its observed predecessor. What this does not do: it decides divergence
-  of value hashes, not which value was right; it is not a finding and carries
-  no severity (B-032); the trace names no oracle or pack because none exists
-  to name; A-033 is enforced only by the existing fail-closed validators,
-  because no normalizer exists yet; and no clinical, laboratory, or community
-  review has looked at any of it.
+  deleted one was neither side of it, and, when the located boundary itself
+  is deleted, locates only a boundary that already differed from the observed
+  boundary behind it: the location can move forward across the gap the
+  deletion opened, never onto a boundary that agreed with the boundary
+  observed before it. The receipt contract enforces the pairings its comments
+  stated: a `diverged` or `indeterminate` entry must name `at`, a `diverged`
+  `from_previous` must name both sides, an `agreed_where_observed` or
+  `unobserved` entry names nothing, and an `unobserved` checkpoint state
+  carries no hashes while every other state carries at least one, so a
+  hand-edited document fails the contract rather than surfacing in a
+  renderer. The rendered page holds every checkpoint, concept, reason,
+  state, and status it reads from a receipt to the published set before the
+  value can become a catalog key: an unpublished value is refused as
+  `invalid_receipt_document` at its structural pointer, and the value never
+  reaches the stderr error object (the catalog's own unknown-key rejection
+  names the key it was asked for, which is why it must never be reached with
+  receipt content). What this does not do: it decides divergence of value
+  hashes, not which value was right; a record-list concept is compared as
+  its whole list, so partial capture of the declared records at a boundary
+  reads as diverged there; `expected_sha256s` is carried for all five
+  concepts whether or not a rule names them and, like every payload hash,
+  unsalted, so a small-value-space concept such as pronouns is recoverable
+  by enumeration; an outcome that stopped at an evidence gate traces only
+  the side that decided it; it is not a finding and carries no severity
+  (B-032); the trace names no oracle or pack because none exists to name;
+  A-033 is enforced only by the existing fail-closed validators, because no
+  normalizer exists yet; and no clinical, laboratory, or community review
+  has looked at any of it.
 - **B-028 slice: assertion predicates for identity, name to use, pronouns,
   and recorded sex or gender (A-005, A-008 to A-015), as mechanism and
   nothing more.** A rule used to be one expected value plus `required`, with

@@ -290,24 +290,31 @@ def test_a_declared_timestamp_renders_as_declared(document: dict[str, Any]) -> N
     assert source_catalog().message("envelope.explainer").text in page
 
 
-@pytest.mark.parametrize(
-    ("pointer", "value", "code"),
-    [
-        ("status", "invented", "invalid_receipt_document"),
-        ("concept", "invented", "unknown_message_key"),
-        ("checkpoint", "invented", "unknown_message_key"),
-        ("reason", "invented", "unknown_message_key"),
-    ],
-)
+@pytest.mark.parametrize("field", ["status", "concept", "checkpoint", "reason"])
+@pytest.mark.parametrize("value", ["invented", "CSYN-SECRET-NAME"])
 def test_an_unpublished_enum_value_fails_closed(
-    document: dict[str, Any], pointer: str, value: str, code: str
+    document: dict[str, Any], field: str, value: str
 ) -> None:
-    """A value with no published label must stop the page, not be printed raw."""
+    """A value with no published label must stop the page, not be printed raw.
 
-    document["payload"]["results"][0][pointer] = value
+    The rejection is the renderer's own, by pointer, before the value could
+    become a catalog key: the catalog's unknown-key error names the key it was
+    asked for, and that path would carry the value onto stderr.
+    """
+
+    document["payload"]["results"][0][field] = value
     with pytest.raises(ContextSafeError) as excinfo:
         render_receipt_page(document)
-    assert excinfo.value.code == code
+    assert excinfo.value.code == "invalid_receipt_document"
+    assert excinfo.value.path == f"$.payload.results[0].{field}"
+    _assert_never_named(excinfo.value, value)
+
+
+def _assert_never_named(error: ContextSafeError, value: str) -> None:
+    assert value not in error.path
+    assert value not in error.message
+    assert value not in str(error)
+    assert value not in canonical_json(error.to_dict())
 
 
 def test_a_non_boolean_scope_or_count_fails_closed(document: dict[str, Any]) -> None:
@@ -320,6 +327,24 @@ def test_a_non_boolean_scope_or_count_fails_closed(document: dict[str, Any]) -> 
     document["payload"]["summary"]["pass"] = "many"  # noqa: S105 - not a password
     with pytest.raises(ContextSafeError):
         render_receipt_page(document)
+
+
+@pytest.mark.parametrize("count", [1, "many"])
+def test_an_unpublished_summary_key_is_refused_without_being_named(
+    document: dict[str, Any], count: object
+) -> None:
+    """A summary key is receipt content and may not enter a pointer unchecked.
+
+    The key is held to the published status set before either the count check
+    or the label lookup can put it into an error's path.
+    """
+
+    document["payload"]["summary"]["CSYN-SECRET-NAME"] = count
+    with pytest.raises(ContextSafeError) as excinfo:
+        render_receipt_page(document)
+    assert excinfo.value.code == "invalid_receipt_document"
+    assert excinfo.value.path == "$.payload.summary"
+    _assert_never_named(excinfo.value, "CSYN-SECRET-NAME")
 
 
 def test_rendering_a_mismatched_catalog_is_refused(document: dict[str, Any]) -> None:
@@ -422,7 +447,7 @@ def test_an_unobserved_boundary_is_never_named_on_the_page() -> None:
     assert f"Diverged at {ehr}" not in section
     assert f"between {ehr}" not in section
     assert f"and {ehr}" not in section
-    first_table = section[section.index('data-cs-divergence="') - 400 :]
+    first_table = section[section.index("<table>", section.index("</table>")) :]
     assert 'data-cs-divergence="diverged"' in first_table
 
 
@@ -529,11 +554,19 @@ def test_every_evidence_state_and_divergence_status_has_a_label(
         ),
         (
             lambda entry: entry["from_expected"].update({"at": "display"}),
-            "unknown_message_key",
+            "invalid_receipt_document",
         ),
         (
             lambda entry: entry["from_previous"].update({"after": "gap"}),
-            "unknown_message_key",
+            "invalid_receipt_document",
+        ),
+        (
+            lambda entry: entry["from_previous"].update({"at": "display"}),
+            "invalid_receipt_document",
+        ),
+        (
+            lambda entry: entry.update({"concept": "display"}),
+            "invalid_receipt_document",
         ),
         (lambda entry: entry["checkpoints"].reverse(), "invalid_receipt_document"),
         (lambda entry: entry["checkpoints"].pop(), "invalid_receipt_document"),
@@ -556,6 +589,76 @@ def test_an_unpublished_divergence_value_fails_closed(
     with pytest.raises(ContextSafeError) as excinfo:
         render_receipt_page(document)
     assert excinfo.value.code == code
+    for word in ("display", "gap", "assumed", "agreed", "passed", "inferred"):
+        _assert_never_named(excinfo.value, word)
+
+
+_LEAK = "CSYN-SECRET-NAME"
+"""A synthetic-namespace token shaped like the free text a receipt must not carry."""
+
+
+def _put_token(field: str) -> Any:
+    def mutate(payload: dict[str, Any]) -> None:
+        divergence = payload["divergence"]
+        if field == "pathway":
+            divergence["pathway"][0] = _LEAK
+        elif field == "concept":
+            divergence["concepts"][0]["concept"] = _LEAK
+        elif field == "from_previous.after":
+            divergence["concepts"][0]["from_previous"].update(
+                {"after": _LEAK, "at": "interface", "status": "diverged"}
+            )
+        else:
+            scope, _, name = field.partition(".")
+            divergence["concepts"][0][scope][name] = _LEAK
+            divergence["concepts"][0][scope]["status"] = "diverged"
+
+    return mutate
+
+
+@pytest.mark.parametrize(
+    ("field", "pointer"),
+    [
+        ("pathway", "$.payload.divergence.pathway[0]"),
+        ("concept", "$.payload.divergence.concepts[0].concept"),
+        ("from_expected.at", "$.payload.divergence.concepts[0].from_expected.at"),
+        ("from_previous.at", "$.payload.divergence.concepts[0].from_previous.at"),
+        (
+            "from_previous.after",
+            "$.payload.divergence.concepts[0].from_previous.after",
+        ),
+    ],
+)
+def test_a_rejected_divergence_value_never_reaches_the_error(
+    tmp_path: Path,
+    document: dict[str, Any],
+    capsys: pytest.CaptureFixture[str],
+    field: str,
+    pointer: str,
+) -> None:
+    """Free text in a boundary or concept field is refused by pointer only.
+
+    Every site that composes a catalog key from receipt content checks the
+    value against the published set first; the safety-negative here is that
+    the token appears in neither the error object nor the CLI's stderr.
+    """
+
+    from contextsafe.cli import EXIT_CONTRACT_ERROR, main
+
+    _put_token(field)(document["payload"])
+    with pytest.raises(ContextSafeError) as excinfo:
+        render_receipt_page(document)
+    assert excinfo.value.code == "invalid_receipt_document"
+    assert excinfo.value.path == pointer
+    _assert_never_named(excinfo.value, _LEAK)
+
+    receipt = tmp_path / "receipt.json"
+    receipt.write_bytes(canonical_json(document).encode("utf-8") + b"\n")
+    assert main(["render", "--receipt", str(receipt)]) == EXIT_CONTRACT_ERROR
+    captured = capsys.readouterr()
+    assert _LEAK not in captured.err
+    assert _LEAK not in captured.out
+    assert json.loads(captured.err)["error"]["code"] == "invalid_receipt_document"
 
 
 def test_a_receipt_without_a_divergence_section_is_refused(

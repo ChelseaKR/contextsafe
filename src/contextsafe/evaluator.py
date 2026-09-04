@@ -18,7 +18,11 @@ source pointer of each observation the predicate read, and the version and
 hash of the mapping each one came through. The trace is built from the
 observations the predicate actually read, never re-matched afterwards, and
 the validator has already refused any pointer that is not a path of closed
-structural segments, so nothing identity-bearing has a way in.
+structural segments, so nothing identity-bearing has a way in. A predicate
+that stops at an evidence gate carries the observations of the side that
+decided the verdict: a preserved-across rule whose source was observed and
+whose target was missing is indeterminate with an empty trace, because the
+missing side is what decided it, and the observed side is not re-attached.
 
 The predicates are a reference-only mechanism for the identity, name-to-use,
 pronoun, and recorded-sex-or-gender assertions in

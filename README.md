@@ -621,11 +621,28 @@ beside its original. F-023 and F-025 from
 [Test and evaluation §4](docs/09-TEST-AND-EVALUATION.md) join the seeded-fault
 library, and property tests hold that reordering observations never changes
 the section and that deleting an observed checkpoint never names the deleted
-boundary and never blames a boundary that agreed with its observed
-predecessor.
+boundary, never moves the located boundary when the deleted one was neither
+side of it, and, when the located boundary itself is deleted, locates only a
+boundary that already differed from the observed boundary behind it: the
+location can move forward across the gap the deletion opened, and never onto
+a boundary that agreed with the boundary observed before it. The page holds
+every checkpoint, concept, reason, state, and status it reads from a receipt
+to the published set before the value can become a catalog key, so an
+unpublished value is refused by its structural pointer and never reaches the
+stderr error object.
 
 Its limits: the section compares value hashes and does not say which value
 was right; it is a location, not a finding, and carries no severity (B-032);
+a record-list concept is compared as its whole list, so an observation set
+that captures only some of the declared recorded-sex-or-gender records at a
+boundary reads as diverged there, never as partial agreement;
+`expected_sha256s` is carried for all five concepts whether or not any rule
+names them and, like every hash in the payload, unsalted, so for a concept
+with a small value space such as pronouns the declared value's hash is
+recoverable by enumeration (the payload has always carried unsalted hashes;
+the section widens what is carried, not how); an outcome that stopped at an
+evidence gate traces only the side that decided it, so a preserved-across
+rule with its source observed and its target missing carries an empty trace;
 the trace names assertion, mapping, source, and runner but no oracle or pack,
 because none exists to name; A-033 rests on the existing fail-closed
 validators because no normalizer exists yet (B-022 to B-026); `ambiguous` is

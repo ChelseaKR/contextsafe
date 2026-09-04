@@ -448,6 +448,120 @@ def test_divergence_vocabulary_is_closed(
     assert not _validator().is_valid(document)
 
 
+_SEEDED = sorted((ROOT / "tests" / "fixtures" / "seeded-faults").rglob("*.json"))
+
+
+@pytest.mark.parametrize("path", _SEEDED, ids=[path.stem for path in _SEEDED])
+def test_every_seeded_fixture_document_validates(path: Path) -> None:
+    """The pairings the contract enforces admit every document the runner emits.
+
+    F-023 carries an unobserved state and an unlocated entry, F-025 a located
+    divergence with both sides named, and the clean set only agreement; a
+    pairing constraint that refused any of them would be wrong, not strict.
+    """
+
+    raw = json.loads(path.read_text(encoding="utf-8"))
+    bundle = parse_bundle(raw["case"], raw["observations"], raw["rules"])
+    _validator().validate(build_receipt_document(bundle, evaluate(bundle)))
+
+
+@pytest.mark.parametrize(
+    ("field", "entry"),
+    [
+        ("from_expected", {"status": "diverged", "at": "ehr"}),
+        ("from_expected", {"status": "indeterminate", "at": "registration"}),
+        ("from_expected", {"status": "agreed_where_observed", "at": None}),
+        ("from_expected", {"status": "unobserved", "at": None}),
+        (
+            "from_previous",
+            {"status": "diverged", "after": "registration", "at": "interface"},
+        ),
+        (
+            "from_previous",
+            {"status": "indeterminate", "after": "registration", "at": "ehr"},
+        ),
+        ("from_previous", {"status": "indeterminate", "after": None, "at": "ehr"}),
+        (
+            "from_previous",
+            {"status": "agreed_where_observed", "after": None, "at": None},
+        ),
+        ("from_previous", {"status": "unobserved", "after": None, "at": None}),
+    ],
+)
+def test_every_published_pairing_of_status_and_location_validates(
+    document: dict[str, Any], field: str, entry: dict[str, Any]
+) -> None:
+    """Each pairing the runtime can emit is admitted.
+
+    That includes an indeterminate entry with no earlier observed side to name.
+    """
+
+    document["payload"]["divergence"]["concepts"][0][field] = entry
+    _payload_validator().validate(document["payload"])
+
+
+@pytest.mark.parametrize(
+    ("field", "entry"),
+    [
+        ("from_expected", {"status": "diverged", "at": None}),
+        ("from_expected", {"status": "indeterminate", "at": None}),
+        ("from_expected", {"status": "agreed_where_observed", "at": "ehr"}),
+        ("from_expected", {"status": "unobserved", "at": "registration"}),
+        ("from_previous", {"status": "diverged", "after": None, "at": "interface"}),
+        (
+            "from_previous",
+            {"status": "diverged", "after": "registration", "at": None},
+        ),
+        ("from_previous", {"status": "diverged", "after": None, "at": None}),
+        ("from_previous", {"status": "indeterminate", "after": None, "at": None}),
+        (
+            "from_previous",
+            {"status": "indeterminate", "after": "registration", "at": None},
+        ),
+        (
+            "from_previous",
+            {"status": "agreed_where_observed", "after": "registration", "at": "ehr"},
+        ),
+        (
+            "from_previous",
+            {"status": "agreed_where_observed", "after": None, "at": "ehr"},
+        ),
+        (
+            "from_previous",
+            {"status": "agreed_where_observed", "after": "registration", "at": None},
+        ),
+        ("from_previous", {"status": "unobserved", "after": None, "at": "ehr"}),
+    ],
+)
+def test_a_status_without_its_location_fails_the_contract(
+    document: dict[str, Any], field: str, entry: dict[str, Any]
+) -> None:
+    """A located status with no location, or a location on an unlocated status,
+    is a hand-edited document and fails here, before any renderer sees it."""
+
+    document["payload"]["divergence"]["concepts"][0][field] = entry
+    assert not _payload_validator().is_valid(document["payload"])
+    assert not _validator().is_valid(document)
+
+
+@pytest.mark.parametrize(
+    ("state", "hashes"),
+    [
+        ("unobserved", ["a" * 64]),
+        ("observed", []),
+        ("ambiguous", []),
+    ],
+)
+def test_an_evidence_state_and_its_hashes_must_agree(
+    document: dict[str, Any], state: str, hashes: list[str]
+) -> None:
+    """unobserved carries no hashes and every other state carries at least one."""
+
+    entry = document["payload"]["divergence"]["concepts"][0]
+    entry["checkpoints"][0].update({"state": state, "value_sha256s": hashes})
+    assert not _validator().is_valid(document)
+
+
 def test_divergence_lists_every_concept_and_every_checkpoint_exactly_once(
     document: dict[str, Any],
 ) -> None:

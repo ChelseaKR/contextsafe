@@ -457,8 +457,14 @@ as indeterminate and unobserved, never pass) and F-025 (a divergence across an
 unobserved EHR located at the interface and never at the EHR), with property
 tests that reordering observations never changes the section and that
 deleting an observed checkpoint never names the deleted boundary, never moves
-the located boundary when the deleted one was neither side, and never blames
-a boundary that agreed with its observed predecessor. B-031 is not closed:
+the located boundary when the deleted one was neither side, and, when the
+located boundary itself is deleted, locates only a boundary that already
+differed from the observed boundary behind it, never one that agreed with the
+boundary observed before it. The contract enforces the status-to-location
+pairings its comments stated, and the page refuses an unpublished checkpoint,
+concept, reason, state, or status by structural pointer before the value can
+become a catalog key, so no receipt value reaches the stderr error object.
+B-031 is not closed:
 `unsupported source values remain explicit` (A-033) is enforced today only by
 the fail-closed validators of the one source profile that exists, and there is
 no normalizer that could normalize anything until B-022 to B-026 exist; the

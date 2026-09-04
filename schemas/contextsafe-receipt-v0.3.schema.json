@@ -211,7 +211,7 @@
           ]
         },
         "expected_sha256s": {
-          "$comment": "The sorted, distinct hashes of every value the case manifest declares for the concept: one for gender identity, name to use, and pronouns; as many as the manifest carries for recorded sex or gender and SPCU, possibly none.",
+          "$comment": "The sorted, distinct hashes of every value the case manifest declares for the concept: one for gender identity, name to use, and pronouns; as many as the manifest carries for recorded sex or gender and SPCU, possibly none. Carried for all five concepts whether or not any rule names the concept, and unsalted, like every other value hash in the payload: for a concept whose value space is small, such as pronouns, the hash of a declared value is recoverable by enumeration. A record-list concept is compared as its whole list, so an observation set that captures only some of the declared records at a boundary reads as diverged there, never as partial agreement.",
           "type": "array",
           "items": {"$ref": "#/$defs/sha256"}
         },
@@ -227,24 +227,30 @@
         "checkpoint": {"$ref": "#/$defs/checkpoint"},
         "state": {"$ref": "#/$defs/evidence_state"},
         "value_sha256s": {
-          "$comment": "The sorted, distinct value hashes observed at this checkpoint; empty exactly when the state is unobserved.",
+          "$comment": "The sorted, distinct value hashes observed at this checkpoint; empty exactly when the state is unobserved, which the if/then below enforces.",
           "type": "array",
           "items": {"$ref": "#/$defs/sha256"}
         }
-      }
+      },
+      "if": {"properties": {"state": {"const": "unobserved"}}},
+      "then": {"properties": {"value_sha256s": {"maxItems": 0}}},
+      "else": {"properties": {"value_sha256s": {"minItems": 1}}}
     },
     "from_expected": {
-      "$comment": "The first observed checkpoint whose value hashes are not the expected hashes. at is null exactly when the status is agreed_where_observed or unobserved.",
+      "$comment": "The first observed checkpoint whose value hashes are not the expected hashes. at is null exactly when the status is agreed_where_observed or unobserved, and the if/then below holds a hand-edited document to that: a located status with no location, or a location with an unlocated status, fails the contract rather than reaching a renderer.",
       "type": "object",
       "additionalProperties": false,
       "required": ["at", "status"],
       "properties": {
         "at": {"oneOf": [{"type": "null"}, {"$ref": "#/$defs/checkpoint"}]},
         "status": {"$ref": "#/$defs/divergence_status"}
-      }
+      },
+      "if": {"properties": {"status": {"enum": ["diverged", "indeterminate"]}}},
+      "then": {"properties": {"at": {"$ref": "#/$defs/checkpoint"}}},
+      "else": {"properties": {"at": {"type": "null"}}}
     },
     "from_previous": {
-      "$comment": "The first observed checkpoint whose value hashes differ from the previous observed checkpoint's. after is that previous observed checkpoint, so a divergence found across an unobserved gap is located between after and at, and the gap has no field to be named in. after is null when there was no earlier observed checkpoint; both are null when the status is agreed_where_observed or unobserved.",
+      "$comment": "The first observed checkpoint whose value hashes differ from the previous observed checkpoint's. after is that previous observed checkpoint, so a divergence found across an unobserved gap is located between after and at, and the gap has no field to be named in. after is null when there was no earlier observed checkpoint, which only an indeterminate entry can say (a diverged entry needs two observed sides); both are null when the status is agreed_where_observed or unobserved. The allOf below holds a hand-edited document to those pairings.",
       "type": "object",
       "additionalProperties": false,
       "required": ["after", "at", "status"],
@@ -252,7 +258,32 @@
         "after": {"oneOf": [{"type": "null"}, {"$ref": "#/$defs/checkpoint"}]},
         "at": {"oneOf": [{"type": "null"}, {"$ref": "#/$defs/checkpoint"}]},
         "status": {"$ref": "#/$defs/divergence_status"}
-      }
+      },
+      "allOf": [
+        {
+          "if": {"properties": {"status": {"const": "diverged"}}},
+          "then": {
+            "properties": {
+              "after": {"$ref": "#/$defs/checkpoint"},
+              "at": {"$ref": "#/$defs/checkpoint"}
+            }
+          }
+        },
+        {
+          "if": {"properties": {"status": {"const": "indeterminate"}}},
+          "then": {"properties": {"at": {"$ref": "#/$defs/checkpoint"}}}
+        },
+        {
+          "if": {
+            "properties": {
+              "status": {"enum": ["agreed_where_observed", "unobserved"]}
+            }
+          },
+          "then": {
+            "properties": {"after": {"type": "null"}, "at": {"type": "null"}}
+          }
+        }
+      ]
     },
     "outcome": {
       "$comment": "Hashes stand in for every expected, observed, and source value; reason codes are a closed set so an unpublished reason cannot reach a receipt.",
@@ -322,7 +353,7 @@
       }
     },
     "trace": {
-      "$comment": "A-035. Where the outcome's evidence came from: the distinct source hash and structural pointer of every observation the predicate read, and the distinct version and hash of every mapping they came through, both sorted. Empty lists exactly when the predicate read nothing (missing evidence). The assertion and its version are the outcome's rule_id and rule_version; the runner version is the payload's. Oracle and pack identity are not carried, because no governed oracle or pack exists to name (B-010, B-029, B-030).",
+      "$comment": "A-035. Where the outcome's evidence came from: the distinct source hash and structural pointer of every observation the predicate read, and the distinct version and hash of every mapping they came through, both sorted. A predicate that stops at an evidence gate carries the observations of the checkpoint that decided the verdict: for preserved_across with one side observed and the other missing or ambiguous, that is the failing side only, so the trace is empty when the failing side had no observation even though the other side had one. The assertion and its version are the outcome's rule_id and rule_version; the runner version is the payload's. Oracle and pack identity are not carried, because no governed oracle or pack exists to name (B-010, B-029, B-030).",
       "type": "object",
       "additionalProperties": false,
       "required": ["mappings", "sources"],
