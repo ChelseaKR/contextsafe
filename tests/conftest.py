@@ -1,11 +1,14 @@
 """Shared copies of the bundled synthetic reference inputs."""
 
+import copy
 import json
+from collections.abc import Callable
 from datetime import date
 from typing import Any
 
 import pytest
 
+from contextsafe.evaluator import evaluate
 from contextsafe.evidence import (
     CANONICAL_JSON_MEDIA_TYPE,
     CANONICAL_JSON_SOURCE_TYPE,
@@ -22,9 +25,77 @@ from contextsafe.plan import (
     PlanOwners,
     SyntheticNamespace,
 )
+from contextsafe.receipt import build_receipt_document
 from contextsafe.reference_fixtures import REFERENCE_ROOT
+from contextsafe.validation import parse_bundle
 
 REFERENCE = REFERENCE_ROOT
+
+FINDING_OUTCOME: dict[str, str] = {
+    "rule_id": "A-I05",
+    "case_id": "CTP-I01",
+    "checkpoint": "ehr",
+    "concept": "pronouns",
+}
+"""The one outcome ``finding_receipt`` records as ``fail``."""
+
+CHAIR_SIGNER: dict[str, str] = {
+    "role": "contextsafe_clinical_safety_chair",
+    "organization_id": "ORG-CONTEXTSAFE-TEST",
+    "signature_status": "not_verified",
+}
+CUSTOMER_SIGNER: dict[str, str] = {
+    "role": "customer_clinical_owner",
+    "organization_id": "ORG-CUSTOMER-TEST",
+    "signature_status": "not_verified",
+}
+"""Visibly test-only declared signers. Neither is a signature of anything."""
+
+_EVENT_DEFAULTS: dict[str, dict[str, Any]] = {
+    "confirmed": {
+        "severity": "cs2_high",
+        "owner": None,
+        "rationale_code": "evidence_verified_against_source",
+        "signers": [CHAIR_SIGNER],
+    },
+    "rejected": {
+        "severity": None,
+        "owner": None,
+        "rationale_code": "evidence_not_reproducible",
+        "signers": [CHAIR_SIGNER],
+    },
+    "severity_changed": {
+        "severity": "cs3_moderate",
+        "owner": None,
+        "rationale_code": "severity_rubric_applied",
+        "signers": [CHAIR_SIGNER],
+    },
+    "owner_assigned": {
+        "severity": None,
+        "owner": {"role": "customer_technical_owner", "token_sha256": "a" * 64},
+        "rationale_code": "ownership_assigned_by_plan_role",
+        "signers": [CUSTOMER_SIGNER],
+    },
+    "remediated": {
+        "severity": None,
+        "owner": None,
+        "rationale_code": "remediation_verified_by_rerun",
+        "signers": [CHAIR_SIGNER],
+    },
+    "accepted_residual_risk": {
+        "severity": "cs2_high",
+        "owner": None,
+        "rationale_code": "residual_risk_bounded_by_disposition",
+        "signers": [CUSTOMER_SIGNER, CHAIR_SIGNER],
+    },
+    "withdrawn": {
+        "severity": None,
+        "owner": None,
+        "rationale_code": "entered_in_error",
+        "signers": [CHAIR_SIGNER],
+    },
+}
+"""A shape-valid event for every published decision."""
 
 
 def _read_json(name: str) -> dict[str, Any]:
@@ -127,3 +198,47 @@ def evidence_metadata() -> EvidenceMetadata:
             "system_version": "1.0.0",
         }
     )
+
+
+@pytest.fixture
+def finding_receipt(
+    case_json: dict[str, Any],
+    observations_json: dict[str, Any],
+    rules_json: dict[str, Any],
+) -> dict[str, Any]:
+    """A receipt document with exactly one ``fail`` outcome, ``FINDING_OUTCOME``.
+
+    The pronoun observation is contradicted so that a finding exists to review;
+    the other four outcomes pass and are therefore not reviewable.
+    """
+
+    observations_json["observations"][4]["value"]["value"] = "ze/hir"
+    bundle = parse_bundle(case_json, observations_json, rules_json)
+    return build_receipt_document(bundle, evaluate(bundle))
+
+
+@pytest.fixture
+def review_event(
+    finding_receipt: dict[str, Any],
+) -> Callable[..., dict[str, Any]]:
+    """Build a shape-valid review event for a decision, bound to that receipt."""
+
+    def build(decision: str, **overrides: Any) -> dict[str, Any]:
+        event: dict[str, Any] = {
+            "schema_version": "contextsafe.review-event/1.0.0",
+            "outcome": dict(FINDING_OUTCOME),
+            "receipt": {
+                "payload_sha256": finding_receipt["payload_sha256"],
+                "rule_set_sha256": finding_receipt["payload"]["hashes"][
+                    "rule_set_sha256"
+                ],
+            },
+            "decision": decision,
+            "external_reference": None,
+            "signature_status": "not_verified",
+            **copy.deepcopy(_EVENT_DEFAULTS[decision]),
+        }
+        event.update(overrides)
+        return event
+
+    return build

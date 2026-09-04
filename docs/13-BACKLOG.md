@@ -563,6 +563,38 @@ decided on the receipt fields that exist today. The contract is reference-only
 and ungoverned: no clinical, community, laboratory, legal, security, or
 accessibility review of it has happened, and none is claimed.
 
+Implementation note (2026-09-04, B-032): the review, finding, and disposition
+state machine in [Architecture §6.5](04-ARCHITECTURE.md) exists as
+`src/contextsafe/review.py`, `contextsafe finding review`, and `contextsafe
+finding list`, with the event contract published as
+`schemas/contextsafe-review-event-v1.schema.json` (the pre-signature shape of
+the `contextsafe-review-v1.schema.json` that §8 lists) and the derived state as
+`schemas/contextsafe-review-state-v1.schema.json`. An event binds an outcome
+(rule, case, checkpoint, concept) and the receipt's payload and rule-set hashes
+to a decision from a closed set, a severity from a closed label set, an owner as
+a role plus the SHA-256 of an opaque handle, a rationale code from a closed
+vocabulary, an optional external reference under the ADR 0006 grammar, and
+declared signers as a role plus an organization label. There is no free-text
+field, by construction. The transition table and the per-decision rules are
+data, and every pair the table does not contain is enumerated as an
+`illegal_transition` test. The log is append-only: one canonical line per
+event, each carrying the event hash and the hash of the record before it, and
+every read re-hashes and replays the whole file before anything is appended.
+B-032 is not closed: the deliverable asks for role *and signature* checks, and
+the signature half does not exist — every event and every signer says
+`signature_status: not_verified`, the two-signer threshold on an accepted
+residual risk is a shape check on a declaration, and a declared signer
+authorizes nothing until B-035 supplies keys, the trust manifest, and
+plan-enrolled reviewer registries. The decision, severity, owner-role,
+signer-role, and rationale vocabularies are reference-only and ungoverned; the
+approved severity rubric is B-010 and none of them has had clinical, community,
+legal, or security review. Dispositions are not bound into any receipt (the
+receipt contract is unchanged), `finding review` reads the receipt for its
+hashes and finding outcomes rather than verifying it (B-036), the log has no
+governed cleanup or retention path, and the disputed-findings flow of
+[Service design §9](03-SERVICE-DESIGN.md) — freeze, two independent reviewers,
+majority and dissent — has no representation here.
+
 ## Phase 5 — trust and operations
 
 | ID | Trace | Deliverable and acceptance | Owner | Dependency | Estimate |

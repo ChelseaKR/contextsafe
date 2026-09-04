@@ -67,6 +67,7 @@ COMMANDS = frozenset(
         "evidence",
         "import",
         "mapping",
+        "finding",
         "diagnostics",
         "cleanup",
         "support-bundle",

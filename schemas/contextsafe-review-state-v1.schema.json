@@ -1,0 +1,135 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://contextsafe.invalid/schemas/contextsafe-review-state-v1.schema.json",
+  "title": "ContextSafe review state 1.0",
+  "$comment": "What `contextsafe finding list` derives from an append-only review log, and what `contextsafe finding review` prints after appending: the current disposition of every outcome the log has seen, the hash of the last record, and the receipt the log is bound to. It is derived, deterministic, and unsigned. It carries hashes, closed values, and counts only, and it is not bound into any receipt (B-032; binding is a later item).",
+  "x-contextsafe-semantic-constraints": [
+    "findings are ordered by (rule_id, case_id, checkpoint, concept) and each outcome appears at most once",
+    "log_head_sha256 is the SHA-256 of the canonical JSON of the last log record, or sixty-four zeros when the log is empty; receipt is null only when the log is empty",
+    "every disposition here was reached by replaying the log through the runtime transition table; the schema does not check reachability",
+    "signature_status is the constant not_verified: no signer of any event was verified, and a declared signer authorizes nothing",
+    "the limitations are pinned in order and closed, like the compiled-pack limitations; changing them requires a new contract version"
+  ],
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "receipt",
+    "event_count",
+    "log_head_sha256",
+    "findings",
+    "limitations",
+    "signature_status"
+  ],
+  "properties": {
+    "schema_version": {"const": "contextsafe.review-state/1.0.0"},
+    "receipt": {
+      "oneOf": [
+        {"type": "null"},
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["payload_sha256", "rule_set_sha256"],
+          "properties": {
+            "payload_sha256": {"$ref": "#/$defs/sha256"},
+            "rule_set_sha256": {"$ref": "#/$defs/sha256"}
+          }
+        }
+      ]
+    },
+    "event_count": {"type": "integer", "minimum": 0},
+    "log_head_sha256": {"$ref": "#/$defs/sha256"},
+    "findings": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/finding"}
+    },
+    "limitations": {
+      "type": "array",
+      "minItems": 3,
+      "maxItems": 3,
+      "prefixItems": [
+        {"const": "declared-signers-are-not-signatures"},
+        {"const": "dispositions-are-not-bound-into-any-receipt"},
+        {"const": "vocabularies-are-reference-only-and-ungoverned"}
+      ],
+      "items": false
+    },
+    "signature_status": {"const": "not_verified"}
+  },
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "finding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "outcome",
+        "disposition",
+        "severity",
+        "owner",
+        "event_count",
+        "last_event_sha256"
+      ],
+      "properties": {
+        "outcome": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["rule_id", "case_id", "checkpoint", "concept"],
+          "properties": {
+            "rule_id": {"type": "string", "pattern": "^[A-Z][A-Z0-9-]{2,63}$"},
+            "case_id": {"type": "string", "pattern": "^CTP-[A-Z0-9]{3,16}$"},
+            "checkpoint": {"enum": ["registration", "ehr", "interface", "lis_return"]},
+            "concept": {
+              "enum": [
+                "gender_identity",
+                "recorded_sex_or_gender",
+                "sex_parameter_for_clinical_use",
+                "name_to_use",
+                "pronouns"
+              ]
+            }
+          }
+        },
+        "disposition": {
+          "enum": [
+            "unreviewed",
+            "confirmed",
+            "owned",
+            "remediated",
+            "accepted_residual_risk",
+            "rejected",
+            "withdrawn"
+          ]
+        },
+        "severity": {
+          "oneOf": [
+            {"type": "null"},
+            {"enum": ["cs1_critical", "cs2_high", "cs3_moderate", "cs4_low"]}
+          ]
+        },
+        "owner": {
+          "oneOf": [
+            {"type": "null"},
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["role", "token_sha256"],
+              "properties": {
+                "role": {
+                  "enum": [
+                    "customer_technical_owner",
+                    "customer_clinical_owner",
+                    "customer_privacy_owner",
+                    "customer_cleanup_owner"
+                  ]
+                },
+                "token_sha256": {"$ref": "#/$defs/sha256"}
+              }
+            }
+          ]
+        },
+        "event_count": {"type": "integer", "minimum": 1},
+        "last_event_sha256": {"$ref": "#/$defs/sha256"}
+      }
+    }
+  }
+}
