@@ -16,8 +16,8 @@ it was loose about was the one that carries a person's name.
 constants by hand. That is the right check performed over a set somebody has to
 remember to extend: a new published pattern with no runtime counterpart is
 exactly what slips past it, and did. This gate enumerates instead. Every
-``pattern`` in every file in ``schemas/`` is collected, and each one must be
-accounted for by the code that decides acceptance:
+``pattern`` in every published contract (see *Scope* below) is collected, and
+each one must be accounted for by the code that decides acceptance:
 
 ``equal``
     the pattern is a runtime constant, character for character once grouping is
@@ -40,6 +40,23 @@ accounted for by the code that decides acceptance:
 A published pattern in none of those three is a finding. So is a derivation or a
 declaration that matches nothing published, because an entry describing a
 contract that is not there is an entry nobody is maintaining.
+
+Scope, and why it is declared rather than assumed
+-------------------------------------------------
+
+A published contract is any ``.json`` file anywhere under ``schemas/``. The
+enumeration is recursive and by suffix, not by filename shape, because a flat
+``schemas/*.schema.json`` glob reports clean over ``schemas/sub/`` and over a
+contract named ``schemas/foo.json`` -- a check reporting clean over a file it
+never opened, which is the defect this gate exists to catch, one level up.
+
+Anything else under ``schemas/`` is placed or the gate refuses to run: a suffix
+in ``DOCUMENTATION_SUFFIXES``, or a dot-prefixed name, is skipped by
+declaration, and any other file ends the run at exit 2 naming it, because a file
+this gate cannot place may be a published grammar going unexamined. The clean
+line says how many contracts were read as well as how many patterns were found,
+so a run that examined less than the directory holds is visible in the output
+rather than indistinguishable from a real pass.
 
 What this does not answer
 -------------------------
@@ -70,7 +87,8 @@ Usage
 
 Exit 0 when every published pattern is accounted for, 1 on a finding, and 2 when
 the gate could not read the contracts or the runtime constants it compares --
-including the case where it found no pattern at all, which is not a clean run.
+including the case where it found no pattern at all, and the case where a file
+sits under ``schemas/`` that it cannot place. Neither is a clean run.
 See `docs/adr/0008-one-exit-code-contract-for-every-gate.md`.
 """
 
@@ -95,9 +113,28 @@ if str(REPO_ROOT / "src") not in sys.path:  # pragma: no cover - import shim
 import contextsafe  # noqa: E402
 from contextsafe.contract_validation import Grammar  # noqa: E402
 
+CONTRACT_SUFFIX = ".json"
+"""What a published contract is named. Enumeration is by suffix, at any depth."""
+
+DOCUMENTATION_SUFFIXES: frozenset[str] = frozenset({".md"})
+"""What may sit beside the contracts without being one. Anything else refuses."""
+
 
 class GateUnavailable(Exception):
     """The gate could not establish what is published or what the runtime says."""
+
+
+@dataclass(frozen=True)
+class Published:
+    """Every published pattern, and how many contract files were read for them.
+
+    The count travels with the patterns because the clean line prints it: a
+    denominator nobody can see is how a gate reports clean over a directory it
+    half read.
+    """
+
+    patterns: dict[str, tuple[str, ...]]
+    files: int
 
 
 @dataclass(frozen=True)
@@ -201,10 +238,14 @@ def token_or_literal(
 
     def build() -> str:
         body = _body(_pattern_of(module_name, attribute))
-        literal = getattr(
-            _runtime(literal_module, literal_attribute.split(".")[0]),
-            literal_attribute.split(".")[1],
-        )
+        holder, _, member = literal_attribute.partition(".")
+        if not member:
+            raise GateUnavailable(
+                f"{literal_module}.{literal_attribute} does not name an "
+                "attribute of a runtime object, so this gate cannot read the "
+                "literal it would write into a published pattern"
+            )
+        literal = getattr(_runtime(literal_module, holder), member, None)
         if not isinstance(literal, str) or not literal.isalnum():
             raise GateUnavailable(
                 f"{literal_module}.{literal_attribute} is not an alphanumeric "
@@ -344,30 +385,64 @@ def _walk(node: object, location: str) -> Iterator[tuple[str, str]]:
             yield from _walk(item, f"{location}/{index}")
 
 
-def published_patterns(root: Path) -> dict[str, tuple[str, ...]]:
-    """Every ``pattern`` in every published contract, by the pattern itself."""
+def contract_files(root: Path) -> tuple[Path, ...]:
+    """Every published contract under ``schemas/``, at any depth.
+
+    By suffix and recursively, and refusing rather than skipping what it cannot
+    place. A ``schemas/*.schema.json`` glob answers for the files somebody
+    remembered to name that way: ``schemas/sub/contextsafe-x-v1.schema.json``
+    and ``schemas/x.json`` are both published grammars it never opens, and a
+    gate reporting clean over a contract it never opened is #58 again with this
+    file as the subject.
+    """
 
     directory = root / "schemas"
-    files = sorted(directory.glob("*.schema.json"))
+    files: list[Path] = []
+    for path in sorted(directory.rglob("*")):
+        if not path.is_file():
+            continue
+        if path.suffix == CONTRACT_SUFFIX:
+            files.append(path)
+        elif path.name.startswith(".") or path.suffix in DOCUMENTATION_SUFFIXES:
+            continue
+        else:
+            raise GateUnavailable(
+                f"{path.relative_to(directory).as_posix()} is under {directory} "
+                f"and is neither a `{CONTRACT_SUFFIX}` contract this gate reads "
+                "nor a documentation suffix it declares, so it may be a "
+                "published grammar going unexamined"
+            )
     if not files:
         raise GateUnavailable(
             f"no published contract under {directory}, so there is nothing to "
             "compare against the runtime and a clean result would mean nothing"
         )
+    return tuple(files)
+
+
+def published_patterns(root: Path) -> Published:
+    """Every ``pattern`` in every published contract, by the pattern itself."""
+
+    directory = root / "schemas"
+    files = contract_files(root)
     found: dict[str, list[str]] = {}
     for path in files:
+        name = path.relative_to(directory).as_posix()
         try:
             schema = json.loads(path.read_text(encoding="utf-8"))
         except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
-            raise GateUnavailable(f"{path.name} could not be read: {exc}") from exc
-        for location, pattern in _walk(schema, path.name):
+            raise GateUnavailable(f"{name} could not be read: {exc}") from exc
+        for location, pattern in _walk(schema, name):
             found.setdefault(pattern, []).append(location)
     if not found:
         raise GateUnavailable(
             f"{len(files)} published contract(s) carry no `pattern` at all, which "
             "is not a repository this gate can report clean over"
         )
-    return {pattern: tuple(sorted(where)) for pattern, where in found.items()}
+    return Published(
+        {pattern: tuple(sorted(where)) for pattern, where in found.items()},
+        len(files),
+    )
 
 
 def _module_constants(module: ModuleType, found: dict[str, list[str]]) -> None:
@@ -445,7 +520,7 @@ def check(
             findings.append(
                 Finding(
                     "unbound-pattern",
-                    where[0],
+                    ", ".join(where),
                     "published with no runtime constant behind it: no compiled "
                     "pattern in the package equals it, no derivation builds it, "
                     "and no declared exception names it. A published grammar "
@@ -487,11 +562,12 @@ def _stale(
     return findings
 
 
-def _report(published: dict[str, tuple[str, ...]], counts: dict[str, int]) -> None:
-    occurrences = sum(len(where) for where in published.values())
+def _report(published: Published, counts: dict[str, int]) -> None:
+    occurrences = sum(len(where) for where in published.patterns.values())
     print(
-        f"pattern-gate: clean - {len(published)} distinct pattern(s) in "
-        f"{occurrences} place(s): {counts['equal']} equal to a runtime constant, "
+        f"pattern-gate: clean - {len(published.patterns)} distinct pattern(s) in "
+        f"{occurrences} place(s) across {published.files} published contract(s): "
+        f"{counts['equal']} equal to a runtime constant, "
         f"{counts['derived']} derived from one, {counts['declared']} declared "
         "without one"
     )
@@ -510,7 +586,7 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     try:
         published = published_patterns(args.root)
-        findings, counts = check(published, runtime_constants())
+        findings, counts = check(published.patterns, runtime_constants())
     except GateUnavailable as exc:
         print(f"pattern-gate: {exc}.", file=sys.stderr)
         print(
@@ -525,7 +601,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     if findings:
         print(
             f"pattern-gate: {len(findings)} finding(s) over "
-            f"{len(published)} distinct pattern(s)",
+            f"{len(published.patterns)} distinct pattern(s) in "
+            f"{published.files} published contract(s)",
             file=sys.stderr,
         )
         for finding in findings:

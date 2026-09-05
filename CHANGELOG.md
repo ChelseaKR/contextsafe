@@ -439,6 +439,9 @@ rather than after it.
   vocabulary on every run. The receipt contract stays at 0.3: the change narrows
   a published pattern to what the runtime always enforced, the way #58's did,
   and no document that validated and was accepted has stopped validating.
+  `schemas/README.md` states that rule beside the one it already stated for a
+  widening, so the versioning policy covers both directions rather than leaving
+  a narrowing under an unmoved `$id` written down nowhere.
 
 - **The two observation contracts disagreed about the mapping block (#69).**
   B-026 gave `contextsafe-observation-set-v0.1` an optional
@@ -450,7 +453,11 @@ rather than after it.
   `tests/test_contracts.py` exists to stop. The v1 contract now carries the same
   block, and the test compares the two constraint for constraint with
   annotations dropped, so each file can keep its own record of when it was
-  widened and neither can be widened alone again.
+  widened and neither can be widened alone again. The `$comment` recording the
+  change names its one narrowing rather than claiming there was none: the
+  128-character bound on a version string, which the sibling contract already
+  carried and which no document this runtime emits or accepts could exceed,
+  because every string is held to `MAX_STRING_LENGTH` before a pattern runs.
 
 - **The unmatched-mapping-row warning could not reach an operator.**
   `mapping_profile_row_unmatched` was raised into the import result and
@@ -614,9 +621,10 @@ rather than after it.
   hand, which is the right check performed over a set somebody has to remember
   to extend.
 
-  `tools/pattern_gate.py` enumerates instead. Every `pattern` in every file in
-  `schemas/` — 45 distinct expressions in 150 places — must be accounted for in
-  one of three ways: **equal** to a pattern the runtime compiles, once `(?:` and
+  `tools/pattern_gate.py` enumerates instead. Every `pattern` in every `.json`
+  file under `schemas/`, at any depth — 45 distinct expressions in 150 places
+  across 19 published contracts — must be accounted for in one of three ways:
+  **equal** to a pattern the runtime compiles, once `(?:` and
   `(` are read as the same grouping (37 of them); **derived** from named runtime
   constants by a function the gate recomputes on every run, so the derivation is
   checked rather than asserted (5); or **declared** as having no runtime regular
@@ -628,6 +636,14 @@ rather than after it.
   it read no contract or found no pattern, per
   [ADR 0008](docs/adr/0008-one-exit-code-contract-for-every-gate.md), and it is
   a stage of `make verify` with a row in the contributing guide's gate table.
+
+  The enumeration is recursive and by suffix, and the clean line says how many
+  contracts it read. A flat `schemas/*.schema.json` glob reports clean over
+  `schemas/sub/contextsafe-x-v1.schema.json` and over `schemas/x.json` — a check
+  passing over a published grammar it never opened, which is this gate's own
+  subject one level up — so it walks the directory, and a file it can neither
+  read as a contract nor place as documentation ends the run at exit 2 naming
+  it rather than being skipped.
 
   What it does not claim, pinned as a test rather than written in a paragraph:
   it answers "some runtime constant says this", not "the right one does".

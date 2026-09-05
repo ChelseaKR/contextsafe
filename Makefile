@@ -47,12 +47,15 @@ secret-scan:
 mutants:
 	uv run python tools/mutation_gate.py
 
-# Every `pattern` in `schemas/` against the constants the runtime compiles. The
-# published half of a grammar and the enforced half were two statements of one
-# rule with nothing holding them together, which is what #58 cost. Not a test,
-# because a test pins the patterns somebody remembered; this enumerates them and
-# fails on one nothing is behind. Stdlib plus the package itself, so it costs
-# `verify` nothing, and it exits 2 rather than 0 when it read no contract.
+# Every `pattern` in every `.json` file under `schemas/`, at any depth, against
+# the constants the runtime compiles. The published half of a grammar and the
+# enforced half were two statements of one rule with nothing holding them
+# together, which is what #58 cost. Not a test, because a test pins the patterns
+# somebody remembered; this enumerates them and fails on one nothing is behind.
+# Recursively and by suffix: a flat glob reports clean over a contract in a
+# subdirectory, which is the same false green one level up. Stdlib plus the
+# package itself, so it costs `verify` nothing, and it exits 2 rather than 0
+# when it read no contract or found a file under `schemas/` it cannot place.
 patterns:
 	uv run python tools/pattern_gate.py
 

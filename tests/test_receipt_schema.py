@@ -42,6 +42,7 @@ from contextsafe.models import (
 from contextsafe.receipt import build_receipt_document
 from contextsafe.reference_fixtures import REFERENCE_ROOT
 from contextsafe.validation import (
+    _HL7_SEGMENT_NAME,
     JSON_POINTER_MAX_SEGMENTS,
     MAX_STRING_LENGTH,
     SOURCE_POINTER_MAX_LENGTH,
@@ -385,7 +386,16 @@ def test_the_published_pointer_bounds_are_the_runtime_constants() -> None:
     definition = _schema()["$defs"]["structural_pointer"]
     assert definition["maxLength"] == min(MAX_STRING_LENGTH, SOURCE_POINTER_MAX_LENGTH)
     assert f"{{1,{JSON_POINTER_MAX_SEGMENTS}}}" in definition["pattern"]
-    assert "160" not in definition["pattern"]
+    # The bound this definition carried until #72, absent from every constraint
+    # it states: asserting it is absent from the `pattern` alone would pass over
+    # a `maxLength` put back. Annotations are dropped, because the `$comment`
+    # says what the number used to be and that sentence is the record of it.
+    constraints = {
+        key: value
+        for key, value in definition.items()
+        if not key.startswith("$") and key != "description"
+    }
+    assert "160" not in json.dumps(constraints)
 
 
 def test_the_published_hl7_dialect_is_the_runtime_segment_allowlist() -> None:
@@ -395,7 +405,7 @@ def test_the_published_hl7_dialect_is_the_runtime_segment_allowlist() -> None:
     segments = sorted(
         word
         for word in STRUCTURAL_POINTER_SEGMENTS
-        if re.fullmatch(r"[A-Z][A-Z0-9]{2}", word)
+        if re.fullmatch(_HL7_SEGMENT_NAME, word)
     )
     assert rf"|\$\.(?:{'|'.join(segments)})\[" in pattern
 

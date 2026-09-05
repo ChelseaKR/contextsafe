@@ -98,6 +98,18 @@ The receipt contract went from 0.1 to 0.2 this way when the rule-set predicates
 added outcome reasons, so a consumer pinned to the 0.1 `$id` rejects a 0.2
 receipt on its `schema_version` rather than accepting a reason it has never
 seen, and from 0.2 to 0.3 when the divergence section and the outcome trace
-were added as required fields. The rule-set contract's 0.1.0 shape is the one exception to "one file per
+were added as required fields.
+
+When a published contract narrows to the grammar the runtime already enforced,
+the version does not move and the definition records the date and the issue
+instead: the file was stating something the validator refused, so no document
+that was accepted has stopped being accepted, and a consumer pinned to that
+`$id` gains nothing by being handed a document the runtime would reject at the
+door. The receipt contract's `structural_pointer` narrowed that way on
+2026-09-04 — one `maxLength`, the JSON Pointer depth, and the HL7 segment
+name — and the receipt stayed at 0.3 (#72). A narrowing that refuses something
+the runtime accepts is not this case and moves the version like a widening.
+
+The rule-set contract's 0.1.0 shape is the one exception to "one file per
 contract": it predates the published schemas, is still accepted unchanged by
 the runtime and pinned by the pack contract, and has no file here.

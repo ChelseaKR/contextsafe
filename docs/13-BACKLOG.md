@@ -437,8 +437,9 @@ alone. The receipt contract's `structural_pointer` states the bounds the
 validator applies rather than a longer one of its own: 128 characters, sixteen
 RFC 6901 reference tokens, and an HL7 dialect rooted only in a vocabulary word
 shaped like a segment name. And `make patterns` (`tools/pattern_gate.py`) is a
-new stage of `make verify` that enumerates every `pattern` in `schemas/` and
-fails on one no runtime constant is behind, which is the gate that would have
+new stage of `make verify` that enumerates every `pattern` in every `.json`
+file under `schemas/`, at any depth, and fails on one no runtime constant is
+behind, which is the gate that would have
 caught the #58 name-target defect. None of this is a governance change: no
 contract version moved, no fixture changed, every pattern that moved narrowed
 to what the runtime already enforced, and no reviewer, approval, or status is

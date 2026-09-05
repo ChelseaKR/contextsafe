@@ -50,13 +50,24 @@ gate = _load_gate()
 
 
 def _copy_schemas(root: Path) -> Path:
+    """The published contracts, copied with the tree shape the gate walks.
+
+    `rglob`, not `glob`: a helper that flattens the directory would agree with a
+    gate that only reads the top of it, and the two would be wrong together.
+    """
+
     directory = root / "schemas"
     directory.mkdir(parents=True)
-    for path in sorted(SCHEMAS.glob("*.schema.json")):
-        (directory / path.name).write_text(
-            path.read_text(encoding="utf-8"), encoding="utf-8"
-        )
+    for path in sorted(SCHEMAS.rglob("*.json")):
+        target = directory / path.relative_to(SCHEMAS)
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text(path.read_text(encoding="utf-8"), encoding="utf-8")
     return directory
+
+
+def _write(path: Path, schema: Any) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(schema, indent=2), encoding="utf-8")
 
 
 def _edit(path: Path, mutate: Callable[[Any], None]) -> None:
@@ -76,11 +87,12 @@ def test_every_published_contract_is_read_and_every_pattern_counted() -> None:
     """The clean line is only worth reading if the count behind it is real."""
 
     published = gate.published_patterns(REPO_ROOT)
-    occurrences = sum(len(where) for where in published.values())
-    assert len(published) >= 40
-    assert occurrences > len(published)
-    _, counts = gate.check(published, gate.runtime_constants())
-    assert sum(counts.values()) == len(published)
+    occurrences = sum(len(where) for where in published.patterns.values())
+    assert len(published.patterns) >= 40
+    assert occurrences > len(published.patterns)
+    assert published.files == len(list(SCHEMAS.rglob("*.json")))
+    _, counts = gate.check(published.patterns, gate.runtime_constants())
+    assert sum(counts.values()) == len(published.patterns)
     assert counts["equal"] > counts["derived"] + counts["declared"]
 
 
@@ -99,7 +111,7 @@ def test_the_receipt_pointer_derivation_is_the_published_pattern() -> None:
     """#72: one function builds it, and the published contract carries the result."""
 
     published = gate.published_patterns(REPO_ROOT)
-    assert gate.structural_pointer() in published
+    assert gate.structural_pointer() in published.patterns
 
 
 # --- a published pattern with nothing behind it ------------------------------
@@ -156,6 +168,86 @@ def test_capturing_and_non_capturing_grouping_is_not_drift() -> None:
 
     assert gate.normalise("^(?:a|b)$") == gate.normalise("^(a|b)$")
     assert gate.normalise("^(?=a)b$") == "^(?=a)b$"
+
+
+def test_every_place_an_unbound_pattern_is_published_is_named(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """One finding per pattern, so it has to carry every location or hide some."""
+
+    directory = _copy_schemas(tmp_path)
+
+    def add(schema: Any) -> None:
+        schema["$defs"]["invented"] = {"type": "string", "pattern": "^INVENTED-[0-9]+$"}
+
+    _edit(directory / "contextsafe-case-v0.1.schema.json", add)
+    _edit(directory / "contextsafe-plan-v1.schema.json", add)
+    assert gate.main(["--root", str(tmp_path)]) == FOUND
+    reported = capsys.readouterr().err
+    assert "contextsafe-case-v0.1.schema.json/$defs/invented" in reported
+    assert "contextsafe-plan-v1.schema.json/$defs/invented" in reported
+
+
+# --- what counts as a published contract -------------------------------------
+
+
+def test_a_contract_in_a_subdirectory_is_examined(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """A flat glob reports clean over `schemas/sub/`, which is #58 again here."""
+
+    directory = _copy_schemas(tmp_path)
+    _write(
+        directory / "sub" / "contextsafe-hidden-v1.schema.json",
+        {"$defs": {"x": {"type": "string", "pattern": "^EVIL2-$"}}},
+    )
+    assert gate.main(["--root", str(tmp_path)]) == FOUND
+    assert "sub/contextsafe-hidden-v1.schema.json/$defs/x" in capsys.readouterr().err
+
+
+def test_a_contract_not_named_schema_json_is_examined(tmp_path: Path) -> None:
+    """Enumeration is by suffix: `schemas/foo.json` publishes a grammar too."""
+
+    directory = _copy_schemas(tmp_path)
+    _write(
+        directory / "extra.json",
+        {"$defs": {"x": {"type": "string", "pattern": "^EVIL3-$"}}},
+    )
+    assert gate.main(["--root", str(tmp_path)]) == FOUND
+
+
+def test_a_file_under_schemas_the_gate_cannot_place_is_a_refusal(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """A contract in a shape this gate does not read is not a contract it read."""
+
+    directory = _copy_schemas(tmp_path)
+    (directory / "contextsafe-hidden-v1.schema.yaml").write_text(
+        "pattern: ^EVIL4-$\n", encoding="utf-8"
+    )
+    assert gate.main(["--root", str(tmp_path)]) == UNAVAILABLE
+    assert "contextsafe-hidden-v1.schema.yaml" in capsys.readouterr().err
+
+
+def test_documentation_and_dotfiles_beside_the_contracts_are_not_a_refusal(
+    tmp_path: Path,
+) -> None:
+    """The declared skips, exercised, so the refusal above is about contracts."""
+
+    directory = _copy_schemas(tmp_path)
+    (directory / "README.md").write_text("# contracts\n", encoding="utf-8")
+    (directory / ".DS_Store").write_bytes(b"\x00")
+    assert gate.main(["--root", str(tmp_path)]) == CLEAN
+
+
+def test_the_clean_line_says_how_many_contracts_it_read(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """The denominator is the half of a clean line that can be wrong quietly."""
+
+    assert gate.main([]) == CLEAN
+    files = len(list(SCHEMAS.rglob("*.json")))
+    assert f"across {files} published contract(s)" in capsys.readouterr().out
 
 
 # --- entries that account for nothing ----------------------------------------
@@ -267,6 +359,30 @@ def test_a_family_name_that_is_not_alphanumeric_is_a_refusal(
         "_NAME_TOKEN",
         "contextsafe.importers.fhir_r4_json",
         "FHIR_R4_PROFILE.synthetic_family_name",
+    )
+    with pytest.raises(gate.GateUnavailable):
+        build()
+
+
+def test_a_literal_attribute_naming_no_member_is_a_refusal() -> None:
+    """The one malformed-declaration path that used to escape as a traceback."""
+
+    build = gate.token_or_literal(
+        "contextsafe.importers.fhir_r4_json",
+        "_NAME_TOKEN",
+        "contextsafe.importers.fhir_r4_json",
+        "FHIR_R4_PROFILE",
+    )
+    with pytest.raises(gate.GateUnavailable):
+        build()
+
+
+def test_a_literal_member_that_is_absent_is_a_refusal() -> None:
+    build = gate.token_or_literal(
+        "contextsafe.importers.fhir_r4_json",
+        "_NAME_TOKEN",
+        "contextsafe.importers.fhir_r4_json",
+        "FHIR_R4_PROFILE.not_a_member",
     )
     with pytest.raises(gate.GateUnavailable):
         build()
