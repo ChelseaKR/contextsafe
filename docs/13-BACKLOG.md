@@ -176,7 +176,7 @@ and cross-platform three-run reproducibility evidence remains outstanding.
 | B-027 | P0-08 | Implement status algebra and pure evaluator; all ten safety invariants property-tested | F | B-010/B-019/B-026 | 6d | Open — note 2026-07-17 |
 | B-028 | P0-05 | Implement identity/NtU/pronoun/RSG predicates A-005..A-015 | F | B-027 | 5d | Open — note 2026-09-04 |
 | B-029 | P0-06 | Implement SPCU context/provenance/period predicates A-016..A-024 | F/CL | B-027 | 6d + 8h review | Open — no note |
-| B-030 | P0-07 | Implement result/range/flag predicates A-025..A-031 | F/LAB | B-025/B-027 | 6d + 8h lab | Open — no note |
+| B-030 | P0-07 | Implement result/range/flag predicates A-025..A-031 | F/LAB | B-025/B-027 | 6d + 8h lab | Open — note 2026-09-04 |
 | B-031 | P0-08/P0-12 | Implement first-observed-divergence and evidence trace A-032..A-035 | F | B-027..030 | 4d | Open — note 2026-09-04 |
 
 Implementation note (2026-07-17, B-027): the property-test layer from
