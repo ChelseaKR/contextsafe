@@ -1088,7 +1088,7 @@ def test_a_symbolic_link_is_never_followed(
     assert target.read_bytes() == b""
 
 
-def test_a_created_log_is_reachable_only_by_its_owner(
+def test_a_created_log_is_created_with_the_mode_the_module_names(
     tmp_path: Path, finding_receipt: dict[str, Any], review_event: EventBuilder
 ) -> None:
     """The mode `_open_log` creates the file with, which nothing asserted.
@@ -1100,17 +1100,25 @@ def test_a_created_log_is_reachable_only_by_its_owner(
     that makes tampering visible, so the permissions it lands with are part of
     what the module promises rather than an incidental of the umask.
 
-    The assertion is on the group and other bits rather than on the literal
-    mode, because a umask can only take permissions away: `0o600` under a
-    stricter umask is still a file nobody else can reach, and that is the
-    property worth pinning.
+    The umask is cleared for the duration, and the assertion is on the literal
+    `0o600`. Asserting only that the group and other bits are clear passes for
+    the wrong reason on the machines this suite actually runs on: with the mode
+    argument removed entirely, `os.open` creates at `0o777 & ~umask`, which is
+    `0o700` under the umask 077 a hardened account uses and `0o755` under the
+    022 that macOS and the ubuntu runners default to. The first of those would
+    satisfy `mode & 0o077 == 0` while the module promised nothing. Clearing the
+    umask makes the file's mode the argument `_open_log` passed, so this pins
+    the module rather than the environment it ran in.
     """
 
     log = tmp_path / "review.jsonl"
-    append_review_event(log, review_event("confirmed"), finding_receipt)
-    mode = os.stat(log).st_mode & 0o777
-    assert mode & 0o077 == 0, f"the review log is reachable outside its owner: {mode:o}"
-    assert mode & 0o400, "the owner cannot read the log they just wrote"
+    previous = os.umask(0)
+    try:
+        append_review_event(log, review_event("confirmed"), finding_receipt)
+        mode = os.stat(log).st_mode & 0o777
+    finally:
+        os.umask(previous)
+    assert mode == 0o600, f"the review log was created at mode {mode:o}, not 600"
 
 
 def test_a_directory_is_not_a_log(

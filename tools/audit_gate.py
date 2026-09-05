@@ -42,7 +42,10 @@ on disk. So the report is the evidence, and the exit code only breaks ties:
   over a clean-looking report is an unexplained disagreement, and the fail-closed
   reading of an unexplained disagreement is that nothing was established;
 * anything else — no report, unparseable report, a report whose every entry was
-  skipped — is exit 2.
+  skipped, a report holding an entry whose ``vulns`` field is not a list — is
+  exit 2. An empty ``vulns`` list is an answer; a ``vulns`` that cannot be read
+  is a distribution whose advisory status was never established, and a gate
+  that counted it as audited would put it behind a "clean" line.
 
 Retries, and what they are for
 ------------------------------
@@ -171,6 +174,26 @@ def _advisory_ids(vulnerabilities: list[object]) -> tuple[str, ...]:
     return tuple(ids)
 
 
+def _advisory_list(dependency: dict[str, object]) -> list[object]:
+    """One audited dependency's ``vulns`` list, or a refusal.
+
+    An empty list is an answer: the service was asked about this distribution
+    and reported nothing against it. Anything that is not a list is not an
+    answer -- an absent key, ``null``, a string, an object -- and the
+    distribution's advisory status was therefore never established. Counting
+    that as audited is the fail-open reading, and it would put an unexamined
+    distribution behind a "clean" line, which is the one thing this gate exists
+    to prevent.
+    """
+
+    vulnerabilities = dependency.get("vulns")
+    if not isinstance(vulnerabilities, list):
+        raise GateUnavailable(
+            "the auditor's report holds a dependency whose advisory list cannot be read"
+        )
+    return vulnerabilities
+
+
 def parse_report(text: str) -> Report:
     """Read one pip-audit JSON report, or refuse.
 
@@ -197,9 +220,9 @@ def parse_report(text: str) -> Report:
         if dependency.get("skip_reason") is not None:
             skipped += 1
             continue
+        vulnerabilities = _advisory_list(dependency)
         examined += 1
-        vulnerabilities = dependency.get("vulns")
-        if not isinstance(vulnerabilities, list) or not vulnerabilities:
+        if not vulnerabilities:
             continue
         vulnerable.append(
             Vulnerable(

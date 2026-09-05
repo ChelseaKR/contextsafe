@@ -223,10 +223,14 @@ proof exists and the workflow does not.
 ### Phase 5 — Evidence that the suite can detect a regression
 
 **Status: built,** over a declared subset of three of the twenty-eight modules
-named in `SAFETY_MODULES`, and running automatically since 2026-09-04. See
+named in `SAFETY_MODULES`, and wired into CI on 2026-09-04
+(`.github/workflows/mutation.yml`); its first run has not been observed. See
 [ADR 0009](adr/0009-mutation-evidence-over-declared-safety-modules.md),
-`make mutants`, and `.github/workflows/mutation.yml`, which runs it weekly and
-on any pull request touching the package, the suite or the gate. Widening the
+`make mutants`, and that workflow, which is configured to run weekly and
+on any pull request touching the package, the suite or the gate. Configuration
+is not execution, and this document does not treat it as such: the evidence
+that the mutation gate runs in CI is its first run, which nobody has watched
+yet. What is proved today is proved by `make mutants` locally. Widening the
 declared subset is a runtime decision and has not been taken; twenty-five safety
 modules still have no mutation evidence.
 
@@ -324,7 +328,7 @@ Built, as of 2026-09-04:
 | 2 | built | ADR 0006; provenance grammars and the boundary scan on `parse_evidence_metadata`, closing issue #35 |
 | 3 | built | ADR 0007; `make scope` |
 | 4 | built, with one substitution | ADR 0008; the three-state contract, proved locally rather than by a CI job nobody has watched run |
-| 5 | built over three of twenty-eight safety modules | ADR 0009; `make mutants`, run by `.github/workflows/mutation.yml` since 2026-09-04 |
+| 5 | built over three of twenty-eight safety modules | ADR 0009; `make mutants`, wired into `.github/workflows/mutation.yml` on 2026-09-04, first run not yet observed |
 | 6 | **blocked on people and money** | nothing, deliberately |
 
 Phase 6 is blocked on people and money, not on code. Nothing in this repository
