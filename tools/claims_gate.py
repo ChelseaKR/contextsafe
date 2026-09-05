@@ -112,7 +112,11 @@ Checks
     the notes for four other items, and a reader could not find one item's
     state without reading nine notes about others. The column is the index, and
     it is derived rather than typed, so it cannot drift from the notes it
-    indexes. A row with no cell is a finding too, for the usual reason.
+    indexes. A row with no cell is a finding too, for the usual reason. The cell
+    is taken by the index of the row's own table `Status` header rather than by
+    position: reading the last cell examined one cell without establishing the
+    row's shape, so a row that dropped any other column left the right value
+    last and passed unexamined.
 
 Usage
 -----
@@ -415,11 +419,55 @@ header is where the binding lives: a note about B-021 written under a bare
 date would leave B-021 reading as unwritten-about, and the row would say so.
 """
 
-_BACKLOG_ROW = re.compile(
-    r"^\| (?P<item>B-0[0-9]{2}) \|(?P<rest>.*)\|\s*$", re.MULTILINE
-)
-"""One phase-table row. ``B-1xx`` parking-lot rows and the allocation rows
-(``B-001`` to ``B-007`` as one row) do not match, because neither carries a per-item status."""
+_BACKLOG_ITEM = re.compile(r"^B-0[0-9]{2}$")
+"""The first cell of one phase-table row. ``B-1xx`` parking-lot rows and the
+allocation rows (``B-001`` to ``B-007`` as one row) do not match, because
+neither carries a per-item status."""
+
+_TABLE_RULE = re.compile(r"^\|[\s:|-]+\|$")
+"""The rule under a Markdown table's header row, which is what marks it a header."""
+
+STATUS_HEADER = "Status"
+
+
+def table_cells(line: str) -> list[str] | None:
+    """The cells of one Markdown table row, or ``None`` if the line is not one."""
+
+    stripped = line.strip()
+    if not stripped.startswith("|") or not stripped.endswith("|"):
+        return None
+    return [cell.strip() for cell in stripped[1:-1].split("|")]
+
+
+def backlog_status_cells(backlog: str) -> list[tuple[str, str | None]]:
+    """Each phase-table item row, with the cell under its own table's header.
+
+    The cell is taken by the index of the ``Status`` header in the table the row
+    belongs to, never as whichever cell happens to be last. A row that drops any
+    other column would otherwise leave the right value in the last position and
+    pass unexamined, which is the defect class this repository names.
+
+    ``None`` is a row whose table publishes no ``Status`` header, or one too
+    short to reach it: nothing was examined, so nothing may read as agreeing.
+    """
+
+    rows: list[tuple[str, str | None]] = []
+    header: list[str] = []
+    lines = backlog.splitlines()
+    for index, line in enumerate(lines):
+        cells = table_cells(line)
+        if cells is None:
+            header = []
+            continue
+        if index + 1 < len(lines) and _TABLE_RULE.match(lines[index + 1]):
+            header = cells
+            continue
+        if not _BACKLOG_ITEM.match(cells[0]):
+            continue
+        column = header.index(STATUS_HEADER) if STATUS_HEADER in header else None
+        stated = cells[column] if column is not None and column < len(cells) else None
+        rows.append((cells[0], stated))
+    return rows
 
 
 def backlog_note_dates(backlog: str) -> dict[str, str]:
@@ -916,7 +964,7 @@ def check_backlog_status(root: Path) -> list[Finding]:
     """Every phase-table row's status cell against the notes in the same file."""
 
     backlog = read(root, BACKLOG)
-    rows = list(_BACKLOG_ROW.finditer(backlog))
+    rows = backlog_status_cells(backlog)
     if not rows:
         raise GateUnavailable(
             f"{BACKLOG} has no phase-table row to derive a status for; the tables "
@@ -924,18 +972,16 @@ def check_backlog_status(root: Path) -> list[Finding]:
         )
     dates = backlog_note_dates(backlog)
     findings: list[Finding] = []
-    for row in rows:
-        item = row.group("item")
+    for item, stated in rows:
         expected = backlog_status(item, dates)
-        cells = [cell.strip() for cell in row.group("rest").split("|")]
-        stated = cells[-1] if cells else ""
         if stated == expected:
             continue
-        detail = (
-            f"{item} states {stated!r} as its status"
-            if stated
-            else f"{item} carries no status cell"
-        )
+        if stated is None:
+            detail = f"{item} has no cell under its table's {STATUS_HEADER!r} header"
+        elif not stated:
+            detail = f"{item} carries an empty status cell"
+        else:
+            detail = f"{item} states {stated!r} as its status"
         findings.append(
             Finding(
                 "backlog-status",

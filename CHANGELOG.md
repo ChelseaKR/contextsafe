@@ -654,6 +654,60 @@ rather than after it.
 
 ### Fixed
 
+- **`make claims` read a backlog row's status by position, and reported clean
+  over a row it had not examined.** `check_backlog_status` took the row's cell
+  as the last one the row split into. The `Status` column is column seven of
+  seven in every phase table in `docs/13-BACKLOG.md`, so the last cell and the
+  status cell coincided — until a row lost a column. A row that dropped any
+  column other than `Status` left the correct status value in the last
+  position: deleting only the Estimate from B-022's row leaves six cells, and
+  `tools/claims_gate.py` answered `claims: clean - 10 check(s) re-derived from
+  the repository` at exit 0 over a row whose shape it never established. That
+  is the class `docs/18-ASSURANCE-PROGRAM.md` names — a check reporting a clean
+  result over content it did not examine — and nothing else in the tree
+  examined a backlog row's column count. A row that dropped the `Status`
+  column itself was a finding, but the wrong one: it named the item's Estimate
+  as its status.
+
+  The cell is now taken by the index of the `Status` header in the table the
+  row belongs to, so `backlog_status_cells` establishes each row's shape before
+  it reads anything. A row too short to reach that column, and a table
+  publishing no such header, are findings that say the cell was not found
+  rather than reporting whatever cell was last; a present-but-empty cell is
+  named as empty. Four tests in `tests/test_claims_gate.py` stand on the four
+  cases, and each fails against the previous code. The derived values, the
+  check's name and its exit-code contract are unchanged, and what the column
+  may assert is still open — [ADR 0014](docs/adr/0014-what-a-derived-status-column-may-assert.md),
+  which found this while measuring its own subject, records that the fix is
+  independent of the three options it puts to the maintainer.
+
+- **`make claims` read a backlog row's status by position, and reported clean
+  over a row it had not examined.** `check_backlog_status` took the row's cell
+  as the last one the row split into. The `Status` column is column seven of
+  seven in every phase table in `docs/13-BACKLOG.md`, so the last cell and the
+  status cell coincided — until a row lost a column. A row that dropped any
+  column other than `Status` left the correct status value in the last
+  position: deleting only the Estimate from B-022's row leaves six cells, and
+  `tools/claims_gate.py` answered `claims: clean - 10 check(s) re-derived from
+  the repository` at exit 0 over a row whose shape it never established. That
+  is the class `docs/18-ASSURANCE-PROGRAM.md` names — a check reporting a clean
+  result over content it did not examine — and nothing else in the tree
+  examined a backlog row's column count. A row that dropped the `Status`
+  column itself was a finding, but the wrong one: it named the item's Estimate
+  as its status.
+
+  The cell is now taken by the index of the `Status` header in the table the
+  row belongs to, so `backlog_status_cells` establishes each row's shape before
+  it reads anything. A row too short to reach that column, and a table
+  publishing no such header, are findings that say the cell was not found
+  rather than reporting whatever cell was last; a present-but-empty cell is
+  named as empty. Four tests in `tests/test_claims_gate.py` stand on the four
+  cases, and each fails against the previous code. The derived values, the
+  check's name and its exit-code contract are unchanged, and what the column
+  may assert is still open — [ADR 0014](docs/adr/0014-what-a-derived-status-column-may-assert.md),
+  which found this while measuring its own subject, records that the fix is
+  independent of the three options it puts to the maintainer.
+
 - **The summariser refused, in whole and forever, any log two commands had
   written at once.** `append_event` derives a record's sequence by counting the
   file's lines and then appending, with no lock between the two, so commands
@@ -971,16 +1025,17 @@ rather than after it.
   maintainer, and each is now a record laying out the options, what they cost,
   and a recommendation, rather than a change that answers the question by
   arriving:
-  [ADR 0013](docs/adr/0013-the-pattern-gate-is-one-layer-of-two.md) on what
+  [ADR 0013](docs/adr/0013-what-the-pattern-gate-closes.md) on what
   `make patterns` closes and what still needs a hand-written pin,
   [ADR 0014](docs/adr/0014-what-a-derived-status-column-may-assert.md) on what
   a derived column may assert about an item's state, and
   [ADR 0015](docs/adr/0015-narrowing-a-published-contract-before-release.md) on
   what a narrowing costs before the first tag. All three carry
-  `Status: proposed`, and nothing else in the tree moved: no contract version,
-  no gate, no test, no fixture, and no status cell. Each names what it does not
-  decide, and the README's ADR list — which `make claims` re-derives — carries
-  all three as pending.
+  `Status: proposed`. No contract version, no fixture and no status cell moved
+  with them, and the one gate that did is the defect ADR 0014 found while
+  measuring its own subject, recorded under *Fixed* below. Each record names
+  what it does not decide, and the README's ADR list — which `make claims`
+  re-derives — carries all three as pending.
 
   The measurements each record stands on were taken from this tree on
   2026-09-05 rather than recalled. ADR 0015 counts the radius of a
@@ -992,12 +1047,9 @@ rather than after it.
   contracts — and the gate's boundary test, which requires a published pattern
   swapped for an unrelated runtime grammar to pass. ADR 0014 quotes
   `backlog_status` and the test that pins a `Closed` cell as a finding, and
-  records one further defect it deliberately does not patch: the "carries no
-  status cell" message takes the last split cell rather than the `Status`
-  column by header index, so a row that drops the column reports its Estimate
-  as its status. Both cases are findings, so nothing reports clean over
-  anything; the fix lands with whichever option is accepted, because all three
-  change or remove the column.
+  records the defect it found in the check it is about, which is fixed below
+  rather than deferred: the fix is the same under every option that keeps the
+  column.
 
 - **What `make verify` costs, measured and recorded in
   [`docs/18-ASSURANCE-PROGRAM.md`](docs/18-ASSURANCE-PROGRAM.md) (issue #93).**

@@ -631,7 +631,58 @@ def test_a_row_that_stops_carrying_a_status_is_a_finding(repo: Path) -> None:
     )
     findings = gate.run_gate(repo)
     assert _checks(findings) == {"backlog-status"}
-    assert "B-001 states '10d'" in findings[0].detail
+    assert "B-001 has no cell under its table's 'Status' header" in findings[0].detail
+
+
+def test_a_row_that_drops_another_column_is_a_finding(repo: Path) -> None:
+    """A row missing a different column left the right value in the last cell.
+
+    Deleting only the Estimate leaves ``Open \u2014 note 2026-09-04`` last, so a
+    check reading the last cell agrees with the notes over a row whose shape it
+    never established. The cell is read by the ``Status`` header's index instead.
+    """
+
+    _edit(
+        repo,
+        "docs/13-BACKLOG.md",
+        "| B-022 | P0-04 | Canonical JSON import with schema and property tests | F | B-017..021 | 3d | Open \u2014 note 2026-09-04 |",
+        "| B-022 | P0-04 | Canonical JSON import with schema and property tests | F | B-017..021 | Open \u2014 note 2026-09-04 |",
+    )
+    findings = gate.run_gate(repo)
+    assert _checks(findings) == {"backlog-status"}
+    assert "B-022 has no cell under its table's 'Status' header" in findings[0].detail
+
+
+def test_an_emptied_status_cell_is_named_as_empty(repo: Path) -> None:
+    """A present-but-blank cell is a different finding from a cell that is gone."""
+
+    _edit(
+        repo,
+        "docs/13-BACKLOG.md",
+        "| B-022 | P0-04 | Canonical JSON import with schema and property tests | F | B-017..021 | 3d | Open \u2014 note 2026-09-04 |",
+        "| B-022 | P0-04 | Canonical JSON import with schema and property tests | F | B-017..021 | 3d |  |",
+    )
+    findings = gate.run_gate(repo)
+    assert _checks(findings) == {"backlog-status"}
+    assert "B-022 carries an empty status cell" in findings[0].detail
+
+
+def test_a_table_that_drops_the_status_header_examines_none_of_its_rows(
+    repo: Path,
+) -> None:
+    """No header, no column: every row under it is unexamined and says so."""
+
+    _edit(
+        repo,
+        "docs/13-BACKLOG.md",
+        "| Estimate | Status |\n|---|---|---|---|---|---:|---|",
+        "| Estimate | State |\n|---|---|---|---|---|---:|---|",
+    )
+    findings = gate.run_gate(repo)
+    assert _checks(findings) == {"backlog-status"}
+    assert findings
+    for finding in findings:
+        assert "has no cell under its table's 'Status' header" in finding.detail
 
 
 def test_a_note_that_moves_to_a_later_date_moves_the_cell(repo: Path) -> None:
@@ -677,7 +728,7 @@ def test_the_parking_lot_and_the_allocation_rows_are_not_status_rows(
     """Only per-item phase rows carry a status; B-1xx and B-001-007 do not."""
 
     backlog = (repo / "docs" / "13-BACKLOG.md").read_text(encoding="utf-8")
-    rows = {m.group("item") for m in gate._BACKLOG_ROW.finditer(backlog)}
+    rows = {item for item, _ in gate.backlog_status_cells(backlog)}
     assert "B-101" not in rows
     assert len(rows) == 57
 

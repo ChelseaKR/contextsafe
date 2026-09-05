@@ -1281,9 +1281,15 @@ column may assert, given that `tools/claims_gate.py` types the word `Open` and
 will refuse a truthful `Closed` the day an item earns one. All three are
 `Status: proposed`, each recommends one option and says why, and none of them
 records a decision as made — the recommendation is the argument, not the
-answer. This note deliberately names no backlog item: no item moved, so no
-derived status cell moves with it, and none of the three records claims work
-against an acceptance statement.
+answer. One thing did change: measuring ADR 0014's own subject found that
+`check_backlog_status` read a row's status as the last cell it split into, so a
+row dropping any column other than `Status` left the right value last and the
+gate reported clean over a row whose shape it had not established. The cell is
+now taken by the index of the table's `Status` header, with four tests on the
+cases; that fix is the same under all three options ADR 0014 lays out, so it
+did not wait for one. This note deliberately names no backlog item: no item
+moved, so no derived status cell moves with it, and none of the three records
+claims work against an acceptance statement.
 
 ## Phase 6 — pilot and v1
 

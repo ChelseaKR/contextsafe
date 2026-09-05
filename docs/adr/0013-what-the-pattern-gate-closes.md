@@ -75,7 +75,9 @@ sufficient.
   identity of the constant behind a field is precisely content this gate does
   not examine. Citing it would put the program's own defect in the document that
   defines the program.
-- Recorded here so the option is refused explicitly rather than by silence.
+- Recorded here so the option is on the record with its cost attached, rather
+  than left out and refused by silence. The recommendation below argues against
+  it; the choice is the maintainer's.
 
 ### (b) Declare it one layer of two, and say so where the gate is described
 
@@ -166,8 +168,8 @@ can honestly assert.
 
 - **Delete the per-field pins as redundant with the gate.** They are not
   redundant; the gate's own boundary test is the demonstration. This is the
-  outcome (b) exists to prevent, and it is named here so that it has been
-  refused in writing.
+  outcome (b) exists to prevent, and it is named here so that a contributor
+  cannot reach it as a tidy-up nobody had considered.
 - **Say nothing and rely on the module docstring.** The paragraph is already
   there and is already accurate. It is in the file a contributor opens *after*
   deciding the gate is sufficient, not before, and the gate table is the surface

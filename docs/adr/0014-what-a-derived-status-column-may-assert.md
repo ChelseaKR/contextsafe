@@ -65,8 +65,9 @@ when it was last written — and stops labelling it with a word about completion
 
 - **Cost:** 57 cells, seven table headers, the explanatory section at the top of
   `docs/13-BACKLOG.md`, the two derived strings in `tools/claims_gate.py`, the
-  check name and its docstring, and four tests in `tests/test_claims_gate.py`.
-  Mechanical, one pass, no new concept.
+  check name and its docstring, and the six tests in
+  `tests/test_claims_gate.py` that carry a derived string. Mechanical, one pass,
+  no new concept.
 - **Cost carried:** the table then states no status at all. A reader asking
   whether B-026 is done still has to open its note. That is the true answer
   today, and the column never contained a better one — but the rename makes the
@@ -128,35 +129,52 @@ vocabulary now means specifying a fail-closed path with no instance to test it
 on, and the first item to close would be the first thing it ever ran against.
 Its entry condition is that closure.
 
-Option (3) is refused: it trades an overstated header for a return of the drift
-the column was added to stop.
+Option (3) is recommended against, because it trades an overstated header for a
+return of the drift the column was added to stop. It is the maintainer's to take
+anyway; this record says only what it costs.
 
-## The unreachable branch, noted rather than patched
+## The status cell was read by position, and that is fixed here
 
-`check_backlog_status` reads the row's cell as the **last** split cell:
+`check_backlog_status` used to read the row's cell as the **last** split cell:
 
 ```python
 cells = [cell.strip() for cell in row.group("rest").split("|")]
 stated = cells[-1] if cells else ""
 ```
 
-The `Status` column is column seven of seven in every phase table, so today the
-last cell and the status cell are the same cell — until a row drops it. Measured
-on the tree: a row written `| B-008 | … | 3d |  |`, keeping an empty cell, splits
-to `[…, '3d', '']` and reports "carries no status cell"; a row written
-`| B-008 | … | 3d |`, dropping the column, splits to `[…, '3d']` and reports
-`B-008 states '3d'` — it names the Estimate as the item's status. The existing
-test asserts exactly that: `test_a_row_that_stops_carrying_a_status_is_a_finding`
-deletes B-001's cell and requires the message to read `B-001 states '10d'`.
+That examines exactly one cell by position and never establishes the row's
+shape. The `Status` column is column seven of seven in every phase table, so the
+last cell and the status cell coincided — until a row lost a column, and then
+which cell was examined depended on *which* column it lost. Measured on this
+tree:
 
-Both cases are findings, so the gate reports clean over nothing and this is a
-message defect, not the named defect class. The fix is to take the cell by the
-index of the `Status` header in the table the row belongs to, which means the
-check learns which table each row sits in. It is not applied here because all
-three options above change the header word or delete the check, and under (3)
-the branch goes away with the column. Whichever option is accepted, the fix
-lands with it, and the case a row that drops the column produces is the test
-that would prove it.
+- a row that drops the `Status` cell but keeps an empty one splits to
+  `[…, '3d', '']` and is a finding;
+- a row that drops the `Status` column outright splits to `[…, '3d']` and was a
+  finding, but the wrong one: it named the Estimate as the item's status;
+- a row that drops **any other** column — deleting only the Estimate from
+  B-022's row, leaving six cells — left `Open — note 2026-09-04` in the last
+  position, and `tools/claims_gate.py` reported `claims: clean` at exit 0 over a
+  row whose shape it had not looked at.
+
+The third case is not a message defect. It is an instance of the class
+`docs/18-ASSURANCE-PROGRAM.md` names — *a check reports a clean result over
+content it did not examine* — inside the check this record is about. Nothing
+else in the tree examined a backlog row's column count, so nothing else would
+have caught it.
+
+So it is fixed here rather than deferred, because the fix is independent of all
+three options: every option that keeps the column needs the cell taken by the
+`Status` header's index, and option (3) deletes a correct check as easily as a
+wrong one. `backlog_status_cells` now finds each phase table's header row, reads
+the cell at the index of that table's `Status` header, and treats a row too
+short to reach it — or a table with no such header — as examined-nothing rather
+than as agreement. Four tests in `tests/test_claims_gate.py` stand on it, one per
+case above plus the empty cell, and each fails against the previous code.
+
+What that fix does **not** do is answer #111. The cell is now read from the right
+column; what the word in it may assert is still the open question, and the three
+options above are untouched by the change.
 
 ## What this does not decide
 

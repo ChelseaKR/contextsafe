@@ -2,7 +2,7 @@
 
 Status: proposed; the versioning rule for a narrowing is the maintainer's to set and is not set here
 Date: 2026-09-05
-Decision owners: technical owner for the published versioning rule and the mapping-profile contract; no reviewer role is implicated, because nothing in this record is a clinical, laboratory, community, interoperability or legal judgment
+Decision owners: technical owner for the published versioning rule and the mapping-profile contract; no clinical, laboratory, community or legal judgment is in this record. Versioning a published contract would be an interoperability judgment the moment a consumer could hold a version — what keeps it a technical call today is that nothing has been tagged and no consumer exists, which is itself one of the facts under review here
 Review trigger: acceptance of this record, the first `vX.Y.Z` tag (#100), and any later change that removes a document class a published contract accepts
 
 ## Context
@@ -104,10 +104,15 @@ after that, such a narrowing moves the version the way a widening does.
 - **Cost of the signal itself:** it states a compatibility break to a consumer
   set that is provably empty, and it makes the first mapping-profile major
   version anybody could hold be 2, when nothing ever published a 1. It is the
-  most conservative option and the only one that needs no new sentence in the
-  versioning rule, because "a narrowing that refuses something the runtime
-  accepts … moves the version like a widening" is already the closest published
-  sentence to this case.
+  most conservative option. It needs no *new* sentence in the versioning rule
+  only in the sense that it takes the strictest reading of an inapplicable one:
+  "a narrowing that refuses something the runtime accepts … moves the version
+  like a widening" is the closest published sentence to this case, but by the
+  reading above it covers a contract narrowing *below* the runtime, and #66 is
+  not that. Closest is not applicable, so (c) too needs the rule extended to
+  cover a contract and a runtime narrowing together — it extends it toward the
+  answer (c) already gives, which is why the extension is one clause rather
+  than a paragraph.
 
 ### The radius (b) and (c) share
 
@@ -122,9 +127,13 @@ after that, such a narrowing moves the version the way a widening does.
 - Five packaged reference profiles are rewritten
   (`src/contextsafe/fixtures/reference/mapping-{canonical-json,fhir-r4-json,hl7v2-er7,lis-csv,lis-json}.json`).
 - Sixteen of the seventeen negative fixtures under `tests/fixtures/mapping/` are
-  rewritten. The seventeenth, `reject-wrong-schema.json`, is the fixture that
-  deliberately carries a version the runtime refuses, so its wrong version has to
-  be re-chosen rather than edited.
+  rewritten. The seventeenth, `reject-wrong-schema.json`, deliberately carries a
+  version the runtime refuses, and the value it carries today is
+  `contextsafe.mapping-profile/2.0.0` — exactly the version (c) moves to. Under
+  (b) it keeps refusing; under (c) it silently becomes a valid document, and a
+  negative test that no longer rejects is a test that cannot fail. So under (c)
+  its version has to be re-chosen rather than edited, and that is a cost (c)
+  carries alone.
 - Six pinned digests move in `tests/test_determinism.py`: the five
   `MAPPED_OBSERVATIONS_SHA256` entries, because every bound observation carries
   the profile's version and digest beside the source's, and
