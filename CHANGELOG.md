@@ -9,6 +9,95 @@ rather than after it.
 
 ## [Unreleased]
 
+### Changed
+
+- **The local event log's record carries the command's warning codes, and its
+  schema version moves to `contextsafe.event-log/0.2.0`.** A record was
+  command, outcome, error code, schema version, and sequence; it now also
+  carries `warnings`, a sorted list of closed warning codes that may not
+  repeat a code and is empty for every command that carries none. That is a
+  widened field set on a published record shape, so the version moved with
+  it, the way the receipt contract's versions move. A warning code is a
+  closed identifier held to the same shape rule as an error code — no message
+  field appeared, and nothing from a source can reach the log through it.
+
+### Fixed
+
+- **The unmatched-mapping-row warning could not reach an operator.**
+  `mapping_profile_row_unmatched` was raised into the import result and
+  nothing a user can run ever printed it: `contextsafe import` writes the
+  observation-set document and `ImportResult.to_dict` is test-only, so a
+  `--mapping` profile whose rows bound nothing exited 0 with no signal at the
+  point where the profile could still be fixed. It was not fail-open — the
+  unbound observations keep their verbatim tokens and evaluating them reports
+  `semantic_mismatch` — but that is one artifact later and is a finding about
+  the data rather than about the profile. The `--log-dir` event record now
+  carries the conversion's closed warning codes, which is the surface that
+  already carries closed codes; no new output document was invented, and
+  whether an import report is ever published remains a maintainer's decision.
+
+- **The canonical-JSON carrier table advertised a concept that importer always
+  refuses.** `CANONICAL_JSON_CARRIERS` listed `sex_parameter_for_clinical_use`,
+  and that importer's converter raises `import_concept_not_convertible` for it
+  every time — the canonical envelope cannot express the supporting-observation
+  link — so a profile row naming that carrier could never match. Harmless in
+  effect and false as a claim, in a table whose whole purpose is to say what an
+  importer can emit, and the opposite of how the FHIR reader treats the same
+  concept, where the sex-parameter extension URL is deliberately absent. The
+  key is gone, a test pins the table against the carriers a conversion actually
+  emits a token under, and the published contract's canonical-json carrier enum
+  lost the same value. That narrows a closed set rather than widening one, and
+  no profile that was valid before is invalid now — a row naming that carrier
+  was refused downstream then and is refused as
+  `mapping_profile_carrier_unknown` now — so the mapping-profile contract's
+  version is unchanged.
+
+- **"Refused first and by name" was true only among the target checks.** The
+  module docstring, the B-026 changelog entry, and the README all say a row
+  reaching sex parameter for clinical use from gender identity or recorded sex
+  or gender is refused first and as `prohibited_spcu_mapping`. `_source` ran
+  before `_target`, so a row that both named a carrier its concept is never
+  read as *and* targeted SPCU was refused as
+  `mapping_profile_carrier_concept_mismatch` instead. The prohibition itself
+  held — review confirmed no indirect row, two-step mapping, case difference,
+  Unicode confusable, or alias evades it, and each fails closed — but three
+  published sentences promised an ordering the code did not implement. The
+  check now runs on the two declared concepts before any other check on the
+  row's contents, so the sentences are true as written, and a doubly-invalid
+  row is pinned to `prohibited_spcu_mapping` rather than left to whichever
+  check happened to run first.
+
+- **The pronoun shape admits a name, and three places said it could not.**
+  `PRONOUN_SET_PATTERN`, its docstring, and the published `pronounSet`
+  description said the shape admits no capital, digit, or space "so no name
+  can be written in it". `jordan/rivera` is two lowercase words joined by a
+  slash and satisfies it, and the boundary scan does not catch it either: it
+  is not a direct identifier, a canary, or free text by any detector's rule.
+  The claim is narrowed to what the shape guarantees — exactly two or three
+  segments of one to twelve lowercase ASCII letters, so no capital, digit,
+  space, or other punctuation, which does exclude free text and a name written
+  the way names are written — rather than the shape narrowed to the claim,
+  because separating a name from a pronoun set inside that shape needs a
+  published list of pronouns, and publishing one is a community judgment
+  nobody here has made. Inventing one to close a documentation defect would
+  have been the worse error. The residual is now stated in the pattern's own
+  docstring, in the contract, and in the backlog note rather than denied.
+
+- **The property test filtered away the case its own claim was about.**
+  `_NOT_SYNTHETIC` in `tests/test_mapping_profile.py` filtered lowercase
+  slash-joined alphabetic strings out of its strategy, which is exactly the
+  class `jordan/rivera` belongs to, so the property could not have found the
+  defect above. Nothing is filtered now: each draw is classified against the
+  two published grammars, and the test asserts refusal outside them and
+  acceptance inside them.
+
+- **The mapping row bound was never tested from the accepting side.** The
+  suite built `MAX_ROWS + 1` rows and asserted `invalid_row_count`, and
+  nothing stood at exactly `MAX_ROWS`, so an off-by-one making the bound
+  exclusive would have passed the whole suite. A test now builds exactly
+  `MAX_ROWS` rows and asserts the profile parses.
+
+
 ### Fixed
 
 - **The full-history secret scan has been red on `main` since B-026 landed, on

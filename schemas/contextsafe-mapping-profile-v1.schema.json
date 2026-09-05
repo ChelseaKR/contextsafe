@@ -40,7 +40,7 @@
   "allOf": [
     {
       "if": {"properties": {"format": {"const": "canonical-json"}}},
-      "then": {"properties": {"rows": {"items": {"properties": {"source": {"properties": {"carrier": {"enum": ["gender_identity", "name_to_use", "pronouns", "recorded_sex_or_gender", "sex_parameter_for_clinical_use"]}}}}}}}}
+      "then": {"properties": {"rows": {"items": {"properties": {"source": {"properties": {"carrier": {"enum": ["gender_identity", "name_to_use", "pronouns", "recorded_sex_or_gender"]}}}}}}}}
     },
     {
       "if": {"properties": {"format": {"const": "fhir-r4-json"}}},
@@ -87,7 +87,7 @@
       "pattern": "^urn:contextsafe:[a-z0-9][a-z0-9.-]{0,63}$"
     },
     "pronounSet": {
-      "description": "A pronoun set as a lowercase slash-separated shape (they/them). A shape, not a list; it admits no capital, digit, or space.",
+      "description": "A pronoun set as a lowercase slash-separated shape (they/them): exactly two or three segments of one to twelve lowercase ASCII letters, so no capital, digit, space, or other punctuation. A shape, not a list, and it cannot tell a pronoun set from any other two lowercase words joined by a slash: jordan/rivera satisfies it. Telling them apart would need a published list of pronouns, which this project has not published.",
       "type": "string",
       "pattern": "^[a-z]{1,12}/[a-z]{1,12}(/[a-z]{1,12})?$"
     },

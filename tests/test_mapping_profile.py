@@ -47,6 +47,8 @@ from contextsafe.jsonio import parse_json_bytes
 from contextsafe.mapping_profile import (
     COMPILED_LIMITATIONS,
     MAX_ROWS,
+    PRONOUN_SET_PATTERN,
+    SYNTHETIC_TOKEN_PATTERN,
     MappingProfile,
     SourceToken,
     SpcuValueBinding,
@@ -259,10 +261,10 @@ def test_the_spcu_prohibition_is_checked_before_the_general_rule() -> None:
     assert _rejection(document).code == "prohibited_spcu_mapping"
 
 
-def test_a_row_set_over_the_bound_is_refused() -> None:
-    document = _reference_profile("canonical-json")
-    row = document["rows"][0]
-    document["rows"] = [
+def _row_run(row: dict[str, Any], count: int) -> list[dict[str, Any]]:
+    """``count`` rows that differ only in their source token and target value."""
+
+    return [
         {
             **row,
             "source": {**row["source"], "token": f"CSYN-P{index:04d}"},
@@ -271,9 +273,127 @@ def test_a_row_set_over_the_bound_is_refused() -> None:
                 "value": {"status": "specified", "value": f"CSYN-T{index:04d}"},
             },
         }
-        for index in range(MAX_ROWS + 1)
+        for index in range(count)
     ]
+
+
+def test_a_row_set_over_the_bound_is_refused() -> None:
+    document = _reference_profile("canonical-json")
+    document["rows"] = _row_run(document["rows"][0], MAX_ROWS + 1)
     assert _rejection(document).code == "invalid_row_count"
+
+
+def test_a_row_set_at_the_bound_is_accepted() -> None:
+    """The accepting side of the same bound: exactly MAX_ROWS parses.
+
+    Without this, an off-by-one that made the bound exclusive would pass the
+    whole suite: the over-bound case above still fails, and nothing else
+    stands at the boundary from this side.
+    """
+
+    document = _reference_profile("canonical-json")
+    document["rows"] = _row_run(document["rows"][0], MAX_ROWS)
+    profile = load_profile(document)
+    assert len(profile.rows) == MAX_ROWS
+
+
+def test_a_carrier_the_importer_never_emits_is_not_in_the_table() -> None:
+    """A canonical-json row cannot name the field code that never converts.
+
+    The importer refuses a ``sex_parameter_for_clinical_use`` record (the
+    envelope carries no supporting-observation link), so it emits no token
+    under that carrier and the table does not advertise one. The row is
+    refused where a carrier the format does not read is refused.
+    """
+
+    document = _reference_profile("canonical-json")
+    document["rows"] = [
+        {
+            "source": {
+                "concept": "sex_parameter_for_clinical_use",
+                "carrier": "sex_parameter_for_clinical_use",
+                "token": "CSYN-CONTEXT-1",
+            },
+            "target": {
+                "concept": "sex_parameter_for_clinical_use",
+                "value": {"value": "fixture-context-1"},
+            },
+        }
+    ]
+    error = _rejection(document)
+    assert error.code == "mapping_profile_carrier_unknown"
+    assert error.path == "$.rows[0].source.carrier"
+
+
+def test_a_doubly_invalid_row_reports_the_prohibition_and_not_the_carrier() -> None:
+    """The prohibition is refused ahead of the source checks, not after them.
+
+    This row is wrong twice: ``PID-8`` is never read as gender identity, and
+    its target is sex parameter for clinical use from a gender-identity
+    source. ``_source`` runs before ``_target``, so until the prohibition
+    moved ahead of both this reported ``carrier_concept_mismatch`` -- true,
+    and not the sentence a reader who tried the prohibition needed.
+    """
+
+    document = _reference_profile("hl7v2-er7")
+    document["rows"] = [
+        {
+            "source": {
+                "concept": "gender_identity",
+                "carrier": "PID-8",
+                "token": "X",
+            },
+            "target": {
+                "concept": "sex_parameter_for_clinical_use",
+                "value": {"value": "fixture-context-1"},
+            },
+        }
+    ]
+    error = _rejection(document)
+    assert (error.code, error.path) == ("prohibited_spcu_mapping", "$.rows[0].target")
+
+
+@pytest.mark.parametrize(
+    ("carrier", "token"),
+    [("not-a-carrier", "X"), ("PID-8", "not a token at all")],
+)
+def test_the_prohibition_outranks_every_other_defect_in_the_same_row(
+    carrier: str, token: str
+) -> None:
+    """Whatever else is wrong with the row, the prohibition is what it says."""
+
+    document = _reference_profile("hl7v2-er7")
+    document["rows"] = [
+        {
+            "source": {
+                "concept": "recorded_sex_or_gender",
+                "carrier": carrier,
+                "token": token,
+            },
+            "target": {
+                "concept": "sex_parameter_for_clinical_use",
+                "value": {"value": "fixture-context-1"},
+            },
+        }
+    ]
+    assert _rejection(document).code == "prohibited_spcu_mapping"
+
+
+def test_a_row_half_that_declares_no_concept_is_still_refused_structurally() -> None:
+    """The early read decides nothing when it cannot read both concepts."""
+
+    document = _reference_profile("hl7v2-er7")
+    document["rows"] = [
+        {
+            "source": "not an object",
+            "target": {
+                "concept": "sex_parameter_for_clinical_use",
+                "value": {"value": "fixture-context-1"},
+            },
+        }
+    ]
+    error = _rejection(document)
+    assert (error.code, error.path) == ("invalid_type", "$.rows[0].source")
 
 
 def test_a_token_that_trips_a_boundary_detector_is_refused_without_echo() -> None:
@@ -390,6 +510,7 @@ def test_the_carrier_table_is_the_registry_and_pid8_is_only_rsg() -> None:
     assert table["lis-csv"]["sex"] == frozenset({ConceptKind.RECORDED_SEX_OR_GENDER})
     assert table["fhir-r4-json"][NAME_CARRIER] == frozenset({ConceptKind.NAME_TO_USE})
     assert FHIR_R4_PROFILE.sex_parameter_url not in table["fhir-r4-json"]
+    assert "sex_parameter_for_clinical_use" not in table["canonical-json"]
     for carriers in table.values():
         for admitted in carriers.values():
             assert admitted
@@ -893,13 +1014,83 @@ def test_cli_mapping_validate_logs_a_closed_record(tmp_path: Path) -> None:
     )
     assert record["command"] == "mapping"
     assert record["outcome"] == "accepted"
+    assert record["warnings"] == []
     assert set(record) == {
         "command",
         "error_code",
         "outcome",
         "schema_version",
         "sequence",
+        "warnings",
     }
+
+
+def _logged_warnings(log_dir: Path) -> list[str]:
+    text = (log_dir / "contextsafe-events.jsonl").read_text(encoding="utf-8")
+    records = [json.loads(line) for line in text.splitlines()]
+    assert len(records) == 1
+    warnings = records[0]["warnings"]
+    assert isinstance(warnings, list)
+    return [str(item) for item in warnings]
+
+
+def test_cli_import_logs_the_warnings_the_conversion_carried(tmp_path: Path) -> None:
+    """Without a profile, the log says the values are unbound tokens."""
+
+    log_dir = tmp_path / "log"
+    argv = _import_args("canonical-json", None)
+    assert main([*argv, "--quiet", "--log-dir", str(log_dir)]) == EXIT_SUCCESS
+    assert _logged_warnings(log_dir) == [
+        "mapping_profile_not_bound",
+        "plan_binding_not_checked",
+    ]
+
+
+def test_cli_import_logs_a_profile_that_binds_nothing(tmp_path: Path) -> None:
+    """The unmatched-row warning reaches an operator, not just a test.
+
+    A profile whose rows bind no token used to leave the command at exit 0
+    with no signal at the point where the profile could still be fixed: the
+    CLI writes the observation set, and the result's warnings had no reader.
+    They are in the ``--log-dir`` record now, which is the surface that
+    already carries closed codes.
+    """
+
+    document = _reference_profile("canonical-json")
+    document["rows"][0]["source"].update({"token": "CSYN-PRONOUN-NOBODY"})
+    profile = _write(tmp_path / "profile.json", document)
+    log_dir = tmp_path / "log"
+    argv = _import_args("canonical-json", profile)
+    assert main([*argv, "--quiet", "--log-dir", str(log_dir)]) == EXIT_SUCCESS
+    warnings = _logged_warnings(log_dir)
+    assert "mapping_profile_row_unmatched" in warnings
+    assert "mapping_profile_not_bound" not in warnings
+    for literal in FIXTURE_CONTENT:
+        assert literal not in json.dumps(warnings)
+
+
+def test_cli_import_with_a_profile_that_binds_everything_logs_no_unmatched_row(
+    tmp_path: Path,
+) -> None:
+    """The control: the same command, the reference profile, no warning."""
+
+    log_dir = tmp_path / "log"
+    argv = _import_args("canonical-json", REFERENCE / "mapping-canonical-json.json")
+    assert main([*argv, "--quiet", "--log-dir", str(log_dir)]) == EXIT_SUCCESS
+    assert _logged_warnings(log_dir) == ["plan_binding_not_checked"]
+
+
+def test_cli_import_that_is_refused_logs_no_warnings(tmp_path: Path) -> None:
+    """A rejected command produced no conversion, so it carries no warning."""
+
+    log_dir = tmp_path / "log"
+    argv = _import_args("canonical-json", FIXTURES / "reject-gi-to-spcu.json")
+    assert main([*argv, "--quiet", "--log-dir", str(log_dir)]) == EXIT_CONTRACT_ERROR
+    text = (log_dir / "contextsafe-events.jsonl").read_text(encoding="utf-8")
+    record = json.loads(text)
+    assert record["outcome"] == "rejected"
+    assert record["error_code"] == "prohibited_spcu_mapping"
+    assert record["warnings"] == []
 
 
 def test_an_unknown_mapping_command_is_refused() -> None:
@@ -949,14 +1140,15 @@ def test_no_row_reaches_spcu_from_gi_or_rsg_whatever_the_tokens(
     assert error.to_dict() == _ERROR_FIXED
 
 
-_NOT_SYNTHETIC = st.text(min_size=1, max_size=24).filter(
-    lambda text: (
-        not (
-            text.startswith(("CSYN-", "fixture-"))
-            or ("/" in text and text.replace("/", "").isalpha() and text.islower())
-        )
-    )
-)
+_ANY_TEXT = st.text(min_size=1, max_size=24)
+"""Nothing is filtered out of the pronoun-target strategy.
+
+It used to filter away both the synthetic prefixes and any lowercase
+slash-joined alphabetic string, which is exactly the class the shape's own
+claim was about, so the property could not have caught ``jordan/rivera``
+being admitted. The strategy draws it now and the test classifies each draw
+against the two published grammars instead.
+"""
 _TARGET_REJECTIONS = (
     {
         "code": "mapping_profile_target_not_synthetic",
@@ -986,17 +1178,64 @@ not there.
 """
 
 
-@settings(max_examples=100, deadline=None)
-@given(value=_NOT_SYNTHETIC)
+def _pronoun_target_admitted(value: str) -> bool:
+    """What the two published grammars admit as a pronouns target value."""
+
+    return bool(
+        SYNTHETIC_TOKEN_PATTERN.fullmatch(value) or PRONOUN_SET_PATTERN.fullmatch(value)
+    )
+
+
+@settings(max_examples=200, deadline=None)
+@given(value=_ANY_TEXT)
 @example(value="Jordan")
 @example(value="they/them/theirs/them")
 @example(value="a")
-def test_no_pronoun_target_outside_the_synthetic_grammar_is_admitted(
+@example(value="they/them")
+@example(value="jordan/rivera")
+@example(value="CSYN-PRONOUN-THEY-THEM")
+def test_a_pronoun_target_is_admitted_exactly_when_the_published_shape_admits_it(
     value: str,
 ) -> None:
+    """Both directions of the same grammar, over arbitrary draws.
+
+    Outside the two shapes the rejection is one of three fixed error objects,
+    compared whole so the drawn value is proved absent. Inside them the value
+    arrives, ``jordan/rivera`` included: the shape admits two lowercase words
+    joined by a slash and cannot tell one from a pronoun set, which is what
+    ``PRONOUN_SET_PATTERN`` now says rather than the reverse.
+    """
+
     document = _reference_profile("canonical-json")
     document["rows"][0]["target"]["value"] = {"status": "specified", "value": value}
-    assert _rejection(document).to_dict() in _TARGET_REJECTIONS
+    if not _pronoun_target_admitted(value):
+        assert _rejection(document).to_dict() in _TARGET_REJECTIONS
+        return
+    profile = load_profile(document)
+    assert profile.rows[0].target.to_dict()["value"] == value
+
+
+def test_the_pronoun_shape_admits_a_lowercase_slash_joined_name() -> None:
+    """The claim the shape carries is the one this pins, not a wider one.
+
+    ``jordan/rivera`` is admitted. Refusing it would need a published list of
+    pronouns to compare against, and publishing one is a community judgment
+    no reviewer here has made, so the documented guarantee is the shape --
+    no capital, digit, space, or other punctuation -- and not "no name can
+    be written in it". The boundary scan does not catch it either: it is not
+    a direct identifier, a canary, or free text by any detector's rule.
+    """
+
+    document = _reference_profile("canonical-json")
+    document["rows"][0]["target"]["value"] = {
+        "status": "specified",
+        "value": "jordan/rivera",
+    }
+    profile = load_profile(document)
+    assert profile.rows[0].target.to_dict() == {
+        "status": "specified",
+        "value": "jordan/rivera",
+    }
 
 
 def _scanned_pronoun_records(tokens: list[str]) -> ScannedSource:

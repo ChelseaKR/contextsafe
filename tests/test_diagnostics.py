@@ -450,7 +450,7 @@ def _all_files(root: Path) -> list[Path]:
 def test_the_log_records_a_closed_vocabulary(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    """One line per run: command, outcome, error code. Nothing else."""
+    """One line per run: command, outcome, error code, warnings. Nothing else."""
 
     log_dir = tmp_path / "logs"
     assert main(["diagnostics", "--log-dir", str(log_dir)]) == EXIT_SUCCESS
@@ -476,10 +476,65 @@ def test_the_log_records_a_closed_vocabulary(
     assert [record["sequence"] for record in records] == [0, 1]
     assert all(
         set(record)
-        == {"command", "error_code", "outcome", "schema_version", "sequence"}
+        == {
+            "command",
+            "error_code",
+            "outcome",
+            "schema_version",
+            "sequence",
+            "warnings",
+        }
         for record in records
     )
+    assert [record["warnings"] for record in records] == [[], []]
     assert str(tmp_path) not in "".join(lines)
+
+
+def test_the_log_refuses_a_warning_code_that_is_a_message(tmp_path: Path) -> None:
+    """The warning list is codes; there is still nowhere for a sentence."""
+
+    with pytest.raises(ContextSafeError) as excinfo:
+        append_event(
+            tmp_path,
+            command="import",
+            outcome=Outcome.ACCEPTED,
+            warnings=["profile CSYN-PRONOUN-THEY-THEM bound nothing"],
+        )
+    assert excinfo.value.code == "unloggable_warning_code"
+    assert excinfo.value.path == "$.warnings"
+    assert not (tmp_path / LOG_FILE_NAME).exists()
+
+
+def test_the_log_refuses_a_repeated_warning_code(tmp_path: Path) -> None:
+    """A code says one thing; saying it twice would say a count instead."""
+
+    with pytest.raises(ContextSafeError) as excinfo:
+        append_event(
+            tmp_path,
+            command="import",
+            outcome=Outcome.ACCEPTED,
+            warnings=["mapping_profile_row_unmatched"] * 2,
+        )
+    assert excinfo.value.code == "unloggable_warning_code"
+
+
+def test_the_logged_warnings_are_sorted_whatever_order_they_arrive_in(
+    tmp_path: Path,
+) -> None:
+    """The list is a set of codes, so the record does not vary with order."""
+
+    forward = tmp_path / "forward"
+    reverse = tmp_path / "reverse"
+    codes = ["plan_binding_not_checked", "mapping_profile_not_bound"]
+    append_event(forward, command="import", outcome=Outcome.ACCEPTED, warnings=codes)
+    append_event(
+        reverse, command="import", outcome=Outcome.ACCEPTED, warnings=codes[::-1]
+    )
+    assert (forward / LOG_FILE_NAME).read_bytes() == (
+        reverse / LOG_FILE_NAME
+    ).read_bytes()
+    record = json.loads((forward / LOG_FILE_NAME).read_text(encoding="utf-8"))
+    assert record["warnings"] == sorted(codes)
 
 
 def test_the_log_refuses_a_command_it_does_not_publish(tmp_path: Path) -> None:

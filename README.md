@@ -325,8 +325,9 @@ The same iteration adds the operator surface (the B-046 slice):
   it. The assembled bundle is scanned again before it is written, as a check on
   the construction rather than as the thing that makes it safe;
 - every command accepts `--log-dir`, which appends one closed-vocabulary record
-  (command, outcome, error code) to a local append-only log. Off unless asked,
-  never enabled from the environment, no message field, and no clock reading.
+  (command, outcome, error code, and the closed warning codes the command
+  carried) to a local append-only log. Off unless asked, never enabled from the
+  environment, no message field, and no clock reading.
 
 ### B-022: canonical JSON import and the importer registry
 
@@ -520,7 +521,8 @@ one target reject (both stay distinct observations, which evaluate as
 ambiguous), a target outside the synthetic grammar rejects, and a
 sex-parameter row binds the value token only — never an order context or a
 supporting observation. A token with no row stays verbatim and the result
-says so. The reference profiles are synthetic bindings for the reference
+says so, and with `--log-dir` the event record says so too, so a profile that
+binds nothing is visible while it can still be fixed. The reference profiles are synthetic bindings for the reference
 fixtures, not the mapping of any real system; no interoperability,
 clinical, laboratory, or community reviewer has seen one; HL7 null flavors
 and an LIS's empty cell are still not bound to presence states; and the
