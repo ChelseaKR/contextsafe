@@ -915,7 +915,7 @@ rather than after it.
   hand-written log line carrying a conforming string this package never raises
   summarises to that string as a key — the tool cannot write such a line, and
   the contract's semantic constraints say so. Because widening the log's
-  command vocabulary does not move `contextsafe.event-log/0.1.0`, a log
+  command vocabulary does not move the record's schema version, a log
   holding a `fixtures` or `events` record would be refused in whole as
   `invalid_enum` by a reader built against a narrower vocabulary; no such
   reader has ever existed, and that is the failure mode the next command added
