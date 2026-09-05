@@ -563,6 +563,80 @@ decided on the receipt fields that exist today. The contract is reference-only
 and ungoverned: no clinical, community, laboratory, legal, security, or
 accessibility review of it has happened, and none is claimed.
 
+Implementation note (2026-09-04, B-032): the review, finding, and disposition
+state machine in [Architecture §6.5](04-ARCHITECTURE.md) exists as
+`src/contextsafe/review.py`, `contextsafe finding review`, and `contextsafe
+finding list`, with the event contract published as
+`schemas/contextsafe-review-event-v1.schema.json` (the pre-signature shape of
+the `contextsafe-review-v1.schema.json` that §8 lists) and the derived state as
+`schemas/contextsafe-review-state-v1.schema.json`. An event binds an outcome
+(rule, case, checkpoint, concept) and the receipt's payload and rule-set hashes
+to a decision from a closed set, a severity from a closed label set, an owner as
+a role plus the SHA-256 of an opaque handle, a rationale code from a closed
+vocabulary, an optional external reference under the ADR 0006 grammar, and
+declared signers as a role plus an organization label. There is no free-text
+field, by construction; a name-shaped token that fits an ADR 0006 grammar is
+accepted, and that residual is tested as such. The transition table and the
+per-decision rules are data, pinned as literals in `tests/test_review.py` so
+that a change to either must confront the test rather than re-derive it, and
+every pair the table does not contain is enumerated as an
+`illegal_transition` test. The log is append-only: one canonical line per
+event, each carrying the event hash and the hash of the record before it, and
+every read re-hashes and replays the whole file before anything is appended.
+B-032 is not closed: the deliverable asks for role *and signature* checks, and
+the signature half does not exist — every event and every signer says
+`signature_status: not_verified`, the two-signer threshold on an accepted
+residual risk is a shape check on a declaration, and a declared signer
+authorizes nothing until B-035 supplies keys, the trust manifest, and
+plan-enrolled reviewer registries. The decision, severity, owner-role,
+signer-role, and rationale vocabularies are reference-only and ungoverned; the
+approved severity rubric is B-010 and none of them has had clinical, community,
+legal, or security review. Dispositions are not bound into any receipt (the
+receipt contract is unchanged), `finding review` reads the receipt for its
+hashes and finding outcomes rather than verifying it (B-036), the log has no
+governed cleanup or retention path, and the disputed-findings flow of
+[Service design §9](03-SERVICE-DESIGN.md) — freeze, two independent reviewers,
+majority and dissent — has no representation here. Three further limits are
+recorded rather than closed. The hash chain cannot detect a record removed from
+the end of the log: a log cut back to an earlier line replays as a valid
+shorter log, and only an external record of the state document's
+`log_head_sha256`, taken after each append, can show the cut. A `remediated`
+decision binds no rerun receipt hash, so `remediation_verified_by_rerun` is a
+declaration the tool cannot check, exactly as a declared signer is. And
+`accepted_residual_risk` has no `withdrawn` exit: the transition table lets an
+acceptance move only to `remediated`, so an acceptance entered in error cannot
+be marked `entered_in_error`, which is reachable only through `withdrawn`. That
+is the table's shape today, recorded here rather than governed: an acceptance
+is the state two declared signers stood behind, and whether one event may undo
+it, or only the §9 disputed-findings flow may, is a decision that flow must
+take when it exists. Two more are stated as limits of the tool rather than
+closed. The size check between the read and the append is a comparison, not a
+lock: it narrows the window in which a second writer can append without
+closing it, so one writer at a time is an operating assumption, and a log two
+writers reach is refused on its next read as `log_chain_broken` rather than
+repaired. And `finding review` refuses a receipt whose result carries a
+`status` outside the published algebra as `invalid_enum`, rather than reading
+it as "not a finding", because an unsupported value is never quietly the safe
+case; that is a shape check on the fields review reads, not verification.
+Before merge, `--output` naming the review log was found to reach `main`'s
+truncating write after the append and replace the log with exit 0; both
+commands now refuse it as `output_path_unsafe` before the log is opened. A
+second review found that refusal comparing path strings and, only where both
+files existed, inodes, so a log that did not exist yet could be named two ways
+(`/tmp/x/review.jsonl` and `/private/tmp/x/review.jsonl`, a symlinked
+parent, `REVIEW.jsonl` on a case-insensitive filesystem) and the first
+`finding review` created, appended, and then overwrote it. The check now
+lives in `review.py`, compares by inode when the log exists and by
+parent-directory inode plus case- and normalization-folded leaf name when it
+does not, over-refuses a case variant on a case-sensitive filesystem rather
+than probing which kind it is on, and runs again after `finding review` has
+appended. Two more operational edges are stated rather than closed: a
+`finding review` whose `--output` cannot be written after the append exits 2
+with `output_io_error` having recorded the event, so the same event is then
+refused as `illegal_transition` and `finding list` derives the state; and a
+first event refused at the transition after the receipt binding held leaves
+a new, empty log behind, which replays to the empty state.
+
 ## Phase 5 — trust and operations
 
 | ID | Trace | Deliverable and acceptance | Owner | Dependency | Estimate |

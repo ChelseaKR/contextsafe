@@ -985,6 +985,104 @@ def test_incompatible_receipts_rejection_is_deterministic(tmp_path: Path) -> Non
     assert b"CTP-I0" not in runs[0].stderr
 
 
+def _finding_inputs(root: Path) -> tuple[Path, Path]:
+    """A receipt with one fail outcome and a confirmed event bound to it."""
+
+    observations = json.loads(
+        (REFERENCE / "observations.json").read_text(encoding="utf-8")
+    )
+    observations["observations"][4]["value"]["value"] = "ze/hir"
+    observations_path = root / "mismatched-observations.json"
+    observations_path.write_text(json.dumps(observations), encoding="utf-8")
+    receipt_path = root / "receipt.json"
+    argv = _evaluate_argv(REFERENCE)
+    argv[4] = str(observations_path)
+    assert main([*argv, "--output", str(receipt_path)]) == 0
+    receipt = json.loads(receipt_path.read_text(encoding="utf-8"))
+    event_path = root / "event.json"
+    event_path.write_text(
+        json.dumps(
+            {
+                "schema_version": "contextsafe.review-event/1.0.0",
+                "outcome": {
+                    "rule_id": "A-I05",
+                    "case_id": "CTP-I01",
+                    "checkpoint": "ehr",
+                    "concept": "pronouns",
+                },
+                "receipt": {
+                    "payload_sha256": receipt["payload_sha256"],
+                    "rule_set_sha256": receipt["payload"]["hashes"]["rule_set_sha256"],
+                },
+                "decision": "confirmed",
+                "severity": "cs2_high",
+                "owner": None,
+                "rationale_code": "evidence_verified_against_source",
+                "external_reference": "ticket.synthetic-a",
+                "signers": [
+                    {
+                        "role": "contextsafe_clinical_safety_chair",
+                        "organization_id": "ORG-CONTEXTSAFE-TEST",
+                        "signature_status": "not_verified",
+                    }
+                ],
+                "signature_status": "not_verified",
+            }
+        ),
+        encoding="utf-8",
+    )
+    return receipt_path, event_path
+
+
+@pytest.mark.skipif(os.name == "nt", reason=_WINDOWS_UNSUPPORTED)
+def test_finding_review_and_list_are_byte_identical_across_runs(
+    tmp_path: Path,
+) -> None:
+    """A review log and the state derived from it carry no clock and no path.
+
+    Each run appends to its own fresh log, so the three logs must be
+    byte-identical too: the file a later item would bind into a receipt is
+    reproducible from the events alone.
+    """
+
+    receipt_path, event_path = _finding_inputs(tmp_path)
+    logs = [tmp_path / f"review-{index}.jsonl" for index in range(3)]
+    handed_out = iter(logs)
+    runs = _three_runs(
+        tmp_path,
+        lambda _reference: [
+            "finding",
+            "review",
+            "--receipt",
+            str(receipt_path),
+            "--event",
+            str(event_path),
+            "--log",
+            str(next(handed_out)),
+        ],
+        with_output=True,
+    )
+    _assert_identical(runs)
+    assert runs[0].returncode == 0
+    assert runs[0].stderr == b""
+    artifact = runs[0].artifact
+    assert artifact is not None
+    _assert_canonical_line(artifact)
+    assert logs[0].read_bytes() == logs[1].read_bytes() == logs[2].read_bytes()
+    _assert_canonical_line(logs[0].read_bytes())
+    for fragment in (str(tmp_path), "Kiritimati", "en_US"):
+        assert fragment.encode("utf-8") not in artifact
+        assert fragment.encode("utf-8") not in logs[0].read_bytes()
+
+    listed = _three_runs(
+        tmp_path / "listed",
+        lambda _reference: ["finding", "list", "--log", str(logs[0])],
+    )
+    _assert_identical(listed)
+    assert listed[0].returncode == 0
+    assert listed[0].stdout == artifact
+
+
 def test_platforms_without_descriptor_relative_open_fail_closed(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

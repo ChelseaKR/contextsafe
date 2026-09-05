@@ -1046,6 +1046,99 @@ rather than after it.
   public so the parser can require the exact set rather than restate it; the
   reference receipt bytes and their pinned digest are unchanged.
 
+- **B-032: the append-only review, finding, and disposition state machine,
+  unsigned.** `contextsafe finding review --receipt R.json --event E.json
+  --log LOG.jsonl` validates one review event against the receipt (the
+  payload hash is re-derived, the event's two hashes must match it, the
+  outcome must be a `fail`, `indeterminate`, or `blocked` result in it, and a
+  result whose `status` is outside the published algebra refuses the receipt
+  as `invalid_enum` rather than passing as not a finding) and
+  against the log's prior state, then appends one canonical line; `contextsafe
+  finding list --log LOG.jsonl` derives the current disposition per outcome.
+  Both print the same derived state document. The state machine is data
+  (`TRANSITIONS` and `DECISION_RULES` in `src/contextsafe/review.py`), and
+  `tests/test_review.py` pins both tables as literals and, from the table,
+  enumerates every pair it does not contain and requires each to be refused
+  as `illegal_transition`. An event has no free-text field, by construction,
+  the way the support bundle has none, with the residual stated: a
+  name-shaped token that fits an ADR 0006 grammar (`Jordan.Rivera`,
+  `JORDAN-RIVERA`) is accepted, since only canaries and direct-identifier
+  shapes are scanned for and a grammar cannot see ordinary letters; the
+  fields are a
+  decision, a severity, a rationale *code*, an owner as a role plus the
+  SHA-256 of an opaque handle, an optional external reference under the
+  ADR 0006 provenance-label grammar, and declared signers as a role plus an
+  organization label under the system-label grammar, both scanned for
+  canaries after the grammar accepts them. Every event and every signer says
+  `signature_status: not_verified` and nothing else can be written there; an
+  `accepted_residual_risk` event needs exactly two declared signers, a
+  customer clinical owner and a ContextSafe clinical safety chair, from
+  distinct organizations, or it is refused. **A declared signer authorizes
+  nothing.** The log is one canonical JSON record per line, each carrying the
+  event's SHA-256 and the SHA-256 of the record before it; every read
+  re-parses every line, requires byte-exact canonical JSON, re-derives every
+  hash, and replays every transition, and a Hypothesis property requires that
+  any single changed byte anywhere in the file is refused. The file is opened
+  once with `O_APPEND` and `O_NOFOLLOW`, read and appended through that one
+  descriptor, and the append is refused if the file is seen to have grown in
+  between -- a size comparison, not a lock, so one writer at a time is an
+  operating assumption and a log two writers reach is refused on its next
+  read rather than repaired; on a
+  platform without `O_NOFOLLOW` both commands fail closed with
+  `input_path_unsupported`. No clock is read. Two contracts are published,
+  `schemas/contextsafe-review-event-v1.schema.json` (with the log record as a
+  `$defs` subschema) and `schemas/contextsafe-review-state-v1.schema.json`,
+  with agreement tests in `tests/test_review_schema.py`; `review.py` joins
+  `SAFETY_MODULES`; `finding` joins the local event log's command vocabulary;
+  and both commands join the three-run determinism matrix. The receipt
+  contract is unchanged and the pinned reference-receipt digest did not move:
+  binding dispositions into a receipt is a later item. The decision, severity,
+  role, and rationale vocabularies are reference-only and ungoverned -- not the
+  approved severity rubric (B-010) or the reviewer registry (B-035) -- and no
+  clinical, community, legal, or security review of them has happened. Two
+  contracts, so `schemas/README.md` now states `13 contracts` in digits: the
+  claims gate's number-word table stops at twelve, and the document was
+  changed rather than the gate. Two rounds of review before merge found and
+  closed two defects and three gaps. `--output` naming the review log, by
+  path, symlink, or hard link, had passed through `main`'s truncating write
+  and replaced the log with the state document after the event was appended,
+  with exit 0; both commands now refuse it as `output_path_unsafe` before the
+  log is opened. The first check compared path strings and, where both files
+  existed, inodes, so a log that did not exist yet could still be named two
+  ways (`/tmp/x/review.jsonl` against `/private/tmp/x/review.jsonl`, a
+  symlinked parent, `REVIEW.jsonl` on a case-insensitive filesystem) and the
+  first `finding review` created, appended, and then overwrote it. The check
+  now lives in `review.py`, under `SAFETY_MODULES` and the mutation gate,
+  compares by inode when the log exists and by parent-directory inode plus
+  case- and normalization-folded leaf name when it does not, over-refusing a
+  case variant on a case-sensitive filesystem rather than probing which kind
+  it is on, and runs again after `finding review` has appended. The second
+  round also found the illegal-transition enumeration derived from the table
+  it tested, so a loosened table shrank the illegal set with every test still
+  green; `TRANSITIONS` and `DECISION_RULES` are now pinned as literals, and
+  the test that pins them is the one that fails when the table changes. A
+  replay refusal at an
+  event field now reports `$.log[i].event.<field>`, where the field is,
+  rather than `$.log[i].<field>`. The log is opened with `O_NONBLOCK`, so a
+  `--log` that names a FIFO is refused as `input_path_unsafe` instead of
+  blocking. `review.py` joins the mutation gate's `DECLARED_TARGETS` and
+  `tests/test_review.py` its screening set; running the gate against it
+  found the log's read loop bounded by end of file alone, so that one
+  mutant held the suite open indefinitely, and it is now bounded by a count
+  of reads as well, with the remaining survivors -- the exact size limit,
+  the identifier length bounds, the immutability of every record type, and a
+  distinctness flag the code never read -- each pinned by a test rather than
+  exempted. That kill claim is from the earlier run and is not re-verified for this tree: `make mutants` was started against it and had not finished when this change was recorded, so whether the `--output` check's new branches all die is a question the gate still has to answer. Stated as a limit rather than fixed: the chain
+  cannot detect a record removed from the end of the log, and only an
+  external record of `log_head_sha256` can; a `remediated` decision binds no
+  rerun receipt, so `remediation_verified_by_rerun` is a declaration the tool
+  cannot check; a `finding review` whose `--output` cannot be written after
+  the append exits 2 with `output_io_error` having recorded the event, so the
+  same event is then refused as `illegal_transition` and `finding list`
+  derives the state; and a first event refused at the transition after the
+  receipt binding held leaves a new, empty log behind, which replays to the
+  empty state.
+
 ## [0.1.0] - 2026-09-02
 
 ### Fixed

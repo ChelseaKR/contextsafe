@@ -77,14 +77,16 @@ from pathlib import Path
 DECLARED_TARGETS: tuple[str, ...] = (
     "src/contextsafe/contract_validation.py",
     "src/contextsafe/identifiers.py",
+    "src/contextsafe/review.py",
 )
 """The modules whose mutants must die.
 
-A subset of the Makefile's ``SAFETY_MODULES``, chosen because these two are
-where the accept-or-reject decisions live: the bounded-string and provenance
-grammars, and the PHI canary and direct-identifier detectors. Widening the set
-is a runtime decision, not a design one; the declaration is here so the subset
-is visible rather than implied.
+A subset of the Makefile's ``SAFETY_MODULES``, chosen because these are where
+the accept-or-reject decisions live: the bounded-string and provenance grammars,
+the PHI canary and direct-identifier detectors, and, since B-032, the review
+log's transition table, signer threshold, and hash chain. Widening the set is a
+runtime decision, not a design one; the declaration is here so the subset is
+visible rather than implied.
 """
 
 SCREENING_TESTS: tuple[str, ...] = (
@@ -92,6 +94,7 @@ SCREENING_TESTS: tuple[str, ...] = (
     "tests/test_evidence_models.py",
     "tests/test_plan.py",
     "tests/test_preflight.py",
+    "tests/test_review.py",
 )
 """The fast tests every mutant is run against first.
 
