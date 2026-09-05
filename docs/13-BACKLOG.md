@@ -144,6 +144,17 @@ closed there with `input_path_unsupported` while
 [Operations](10-OPERATIONS-SRE.md) still lists Windows 11 as a planned supported
 platform. Closing that gap needs a decision, not a test.
 
+Corrected 2026-09-04 (the paragraph above is left as it was written, on
+2026-08-15): [Operations](10-OPERATIONS-SRE.md) section 3.1 now states the
+Windows matrix command by command, so it no longer lists Windows 11 without
+qualification. Six commands refuse there rather than three — `evidence
+preflight`, `import` in every format, `finding review`, `finding list`, `pack
+validate`, and `plan validate` — and `pack validate` and `plan validate` report
+`component_path_escape`, not `input_path_unsupported`, because the pack
+compiler maps an unsupported platform onto the same code as an escaping
+component path. The fail-closed behaviour itself is unchanged, and no decision
+to drop or keep Windows has been taken.
+
 Implementation note (2026-07-17, B-021): the payload/envelope-separation part of
 B-021 is
 now exercised: `contextsafe evaluate` emits a receipt document whose deterministic
