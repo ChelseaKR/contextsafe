@@ -104,6 +104,7 @@ WARNING_CODES = frozenset(
         "mapping_profile_row_unmatched",
         "plan_binding_not_checked",
         "result_columns_not_observed",
+        "result_observations_not_written",
     }
 )
 """Every warning code that may appear in a record: a list, not a shape.
