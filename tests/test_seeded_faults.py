@@ -4,7 +4,7 @@
 assertion expected to detect each. B-048 defines the evaluation over that
 library plus five hidden faults, run by independent QA. This module is the
 part of B-048 that needs no external person: for every published fault it
-holds one of three things, and a committed matrix (``MATRIX``) says which.
+holds one of four things, and a committed matrix (``MATRIX``) says which.
 
 * **exercised outside the receipt** — a complete synthetic fixture under
   ``tests/fixtures/laboratory/seeded-faults/`` and a verdict from the
@@ -20,11 +20,18 @@ holds one of three things, and a committed matrix (``MATRIX``) says which.
   ``indeterminate`` and ``unobserved`` where absence is the fault), and
   located in the divergence section at the observed checkpoint the fault
   touched and nowhere else.
-* **refused** — the faulted input cannot reach evaluation at all: a
-  fail-closed gate refuses it with a named code at a structural path, and
-  a fixture under ``seeded-faults/refused/`` plus a test pin that refusal.
-  A refusal is detection without a receipt, so it is counted separately
-  from exercised and never as localization.
+* **refused** — the faulted input cannot reach the mechanism it would
+  corrupt: a fail-closed gate refuses it with a named code at a structural
+  path, and a fixture under ``seeded-faults/refused/`` or a named test pins
+  that refusal. The gate is usually the bundle parser, but not always: a
+  receipt document carrying a field the contract does not publish is refused
+  by the renderer, a review event that disposes of a finding without an owner
+  is refused before the log is appended, and a stored evidence object whose
+  bytes were changed is refused on the store's next read. A refusal is
+  detection without a receipt, so it is counted separately from exercised and
+  never as localization — and where the refusal lands somewhere other than the
+  fault's own claim (the store's next read rather than the receipt already
+  issued), the row still names what would close that gap.
 * **not yet exercisable** — nothing here can express or decide the fault,
   and the row names the missing item from a closed vocabulary.
 
@@ -48,6 +55,7 @@ nothing here is governed content.
 
 import json
 import re
+from collections.abc import Mapping
 from dataclasses import dataclass
 from enum import StrEnum
 from pathlib import Path
@@ -61,6 +69,7 @@ from contextsafe.cli import main
 from contextsafe.divergence import ConceptDivergence, compute_divergence
 from contextsafe.errors import ContextSafeError
 from contextsafe.evaluator import Outcome, evaluate
+from contextsafe.html_receipt import render_receipt_page
 from contextsafe.laboratory import (
     AFFIRMATIVE_RESULT_REASONS,
     REASON_STATUSES,
@@ -79,6 +88,14 @@ from contextsafe.models import (
     OutcomeStatus,
 )
 from contextsafe.receipt import build_receipt, build_receipt_document
+from contextsafe.review import (
+    FindingState,
+    ReviewEvent,
+    apply_event,
+    bind_to_receipt,
+    parse_receipt_findings,
+    parse_review_event,
+)
 from contextsafe.validation import parse_bundle
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -137,8 +154,21 @@ SPCU_DECLARED_FORM_ONLY = (
 )
 """What the F-015 and F-016 refusals do not cover, restated in the tables."""
 
+NAME_DECLARED_FORM_ONLY = (
+    "(declared form only; the same token in the usual slot is a value change, "
+    "and telling it from a legal name needs A-006/A-007, B-019)"
+)
+"""What the F-002 refusal does not cover, restated in the tables.
+
+``_name_to_use`` admits one name use, so a boundary that says it wrote the
+official name is refused whole. A boundary that writes the legal token into
+the usual slot and says nothing declares nothing to refuse, and the receipt
+reports what it can see: a value that changed between two boundaries.
+"""
+
 REFUSED_FAULTS: dict[str, tuple[str, str, str]] = {
     # fault: (assertion, error code, structural error path)
+    "F-002": ("A-006", "invalid_name_use", "$.observations[1].value.use"),
     "F-015": ("A-020", "prohibited_spcu_mapping", "$.observations[0].mapping"),
     "F-016": ("A-021", "prohibited_spcu_mapping", "$.observations[0].mapping"),
     "F-024": ("A-033", "invalid_rsg_value", "$.observations[0].value.value"),
@@ -263,10 +293,43 @@ class MissingItem(StrEnum):
     DISPLAY_OBSERVATION = "patient-facing display observation (E-DISPLAY, B-019)"
     NORMALIZER = "normalizer and adapters (B-022 to B-026)"
     AUTHORED_ASSERTIONS = "authored assertions with validity (B-010)"
-    REVIEW_THRESHOLDS = "review and disposition state machine (B-032)"
+    FINALIZATION_GATE = (
+        "a gate closing a receipt's findings against a review log (B-032)"
+    )
     SIGNATURES = "signatures and role thresholds (B-035)"
     RECEIPT_VERIFIER = "receipt verifier (B-036)"
-    HTML_PRESENTATION = "evidence-minimized presentation (B-038)"
+
+
+MISSING_ITEM_ISSUES: Mapping[MissingItem, int | None] = {
+    MissingItem.LABORATORY_ORACLE: None,
+    MissingItem.LABORATORY_RECEIPT: 76,
+    MissingItem.SPCU_PREDICATES: 90,
+    MissingItem.NAME_CONTEXTS: None,
+    MissingItem.DISPLAY_OBSERVATION: None,
+    MissingItem.NORMALIZER: None,
+    MissingItem.AUTHORED_ASSERTIONS: None,
+    MissingItem.FINALIZATION_GATE: None,
+    MissingItem.SIGNATURES: 81,
+    MissingItem.RECEIPT_VERIFIER: 81,
+}
+"""The issue tracking each missing item, where one exists.
+
+B-048 closes when every row is exercised or waits on a dependency that has an
+issue of its own, so which dependencies have one is data here rather than
+prose: #90 holds the SPCU predicates pending clinical review, #81 holds the
+signing layer's ADR that blocks both B-035 and B-036, and #76 holds the
+laboratory receipt section. A ``None`` is not an omission but the finding
+itself, and :data:`BLOCKED_WITHOUT_AN_ISSUE` says which of them still stand
+between this corpus and that close.
+"""
+
+BLOCKED_WITHOUT_AN_ISSUE: tuple[MissingItem, ...] = (MissingItem.NAME_CONTEXTS,)
+"""What a not-yet-exercisable row waits on that no issue tracks.
+
+Derived from the matrix and compared with this tuple, so a row that starts
+waiting on an untracked dependency has to be declared here and disclosed in
+docs/09 rather than joining the count in silence.
+"""
 
 
 LABORATORY = ROOT / "tests" / "fixtures" / "laboratory" / "seeded-faults"
@@ -435,10 +498,12 @@ MATRIX: tuple[FaultRow, ...] = (
         "`F-001.json`: A-I02 `value_not_present` at `ehr`",
         MissingItem.DISPLAY_OBSERVATION,
     ),
-    _waiting(
+    _refused(
         "F-002",
         "replace NtU with legal test name",
         "A-006/A-007",
+        "`refused/F-002.json`: `invalid_name_use` at `$.observations[1].value.use` "
+        + NAME_DECLARED_FORM_ONLY,
         MissingItem.DISPLAY_OBSERVATION,
         MissingItem.NAME_CONTEXTS,
     ),
@@ -536,17 +601,25 @@ MATRIX: tuple[FaultRow, ...] = (
         "A-034",
         "`F-025.json`: A-I02 `value_changed_across_checkpoints` at `interface`; `ehr` never named",
     ),
-    _waiting(
+    _refused(
         "F-026",
         "mutate raw evidence after evaluation",
         "A-035/receipt verifier",
+        "`tests/test_evidence_store.py"
+        "::test_same_size_hash_corruption_and_missing_object_are_distinctly_detected`"
+        " (the store's next read, not the receipt already issued)",
         MissingItem.RECEIPT_VERIFIER,
     ),
-    _waiting(
+    _refused(
         "F-027",
         "include unnecessary legal-name/GI field in HTML",
         "A-031/A-036",
-        MissingItem.HTML_PRESENTATION,
+        "`tests/test_seeded_faults.py"
+        "::test_f027_an_unnecessary_identity_field_never_reaches_a_page`; "
+        "`tests/test_html_receipt.py"
+        "::test_a_field_the_contract_does_not_publish_is_refused`; "
+        "`tests/test_a11y_gate.py"
+        "::test_a_receipt_value_the_page_does_not_need_is_caught`",
         MissingItem.DISPLAY_OBSERVATION,
     ),
     _refused(
@@ -601,24 +674,29 @@ MATRIX: tuple[FaultRow, ...] = (
         "`payload_sha256` moves",
         MissingItem.RECEIPT_VERIFIER,
     ),
-    _waiting(
+    _refused(
         "F-036",
         "omit the owner or disposition for a mandatory failed outcome",
         "P0-10 finalization gate",
-        MissingItem.REVIEW_THRESHOLDS,
+        "`tests/test_seeded_faults.py"
+        "::test_f036_a_disposition_that_omits_the_owner_is_refused`; "
+        "`tests/test_seeded_faults.py"
+        "::test_f036_a_finding_nobody_reviewed_is_reported_by_nothing_here`",
+        MissingItem.FINALIZATION_GATE,
     ),
 )
 """The corpus matrix: every published fault, its status, and what it waits on.
 
-An exercised row may still name a missing item: F-001 is reported at the
-EHR as a value change, not at a patient-facing display (A-006); F-035
+An exercised or refused row may still name a missing item: F-001 is reported
+at the EHR as a value change, not at a patient-facing display (A-006); F-035
 proves the identity moves, not that a verifier would notice a claimed one;
-and F-020 is reported by the flag predicate rather than by the assertion its
-library row names, which ``REPORTED_BY_ANOTHER_ASSERTION`` says and docs/09
-has to disclose.
+F-026's refusal is the evidence store's next read rather than a verifier over
+the receipt already issued; and F-020 is reported by the flag predicate rather
+than by the assertion its library row names, which
+``REPORTED_BY_ANOTHER_ASSERTION`` says and docs/09 has to disclose.
 """
 
-MATRIX_DATE = "2026-09-04"
+MATRIX_DATE = "2026-09-05"
 """The date the docs/09 status table carries, so the two cannot disagree."""
 
 
@@ -666,7 +744,7 @@ EXERCISED = sorted({*EXPECTED_DETECTION, *EVIDENCE_FAULTS})
 
 
 def test_the_library_holds_exactly_the_faults_the_tables_expect() -> None:
-    """Twelve exercised files, five refused files, and nothing unaccounted for."""
+    """Twelve exercised files, six refused files, and nothing unaccounted for."""
 
     assert [path.stem for path in ALL_FAULT_FILES] == EXERCISED
     assert len(FAULT_FILES) == 10
@@ -702,8 +780,8 @@ def test_the_matrix_counts_are_the_ones_the_documents_state() -> None:
     assert counts == {
         CorpusStatus.EXERCISED: 12,
         CorpusStatus.EXERCISED_OUTSIDE_THE_RECEIPT: 7,
-        CorpusStatus.REFUSED: 7,
-        CorpusStatus.NOT_EXERCISABLE: 10,
+        CorpusStatus.REFUSED: 11,
+        CorpusStatus.NOT_EXERCISABLE: 6,
     }
     assert sum(counts.values()) == 36
 
@@ -1178,6 +1256,60 @@ def test_each_refused_fault_exits_two_through_the_cli_and_writes_no_receipt(
     assert not output.exists()
 
 
+def test_f002_a_name_declared_as_the_official_one_is_refused_whole() -> None:
+    """F-002, A-006: the contract carries one name use, and refuses the other.
+
+    The EHR says it wrote the official (legal) name in place of the name to
+    use. ``name_to_use`` admits ``usual`` and nothing else, so the whole
+    observation set is refused before any rule runs and no receipt exists.
+    """
+
+    document = _load(REFUSED / "F-002.json")
+    ehr = document["observations"]["observations"][1]["value"]
+    assert ehr["use"] == "official"
+    assert ehr["value"] != document["case"]["concepts"]["name_to_use"]["value"]
+    with pytest.raises(ContextSafeError) as raised:
+        _bundle(document)
+    assert raised.value.code == "invalid_name_use"
+    assert "official" not in json.dumps(raised.value.to_dict())
+
+
+def test_f002_the_undeclared_form_is_only_a_changed_value() -> None:
+    """What the refusal does not cover, stated as a test rather than as prose.
+
+    Put the same substituted token in the usual slot and nothing declares a
+    legal name any more: what is reported is a value that changed between
+    registration and the EHR, which is what a predicate can see. Nothing names the
+    substitution for what it is, and telling a legal name from any other name
+    is what A-006/A-007 and the name contexts of B-019 would decide.
+    """
+
+    document = _load(REFUSED / "F-002.json")
+    document["observations"]["observations"][1]["value"]["use"] = "usual"
+    outcomes = _outcomes(document)
+    assert _by_rule(outcomes, "A-I02").status is OutcomeStatus.PASSED
+    changed = _by_rule(outcomes, "A-I03")
+    assert (changed.status, changed.reason) == (
+        OutcomeStatus.FAIL,
+        OutcomeReason.VALUE_CHANGED_ACROSS_CHECKPOINTS,
+    )
+    entry = _divergence(document, ConceptKind.NAME_TO_USE)
+    assert entry.from_expected.at is Checkpoint.EHR
+    rendered = json.dumps(entry.to_dict())
+    for word in ("legal", "official"):
+        assert word not in rendered
+
+
+def test_f002_would_pass_if_the_name_to_use_had_survived() -> None:
+    """The substitution is what turned the outcome, not the rules."""
+
+    document = _load(REFUSED / "F-002.json")
+    document["observations"]["observations"][1]["value"] = json.loads(
+        json.dumps(document["observations"]["observations"][0]["value"])
+    )
+    assert all(item.status is OutcomeStatus.PASSED for item in _outcomes(document))
+
+
 def test_f015_and_f016_are_refused_by_the_mapping_not_the_value() -> None:
     """The SPCU value is the declared one; what is refused is the derivation."""
 
@@ -1259,16 +1391,185 @@ def test_f032_the_misattached_observation_is_refused_not_reassigned() -> None:
 
 
 def test_every_refused_row_that_names_a_test_names_one_that_exists() -> None:
-    """F-028, F-029, and F-030 point at suites elsewhere; the pointer must resolve."""
+    """Six rows point at a named test; every pointer must resolve."""
 
-    pattern = re.compile(r"`tests/(test_[a-z_]+\.py)::(test_[a-z0-9_]+)`")
+    pattern = re.compile(r"`tests/(test_[a-z0-9_]+\.py)::(test_[a-z0-9_]+)`")
     named = 0
     for row in _rows(CorpusStatus.REFUSED):
         for module, function in pattern.findall(row.evidence):
             source = (ROOT / "tests" / module).read_text(encoding="utf-8")
             assert f"def {function}(" in source, row.fault
             named += 1
-    assert named == 3
+    assert named == 9
+
+
+# --- refused at the receipt document and at the review log -------------------
+
+
+def _receipt_document(fault: str) -> dict[str, Any]:
+    """The receipt document one exercised fault's fixture produces."""
+
+    bundle = _bundle(_load(FAULTS / f"{fault}.json"))
+    document = build_receipt_document(bundle, evaluate(bundle))
+    assert isinstance(document, dict)
+    return document
+
+
+def _sealed(document: dict[str, Any]) -> dict[str, Any]:
+    """Re-derive ``payload_sha256`` so a refusal is about the field, not the hash."""
+
+    document["payload_sha256"] = sha256_json(document["payload"])
+    return document
+
+
+F027_INJECTED_FIELD = "legal_name"
+F027_INJECTED_VALUE = "CSYN-ASTER-LEGAL"
+"""The unnecessary field and the synthetic token this fault would carry."""
+
+F027_LEVELS: tuple[tuple[str | int, ...], ...] = (
+    (),
+    ("envelope",),
+    ("payload",),
+    ("payload", "hashes"),
+    ("payload", "results", 0),
+)
+"""Every level of the receipt document the field could be added at."""
+
+
+def test_f027_an_unnecessary_identity_field_never_reaches_a_page() -> None:
+    """F-027, A-031/A-036: the page carries what substantiates an outcome.
+
+    Two halves. The receipt this corpus produces has no identity value in it
+    to render, so the page has none: the name the fault library's fixtures
+    carry appears nowhere on it. And a document carrying a field the contract
+    does not publish is refused at every level of the document rather than
+    rendered around, so a report template cannot acquire a legal-name field by
+    having one added to the document it is rendered from -- the closed field
+    set is what decides that, so the same holds for any other. The rejection
+    names a location and never the field or the value.
+    """
+
+    page = render_receipt_page(_sealed(_receipt_document("F-001")))
+    assert F027_INJECTED_VALUE not in page
+    assert (
+        _load(FAULTS / "F-001.json")["case"]["concepts"]["name_to_use"]["value"]
+        not in page
+    )
+    for level in F027_LEVELS:
+        document = _receipt_document("F-001")
+        target: Any = document
+        for step in level:
+            target = target[step]
+        target[F027_INJECTED_FIELD] = F027_INJECTED_VALUE
+        with pytest.raises(ContextSafeError) as raised:
+            render_receipt_page(_sealed(document))
+        assert raised.value.code == "invalid_receipt_document", level
+        rendered = json.dumps(raised.value.to_dict())
+        assert F027_INJECTED_VALUE not in rendered
+        assert F027_INJECTED_FIELD not in rendered
+
+
+F036_FINDING: dict[str, str] = {
+    "rule_id": "A-I02",
+    "case_id": "CTP-I01",
+    "checkpoint": Checkpoint.EHR.value,
+    "concept": ConceptKind.NAME_TO_USE.value,
+}
+"""The mandatory failed outcome F-036 is reviewed against, from F-001."""
+
+F036_SECOND_FINDING_RULE = "A-I03"
+"""The other failed outcome in the same receipt, which no event here names."""
+
+F036_SIGNER: dict[str, str] = {
+    "role": "contextsafe_clinical_safety_chair",
+    "organization_id": "ORG-CONTEXTSAFE-FIXTURE",
+    "signature_status": "not_verified",
+}
+"""A declared signer, which authorizes nothing: no signature is verified (B-035)."""
+
+
+def _review_event(
+    document: dict[str, Any], decision: str, **fields: Any
+) -> ReviewEvent:
+    """Parse one shape-valid review event bound to this receipt document."""
+
+    event: dict[str, Any] = {
+        "schema_version": "contextsafe.review-event/1.0.0",
+        "outcome": dict(F036_FINDING),
+        "receipt": {
+            "payload_sha256": document["payload_sha256"],
+            "rule_set_sha256": document["payload"]["hashes"]["rule_set_sha256"],
+        },
+        "decision": decision,
+        "severity": None,
+        "owner": None,
+        "rationale_code": "evidence_verified_against_source",
+        "external_reference": None,
+        "signers": [dict(F036_SIGNER)],
+        "signature_status": "not_verified",
+        **fields,
+    }
+    return parse_review_event(event)
+
+
+def test_f036_a_disposition_that_omits_the_owner_is_refused() -> None:
+    """F-036: neither half of a disposition can be left out of the log.
+
+    Omitting the owner is refused on the event's own shape; reaching a
+    disposition without ever assigning one is refused by the transition table,
+    because ``remediated`` is reachable only from ``owned``. Each names a
+    field, and neither event can be appended to a log.
+    """
+
+    document = _sealed(_receipt_document("F-001"))
+    findings = parse_receipt_findings(document)
+    with pytest.raises(ContextSafeError) as raised:
+        _review_event(
+            document,
+            "owner_assigned",
+            owner=None,
+            rationale_code="ownership_assigned_by_plan_role",
+        )
+    assert (raised.value.code, raised.value.path) == ("owner_required", "$.owner")
+
+    confirmed = _review_event(document, "confirmed", severity="cs2_high")
+    bind_to_receipt(confirmed, findings)
+    state = apply_event(FindingState(outcome=confirmed.outcome), confirmed, "0" * 64)
+    assert state.owner is None
+    remediated = _review_event(
+        document, "remediated", rationale_code="remediation_verified_by_rerun"
+    )
+    with pytest.raises(ContextSafeError) as raised:
+        apply_event(state, remediated, "1" * 64)
+    assert (raised.value.code, raised.value.path) == (
+        "illegal_transition",
+        "$.decision",
+    )
+
+
+def test_f036_a_finding_nobody_reviewed_is_reported_by_nothing_here() -> None:
+    """What the refusal does not cover, stated as a test rather than as prose.
+
+    The receipt carries two mandatory failed outcomes. A log that disposes of
+    one says nothing at all about the other: the review state is derived from
+    the log, and no mechanism here reads a receipt's findings back against it.
+    A finding with no owner and no disposition is therefore silent rather than
+    reported, which is the gate F-036's row still waits on.
+    """
+
+    document = _sealed(_receipt_document("F-001"))
+    findings = parse_receipt_findings(document)
+    reviewed = {key.to_dict()["rule_id"] for key in findings.findings}
+    assert reviewed == {F036_FINDING["rule_id"], F036_SECOND_FINDING_RULE}
+
+    confirmed = _review_event(document, "confirmed", severity="cs2_high")
+    bind_to_receipt(confirmed, findings)
+    state = apply_event(FindingState(outcome=confirmed.outcome), confirmed, "0" * 64)
+    assert state.outcome.to_dict()["rule_id"] == F036_FINDING["rule_id"]
+    undisposed = {key for key in findings.findings if key != confirmed.outcome}
+    assert {key.to_dict()["rule_id"] for key in undisposed} == {
+        F036_SECOND_FINDING_RULE
+    }
 
 
 # --- the documents ----------------------------------------------------------
@@ -1290,7 +1591,7 @@ _LIBRARY_ROW = re.compile(r"^\| (F-0\d\d) \| ([^|]+) \| ([^|]+) \|$")
 _STATUS_ROW = re.compile(r"^\| (F-0\d\d) \| ([^|]+) \| ([^|]+) \| ([^|]+) \|$")
 _COUNTS = re.compile(
     r"As of (\d{4}-\d{2}-\d{2}): (\d+) of 36 exercised at receipt level, "
-    r"(\d+) exercised outside the receipt, (\d+) refused before evaluation, "
+    r"(\d+) exercised outside the receipt, (\d+) refused by a fail-closed gate, "
     r"and (\d+) not yet exercisable\."
 )
 
@@ -1419,6 +1720,46 @@ def test_the_readme_carries_one_current_count_and_older_slices_defer_to_it() -> 
         (CorpusStatus.NOT_EXERCISABLE, "are *not yet exercisable*"),
     ):
         assert f"{_NUMBER_WORDS[len(_rows(status))]} {phrase}" in current, phrase
+
+
+def waiting_dependencies() -> tuple[tuple[MissingItem, int | None], ...]:
+    """What the not-yet-exercisable rows wait on, with the issue tracking each."""
+
+    seen = {
+        item: MISSING_ITEM_ISSUES[item]
+        for row in _rows(CorpusStatus.NOT_EXERCISABLE)
+        for item in row.missing
+    }
+    return tuple(sorted(seen.items(), key=lambda pair: pair[0].value))
+
+
+def test_every_missing_item_says_whether_an_issue_tracks_it() -> None:
+    """A dependency with no issue is the finding, not a blank in the table."""
+
+    assert set(MISSING_ITEM_ISSUES) == set(MissingItem)
+    assert (
+        tuple(item for item, issue in waiting_dependencies() if issue is None)
+        == BLOCKED_WITHOUT_AN_ISSUE
+    )
+
+
+def test_the_docs_name_the_issue_behind_every_waiting_row() -> None:
+    """B-048's closing condition, restated where the table is read.
+
+    B-048 closes when every row is exercised, refused, or waiting on a
+    dependency that has an issue of its own. So the corpus status section has
+    to say, for each thing the waiting rows wait on, either which issue tracks
+    it or that none does -- and the sentences are derived from the matrix here
+    rather than read from the prose, so a new waiting row cannot arrive
+    without one.
+    """
+
+    section = _corpus_status_section()
+    for item, issue in waiting_dependencies():
+        if issue is None:
+            assert f"{item.value} has no issue of its own" in section, item
+        else:
+            assert f"{item.value} is issue #{issue}" in section, item
 
 
 def test_the_docs_say_what_this_corpus_is_not() -> None:

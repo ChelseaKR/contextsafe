@@ -76,6 +76,44 @@ rather than after it.
   unaffected and is still used. `UP046`, the same rule for a generic class, is
   not ignored today because no class here is generic; a future one takes the
   ignore for this same recorded reason. Refs #114.
+- **Four seeded faults the corpus recorded as not yet exercisable are
+  refused, and the matrix now records which dependency has an issue.** F-002,
+  F-026, F-027, and F-036 each had a mechanism that refuses the fault and no
+  row saying so. F-027: `render_receipt_page` refuses a field the receipt
+  contract does not publish at every level of the document rather than
+  rendering around it (B-038), and the receipt this corpus produces carries no
+  identity value to render in the first place. F-036: an `owner_assigned`
+  event with no owner is refused as `owner_required`, and a `remediated`
+  decision from `confirmed` — a disposition reached without ever assigning an
+  owner — as `illegal_transition` (B-032). F-026: a stored evidence object
+  whose bytes were changed is refused on the store's next read as
+  `evidence_store_corrupt`. F-002: the observation contract carries one name
+  use, so a boundary that says it wrote the official name in place of the name
+  to use is refused whole as `invalid_name_use`, pinned by a new fixture
+  `tests/fixtures/seeded-faults/refused/F-002.json`. The counts move to 12
+  exercised at receipt level, 7 exercised outside the receipt, 11 refused, and
+  6 not yet exercisable.
+  Three of the four refusals land somewhere other than the fault's own claim,
+  and the rows say so rather than letting the count imply otherwise: F-026's
+  refusal is the store's next read, not the verifier that would notice the
+  same mutation from a receipt's side (B-036); F-036's covers the owner, while
+  a mandatory failed outcome that no event ever names is silent, because
+  nothing reads a receipt's findings back against the log; and F-002's covers
+  only the form a boundary declares, because the same token in the usual slot
+  is, to every predicate here, a value that changed. F-034 stays not
+  exercisable deliberately: the two-signer threshold on an accepted residual
+  risk refuses a dropped signer and a shared organization, but both are shape
+  checks on a declaration, every signer says `signature_status:
+  not_verified`, and no receipt carries a signer at all.
+  `MISSING_ITEM_ISSUES` and `BLOCKED_WITHOUT_AN_ISSUE` in
+  `tests/test_seeded_faults.py` now hold, as data, which dependency a waiting
+  row has an issue for — #90 for the SPCU predicates, #81 for the signing
+  layer, #76 for the laboratory receipt section — and which has none: the name
+  contexts and periods of B-019, which F-003 waits on. A test requires
+  `docs/09-TEST-AND-EVALUATION.md` to say so for every waiting row, so a new
+  one cannot arrive without naming what tracks it. B-048 is not closed and its
+  acceptance statement has not moved: there is still no hidden-fault set, no
+  independent fault author, and no independent QA.
 
 - **The local event log's record carries the command's warning codes, and its
   schema version moves to `contextsafe.event-log/0.2.0`.** A record was

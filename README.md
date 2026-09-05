@@ -876,23 +876,29 @@ backlog items stand after it:
   no receipt and no divergence section, so nothing localizes them, and because
   every analyte, unit, bound, and flag in them is a token invented for software
   tests: no laboratory medical director has supplied or approved any of them,
-  and none of them is a reference range. Seven
-  are *refused*: the faulted input never reaches evaluation because a
-  fail-closed gate refuses it whole with a named code at a structural path — a
-  declared GI-to-SPCU or RSG-to-SPCU mapping (F-015, F-016), an unsupported
-  value that is refused rather than nearest-matched (F-024), an identifier
-  outside the synthetic namespace (F-029), an observation naming another case
-  (F-032), and the pack validity and receipt contract gates that already exist
-  (F-028, F-030); a refusal is detection without a receipt, so it is counted
-  separately and never as localization. Ten are *not yet exercisable*, and each
+  and none of them is a reference range. Eleven
+  are *refused*: the faulted input never reaches the mechanism it would corrupt,
+  because a fail-closed gate refuses it whole with a named code at a structural
+  path — a declared GI-to-SPCU or RSG-to-SPCU mapping (F-015, F-016), a name a
+  boundary declares as the official one where the contract carries one name use
+  (F-002), an unsupported value that is refused rather than nearest-matched
+  (F-024), an identifier outside the synthetic namespace (F-029), an
+  observation naming another case (F-032), a legal-name field added to a
+  receipt document, which the renderer refuses rather than renders around
+  (F-027), a review event that disposes of a mandatory failed outcome without
+  an owner (F-036), a stored evidence object whose bytes were changed, refused
+  on the store's next read (F-026), and the pack validity and receipt contract
+  gates that already exist (F-028, F-030); a refusal is detection without a
+  receipt, so it is counted separately and never as localization, and where it
+  lands somewhere other than the fault's own claim the row still says so. Six
+  are *not yet exercisable*, and each
   row names what it waits on from a closed vocabulary: the SPCU predicates and
-  their clinical review, name contexts and periods in the observation contract,
-  the receipt verifier, signatures, the review state machine, and the
-  presentation pass. This is not
+  their clinical review (F-011 to F-014), a name period the observation
+  contract does not carry (F-003), and signatures (F-034). This is not
   the 41-fault evaluation B-048 defines: there is no hidden-fault set, no
   independent fault author has reviewed the corpus, no independent QA has run
   it, and every fault here was written by the implementer of the mechanism
-  that detects it. Twelve of 36 at receipt level, and nineteen decided in all,
+  that detects it. Twelve of 36 at receipt level, and thirty decided in all,
   is deterministic corpus coverage over the
   published library — not a sensitivity estimate over faults the library does
   not contain, and not a population claim of any kind. Nothing here is

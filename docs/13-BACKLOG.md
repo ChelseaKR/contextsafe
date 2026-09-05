@@ -857,7 +857,7 @@ a new, empty log behind, which replays to the empty state.
 | B-045 | P0-14 | Package and fresh-install test Windows/macOS/Ubuntu artifacts with SBOM/signatures | F/SEC | B-020..036 | 6d | Open — note 2026-09-04 |
 | B-046 | P0-15 | Implement diagnostics, cleanup enumerator, redacted support bundle, and local logs | F/SEC | B-018/B-020 | 5d | Open — note 2026-09-04 |
 | B-047 | P0-15 | Exercise PHI, critical finding, wrong result, pack withdrawal, key compromise runbooks | F/SEC/CL/DP | B-035/B-040/B-046 | 3d + 12h participants | Open — no note |
-| B-048 | G-01, F-001..036 | Full 36-published-regression-fault and five-hidden-challenge-fault evaluation; all 41/41 must be detected and correctly localized, with any miss blocking release; corpus-bounded result makes no population-sensitivity claim | E/independent QA | B-028..046 | 6d + 16h QA | Open — note 2026-09-04 |
+| B-048 | G-01, F-001..036 | Full 36-published-regression-fault and five-hidden-challenge-fault evaluation; all 41/41 must be detected and correctly localized, with any miss blocking release; corpus-bounded result makes no population-sensitivity claim | E/independent QA | B-028..046 | 6d + 16h QA | Open — note 2026-09-05 |
 
 Implementation note (2026-08-15, B-039): the canary suite is seeded in
 `tests/test_privacy_canaries.py` for the one source profile that exists. It
@@ -1195,6 +1195,53 @@ unsigned, because build provenance says which workflow produced the bytes and
 nothing about who authorized them, and the signing path is B-035; the SBOM is
 derived from `uv.lock` and is not byte-reproducible run to run; and the
 workflow has never fired, since no tag exists.
+
+Implementation note (2026-09-05, B-048): four rows the 2026-09-04 note listed
+as not yet exercisable had a mechanism that refuses the fault, and no row
+saying so. F-027 is refused: since B-038,
+`html_receipt.render_receipt_page` refuses a field the receipt contract does
+not publish at every level of the document rather than rendering around it,
+and the a11y gate's `minimization` check reports a page carrying any value the
+payload does not need; the receipt this corpus produces has no identity value
+in it to render, and a test over F-001's receipt in
+`tests/test_seeded_faults.py` proves both halves. F-036 is refused: since
+B-032, an `owner_assigned` event with no owner is refused as `owner_required`,
+and a `remediated` decision from `confirmed` — a disposition reached without
+ever assigning an owner — as `illegal_transition`, so neither half of a
+disposition can be left out of the log. F-026 is refused: a stored evidence
+object whose bytes were changed is refused on the store's next read as
+`evidence_store_corrupt`. And F-002 is refused: the observation contract
+carries one name use, so a boundary that says it wrote the official name in
+place of the name to use is refused whole as `invalid_name_use`, pinned by a
+new fixture under `tests/fixtures/seeded-faults/refused/`. The corpus now
+reads 12 exercised at receipt level, 7 exercised outside the receipt, 11
+refused, and 6 not yet exercisable.
+
+Three of the four refusals land somewhere other than the fault's own claim,
+and the rows say so rather than letting the count imply coverage they do not
+have. F-026's refusal is the store's next read finding bytes that no longer
+hash to their own name, not the verifier that would notice the same mutation
+from a receipt's side (B-036). F-036's covers the owner; a mandatory failed
+outcome that no event ever names is silent, because nothing reads a receipt's
+findings back against the log, and that gate is what the row now waits on.
+F-002's covers only the form a boundary declares, because the same token
+written into the usual slot is, to every predicate here, a value that changed.
+F-034 stays not exercisable deliberately: the two-signer threshold on an
+accepted residual risk refuses a dropped signer as `signer_threshold_unmet`
+and a shared organization as `signer_organizations_not_distinct`, but both are
+shape checks on a declaration, every event and signer says `signature_status:
+not_verified`, and no receipt carries a signer at all, so nothing here can
+detect a receipt signer removed or substituted. `MISSING_ITEM_ISSUES` now
+holds, as data, which dependency a row waits on has an issue of its own — #90
+for the SPCU predicates, #81 for the signing layer that blocks B-035 and
+B-036, #76 for the laboratory receipt section — and `BLOCKED_WITHOUT_AN_ISSUE`
+holds the one that has none: the name contexts and periods of B-019, which
+F-003 waits on. A test requires §4 to say which is which for every waiting
+row. B-048 is not closed and its acceptance statement has not moved: there is
+still no hidden-fault set, no independent fault author has reviewed the
+corpus, and no independent QA has run it, so 30 of 36 decided remains
+deterministic corpus coverage over the published library and no
+population-sensitivity claim of any kind.
 
 ## Phase 6 — pilot and v1
 
