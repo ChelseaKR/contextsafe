@@ -18,13 +18,14 @@ import json
 import re
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 import pytest
 from jsonschema import Draft202012Validator, FormatChecker
 
 from contextsafe.canonical import sha256_json
 from contextsafe.cli import EXIT_SUCCESS, main
+from contextsafe.errors import ContextSafeError
 from contextsafe.evaluator import Outcome, evaluate
 from contextsafe.models import (
     PATHWAY,
@@ -40,7 +41,14 @@ from contextsafe.models import (
 )
 from contextsafe.receipt import build_receipt_document
 from contextsafe.reference_fixtures import REFERENCE_ROOT
-from contextsafe.validation import STRUCTURAL_POINTER_SEGMENTS, parse_bundle
+from contextsafe.validation import (
+    JSON_POINTER_MAX_SEGMENTS,
+    MAX_STRING_LENGTH,
+    SOURCE_POINTER_MAX_LENGTH,
+    STRUCTURAL_POINTER_SEGMENTS,
+    parse_bundle,
+    parse_observations,
+)
 
 ROOT = Path(__file__).resolve().parents[1]
 REFERENCE = REFERENCE_ROOT
@@ -289,8 +297,107 @@ def test_contract_pointer_grammar_is_the_runtime_segment_vocabulary() -> None:
         "$.ZZZ[1]-5.1.1",
         "$.PID[1]-5.1",
         "$.rows[0].patient",
+        "$.value[0]-1.1.1",
     ):
         assert compiled.fullmatch(refused) is None
+
+
+def _accepts_contract(pointer: str) -> bool:
+    """True when the published contract admits ``pointer``: pattern and bound."""
+
+    definition = _schema()["$defs"]["structural_pointer"]
+    return len(pointer) <= definition["maxLength"] and (
+        re.fullmatch(definition["pattern"], pointer) is not None
+    )
+
+
+def _observation_set_with_pointer(pointer: str) -> dict[str, Any]:
+    document = json.loads((REFERENCE / "observations.json").read_text(encoding="utf-8"))
+    document["observations"][0]["evidence"]["source_pointer"] = pointer
+    return cast(dict[str, Any], document)
+
+
+def _accepts_runtime(pointer: str) -> bool:
+    """True when the validator admits ``pointer`` as an observation's evidence."""
+
+    try:
+        parse_observations(_observation_set_with_pointer(pointer))
+    except ContextSafeError:
+        return False
+    return True
+
+
+_POINTER_HEADS = {0: "", 1: ".name", 2: ".value", 3: "[0]"}
+"""Openings of every length modulo four, so any total length is writable."""
+
+
+def _pointer_of_length(length: int) -> str:
+    """A ``$``-rooted path of nothing but vocabulary words, exactly this long.
+
+    Every segment here is in `STRUCTURAL_POINTER_SEGMENTS` or is an index, so
+    the only thing that can decide such a pointer is the length bound.
+    """
+
+    body = length - 1
+    head = _POINTER_HEADS[body % 4]
+    pointer = "$" + head + ".sex" * ((body - len(head)) // 4)
+    assert len(pointer) == length
+    return pointer
+
+
+@pytest.mark.parametrize(
+    "pointer",
+    [
+        _pointer_of_length(127),
+        _pointer_of_length(128),
+        _pointer_of_length(129),
+        _pointer_of_length(160),
+        "/name" * JSON_POINTER_MAX_SEGMENTS,
+        "/name" * (JSON_POINTER_MAX_SEGMENTS + 1),
+        "/0" * JSON_POINTER_MAX_SEGMENTS,
+        "/0" * (JSON_POINTER_MAX_SEGMENTS + 1),
+        "$.PID[1]-5.1.1",
+        "$.value[0]-1.1.1",
+    ],
+)
+def test_the_contract_and_the_runtime_agree_at_every_pointer_bound(
+    pointer: str,
+) -> None:
+    """#72: the published bound and the enforced bound, pinned equal.
+
+    The contract carried `maxLength: 160` while `_SOURCE_POINTER` stopped at
+    128, so a 129-character path of nothing but vocabulary words validated
+    against the published contract and was refused by the runtime. Nothing
+    could produce such a receipt, because the runtime refuses the observation
+    first -- which is exactly why only a test comparing the two ends notices.
+
+    A single `maxLength` is not the whole answer, and this is where that shows:
+    the RFC 6901 dialect is bounded by depth, not by length, so both bounds
+    have to be stated, and both are checked here from the ends that differ.
+    """
+
+    assert _accepts_contract(pointer) == _accepts_runtime(pointer), pointer
+
+
+def test_the_published_pointer_bounds_are_the_runtime_constants() -> None:
+    """Not a number that happens to match: the number the validator applies."""
+
+    definition = _schema()["$defs"]["structural_pointer"]
+    assert definition["maxLength"] == min(MAX_STRING_LENGTH, SOURCE_POINTER_MAX_LENGTH)
+    assert f"{{1,{JSON_POINTER_MAX_SEGMENTS}}}" in definition["pattern"]
+    assert "160" not in definition["pattern"]
+
+
+def test_the_published_hl7_dialect_is_the_runtime_segment_allowlist() -> None:
+    """Only a vocabulary word shaped like a segment name may root that dialect."""
+
+    pattern = _schema()["$defs"]["structural_pointer"]["pattern"]
+    segments = sorted(
+        word
+        for word in STRUCTURAL_POINTER_SEGMENTS
+        if re.fullmatch(r"[A-Z][A-Z0-9]{2}", word)
+    )
+    assert rf"|\$\.(?:{'|'.join(segments)})\[" in pattern
 
 
 @pytest.mark.parametrize("status", list(OutcomeStatus))

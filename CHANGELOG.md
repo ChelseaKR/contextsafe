@@ -412,6 +412,46 @@ rather than after it.
 
 ### Fixed
 
+- **The receipt contract and the runtime disagreed about how long a source
+  pointer may be (#72).** The published `structural_pointer` carried
+  `maxLength: 160` while the validator stopped at 128, so a 129-character path
+  built entirely from vocabulary words validated against the published contract
+  and was refused by the runtime. Two smaller disagreements sat in the same
+  definition: the published RFC 6901 branch was unbounded in depth where the
+  runtime admits at most sixteen reference tokens, and the published HL7 branch
+  admitted any vocabulary word as a segment name where the runtime requires one
+  shaped like a segment name, so `$.value[0]-1.1.1` validated and was refused.
+  Nothing could produce such a receipt, because the runtime refuses the
+  observation first, which is exactly why nothing noticed: it is the shape of
+  #58, two internally consistent grammars with no test comparing them.
+
+  The contract now states the runtime's bounds, and the runtime names them:
+  `MAX_STRING_LENGTH`, `SOURCE_POINTER_MAX_LENGTH` and
+  `JSON_POINTER_MAX_SEGMENTS` in `contextsafe.validation`. One `maxLength` is
+  not the whole answer and the reason is worth stating — the RFC 6901 dialect is
+  bounded by depth and not by length, and a sixteen-token pointer of the longest
+  vocabulary word is 496 characters — but every string this validator accepts is
+  held to 128 characters before any pattern is applied, so 128 is the bound that
+  applies to the field and the contract says so. `tests/test_receipt_schema.py`
+  now asserts that the contract and the runtime accept the same pointers at
+  127, 128, 129 and 160 characters and at sixteen and seventeen tokens, and
+  `make patterns` rebuilds the whole published expression from the runtime
+  vocabulary on every run. The receipt contract stays at 0.3: the change narrows
+  a published pattern to what the runtime always enforced, the way #58's did,
+  and no document that validated and was accepted has stopped validating.
+
+- **The two observation contracts disagreed about the mapping block (#69).**
+  B-026 gave `contextsafe-observation-set-v0.1` an optional
+  `profile_sha256`/`profile_version` pair and left the sibling
+  `contextsafe-observation-v1`, which carries a `mapping` definition for the
+  same field, behind — and disclosed that it had. Harmless in effect, because
+  that contract describes an unimplemented shape no emitted document satisfies,
+  and drift on a shared field all the same, which is what
+  `tests/test_contracts.py` exists to stop. The v1 contract now carries the same
+  block, and the test compares the two constraint for constraint with
+  annotations dropped, so each file can keep its own record of when it was
+  widened and neither can be widened alone again.
+
 - **The unmatched-mapping-row warning could not reach an operator.**
   `mapping_profile_row_unmatched` was raised into the import result and
   nothing a user can run ever printed it: `contextsafe import` writes the
@@ -564,6 +604,35 @@ rather than after it.
   repository; it does not rewrite history.
 
 ### Added
+
+- **`make patterns`: every published pattern now has to have a runtime constant
+  behind it (#73).** The name-target defect fixed in #58 had one root cause
+  worth generalising: `nameToUseTarget` inlined its own regular expression
+  instead of referencing the `syntheticToken` the same schema already carried,
+  so nothing compared the published grammar with the runtime one and the two
+  drifted. `tests/test_mapping_profile_schema.py` pins four patterns that way by
+  hand, which is the right check performed over a set somebody has to remember
+  to extend.
+
+  `tools/pattern_gate.py` enumerates instead. Every `pattern` in every file in
+  `schemas/` — 45 distinct expressions in 150 places — must be accounted for in
+  one of three ways: **equal** to a pattern the runtime compiles, once `(?:` and
+  `(` are read as the same grouping (37 of them); **derived** from named runtime
+  constants by a function the gate recomputes on every run, so the derivation is
+  checked rather than asserted (5); or **declared** as having no runtime regular
+  expression, with the reason printed on every run, clean or not (3: the
+  calendar in a date-time, the surrogate block the runtime compares by code
+  point, and the FHIR coding code where two runtime bounds meet at one field).
+  A published pattern in none of the three is a finding, and so is a derivation
+  or a declaration that matches nothing published. It exits 2 rather than 0 when
+  it read no contract or found no pattern, per
+  [ADR 0008](docs/adr/0008-one-exit-code-contract-for-every-gate.md), and it is
+  a stage of `make verify` with a row in the contributing guide's gate table.
+
+  What it does not claim, pinned as a test rather than written in a paragraph:
+  it answers "some runtime constant says this", not "the right one does".
+  Swapping one published pattern for another runtime grammar passes it, and the
+  per-field pins are still what hold a field to its own constant.
 
 - **The versioned mapping profile, `contextsafe import --mapping`, and
   `contextsafe mapping validate` (B-026).** A mapping profile is the

@@ -175,7 +175,7 @@ is published HL7 Gender Harmony material.
 With [`uv`](https://docs.astral.sh/uv/) installed:
 
 ```sh
-make verify                       # sync lint format typecheck test audit hygiene scope publication-sweep i18n a11y claims
+make verify                       # sync lint format typecheck test audit hygiene scope patterns publication-sweep i18n a11y claims
 uv run contextsafe fixtures export   # the packaged synthetic inputs, into ./fixtures/reference
 uv run contextsafe evaluate \
   --case fixtures/reference/case.json \

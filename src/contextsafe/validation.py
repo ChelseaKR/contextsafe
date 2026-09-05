@@ -38,8 +38,43 @@ _OBSERVATION_ID = re.compile(r"^OBS-[A-Z0-9-]{3,48}$")
 _RULE_ID = re.compile(r"^A-I[0-9]{2}$")
 _SEMVER = re.compile(r"^(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)$")
 _SHA256 = re.compile(r"^[0-9a-f]{64}$")
+MAX_STRING_LENGTH = 128
+"""Characters any string this validator accepts may carry.
+
+Every string reaching `_string` is held to this, whatever field it is, so it
+is the bound a published contract has to state for a field whose own grammar
+is looser. The source pointer is that field: `_SOURCE_POINTER` bounds the
+RFC 6901 dialect by depth and not by length, and this is what stops a
+sixteen-token pointer of the longest vocabulary word -- 496 characters -- from
+being accepted anyway.
+"""
+SOURCE_POINTER_MAX_LENGTH = 128
+"""Characters a ``$``-rooted source pointer may carry, the root included.
+
+Named because the published receipt contract has to state the same bound and
+stated a different one: `schemas/contextsafe-receipt-v0.3.schema.json` carried
+``maxLength: 160`` while this pattern stopped at 128, so a 129-character path
+of nothing but vocabulary words validated against the published contract and
+was refused here (#72). Separate from `MAX_STRING_LENGTH` because they are two
+bounds that happen to be equal, not one bound named twice: moving the bound on
+strings in general should not silently rewrite the pointer grammar. The
+published bound for the field is the smaller of the two, and
+`tools/pattern_gate.py` derives it that way.
+"""
+JSON_POINTER_MAX_SEGMENTS = 16
+"""Reference tokens an RFC 6901 source pointer may carry.
+
+The RFC 6901 dialect is bounded by its depth rather than by its length, so a
+published contract has to state both this and a length: neither implies the
+other, and seventeen ``/0`` tokens are 34 characters.
+"""
+_SEGMENT_INDEX = r"(?:0|[1-9][0-9]*)"
+"""A pointer's array index: a non-negative integer without a leading zero."""
+_HL7_SEGMENT_NAME = r"[A-Z][A-Z0-9]{2}"
+"""An HL7 v2 segment name's shape, before the vocabulary is applied to it."""
 _SOURCE_POINTER = re.compile(
-    r"^(?:\$[.\[\]A-Za-z0-9_-]{1,127}|(?:/[A-Za-z0-9_.-]+){1,16})$"
+    rf"^(?:\$[.\[\]A-Za-z0-9_-]{{1,{SOURCE_POINTER_MAX_LENGTH - 1}}}"
+    rf"|(?:/[A-Za-z0-9_.-]+){{1,{JSON_POINTER_MAX_SEGMENTS}}})$"
 )
 """Where in its source an observation was read from: the alphabet.
 
@@ -54,10 +89,10 @@ pattern bounds the alphabet; ``_structural_pointer`` bounds the words.
 """
 _POINTER_SEGMENT = re.compile(r"\.([A-Za-z0-9_-]+)|\[(0|[1-9][0-9]*)\]")
 _HL7_POINTER = re.compile(
-    r"^\$\.([A-Z][A-Z0-9]{2})\[(?:0|[1-9][0-9]*)\]-(?:0|[1-9][0-9]*)"
-    r"\.(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)$"
+    rf"^\$\.({_HL7_SEGMENT_NAME})\[{_SEGMENT_INDEX}\]-{_SEGMENT_INDEX}"
+    rf"\.{_SEGMENT_INDEX}\.{_SEGMENT_INDEX}$"
 )
-_POINTER_INDEX = re.compile(r"^(?:0|[1-9][0-9]*)$")
+_POINTER_INDEX = re.compile(rf"^{_SEGMENT_INDEX}$")
 STRUCTURAL_POINTER_SEGMENTS: frozenset[str] = frozenset(
     {
         # the canonical case manifest and the canonical JSON evidence envelope
@@ -108,6 +143,16 @@ is the segment name. A word outside this set is free text where none is
 allowed, and the whole observation set is refused rather than the segment
 being carried, hashed, or dropped. A source profile that needs more names
 extends this set under review, not by widening a grammar.
+"""
+SYNTHETIC_NAME_PREFIX = "CSYN-"
+"""The prefix a name to use must carry, and the whole of what a pattern can say.
+
+Every published contract that carries a name-to-use value states this prefix
+and nothing more, because the rest of the rule is not writable as a regular
+expression: the boundary scan in `contextsafe.identifiers` is what refuses
+``CSYN-Jordan Rivera 555-01-0199``, and #58 is what that costs when the prefix
+is mistaken for the grammar. Named so `tools/pattern_gate.py` can hold the four
+published ``^CSYN-`` patterns to the constant this validator actually applies.
 """
 _SAFE_TOKEN = re.compile(r"^[A-Za-z0-9:/_.-]{1,96}$")
 _ORDER_CONTEXT_TOKEN = re.compile(r"^ORDER-CSYN-[A-Za-z0-9:/_.-]+$")
@@ -211,7 +256,7 @@ def _exact_keys(
 
 
 def _string(value: object, path: str, *, pattern: re.Pattern[str] | None = None) -> str:
-    if not isinstance(value, str) or not value or len(value) > 128:
+    if not isinstance(value, str) or not value or len(value) > MAX_STRING_LENGTH:
         raise _error("invalid_string", path, "expected a bounded non-empty string")
     if any(0xD800 <= ord(character) <= 0xDFFF for character in value):
         raise _error(
@@ -394,7 +439,9 @@ def _name_to_use(value: object, path: str) -> NameToUse:
         raise _error(
             "invalid_name_use", f"{path}.use", "name-to-use must have usual use"
         )
-    if semantic_value is not None and not semantic_value.startswith("CSYN-"):
+    if semantic_value is not None and not semantic_value.startswith(
+        SYNTHETIC_NAME_PREFIX
+    ):
         raise _error(
             "non_synthetic_name",
             f"{path}.value",
