@@ -716,6 +716,25 @@ verifies, no schema is published, no key or dependency is added, no security
 review of the trust model has happened, and every artifact still says
 `not_signed` or `not_verified`, which the design commits to never relabeling.
 
+### B-045: packaging and fresh-install evidence
+
+`.github/workflows/package.yml` builds the sdist and wheel, exports a CycloneDX
+SBOM from the locked graph, and on Ubuntu, macOS and Windows installs that
+wheel with `pip install --no-index` into an empty virtual environment, runs the
+Quickstart above from a directory outside the checkout, and requires the
+receipt document to reproduce the digest `tests/test_determinism.py` pins.
+Build provenance is attested over the recorded checksums only after every
+platform passes. The gate is `tools/fresh_install_gate.py`; it reads the pin
+rather than restating it, exits 2 rather than 0 for anything it could not
+examine (including a working directory that existed before it ran, since a
+kept environment would report a wheel it never installed), and its report
+carries digests, counts and codes and no path.
+`make package` builds the same artifacts locally and lists the wheel. The
+limits: these are GitHub's server images, not the desktop fresh installs RG-15
+names; the artifacts are unsigned, and provenance says which workflow produced
+them, not that anyone authorized them (B-035); the SBOM is derived from
+`uv.lock`, not read out of the wheel; and no tag exists, so it has not fired.
+
 The durable evidence store has no CLI import route; `contextsafe import` writes
 only an observation-set document and never an evidence record. Every iteration-3 evidence record says
 `authorization_status: not_verified_internal_test_only` and
