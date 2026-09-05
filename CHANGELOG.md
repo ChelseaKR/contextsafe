@@ -1006,6 +1006,46 @@ rather than after it.
   added and es-US remains an unreviewed machine translation (B-042). No
   contract version moved and the pinned reference-receipt digest is unchanged.
 
+- **`contextsafe receipt diff --before A.json --after B.json`, the deterministic
+  receipt delta (B-037), under a new `receipt` command group.** It reads two
+  receipt documents through the same bounded loader `render` uses, parses each
+  strictly against the published receipt shape -- every object closed, every
+  enum the published one, the envelope pinned to `not_signed` and untrusted
+  time, the mandated limitation set exact, the summary required to count the
+  results, and the declared `payload_sha256` required to cover the payload --
+  and rejects the pair unless both carry the same `case_id`, the same
+  `rule_set_sha256`, the same receipt schema versions, the same concept and
+  checkpoint sets, the same rule identifiers, and each rule bound the same way.
+  A mismatch is exit 2 with one `incompatible_receipts` error object whose path
+  and message name the field class that differed and never its value. The delta
+  (`schemas/contextsafe-receipt-delta-v0.1.schema.json`, the twelfth published
+  contract) lists per `rule_id` the status and reason in each receipt, a
+  `changed` flag, an `evidence_sha256s_changed` flag, and a closed change code;
+  counts of `regressed` (pass to fail, indeterminate, or blocked), `improved`
+  (the mirror), `unchanged`, and `changed_other` (any other difference, so the
+  counts partition the rules); the recomputed payload hash of each receipt; a
+  `runner_version_changed` flag; and a pinned three-slug limitation set. It is
+  envelope-free, ordered by `rule_id`, and carries no expected, observed, or
+  evidence hash and no semantic value. Property tests pin that `diff(A, A)` is
+  all-unchanged, that the delta is invariant under any reordering of either
+  receipt's results, and that swapping the inputs mirrors it exactly. The
+  command honours `--quiet`, `--no-color`, `--output`, and `--log-dir` (the
+  event log's closed command vocabulary gains `receipt`), and its artifact and
+  its rejection are in the three-run determinism matrix with a pinned digest.
+  `render` stays where it is and may move under `receipt` later.
+
+  What this does not claim: both receipts are unsigned and carry no trusted
+  time, so `before` and `after` are the caller's labels and the delta proves
+  nothing about which run came first -- the document says so in its own
+  limitations. Payload-hash agreement is an internal-consistency check, not
+  verification; no signature, approval, or evidence is verified (B-036). The
+  contract is reference-only and ungoverned: no clinical, community,
+  laboratory, legal, security, or accessibility review of it has happened.
+  `src/contextsafe/receipt_delta.py` is a new safety module in the Makefile's
+  95% coverage set. `MANDATED_LIMITATIONS` in `contextsafe.receipt` is now
+  public so the parser can require the exact set rather than restate it; the
+  reference receipt bytes and their pinned digest are unchanged.
+
 ## [0.1.0] - 2026-09-02
 
 ### Fixed

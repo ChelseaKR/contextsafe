@@ -373,6 +373,10 @@ def test_a_count_beyond_the_number_words_is_reported_in_digits(repo: Path) -> No
     findings = [f for f in gate.run_gate(repo) if "contracts'" in f.detail]
     assert findings and f"'{count} contracts'" in findings[0].detail
 
+    (repo / "schemas" / "README.md").write_text("no count stated\n", encoding="utf-8")
+    findings = [f for f in gate.run_gate(repo) if "contracts'" in f.detail]
+    assert findings and f"'{count} contracts'" in findings[0].detail
+
 
 def test_an_empty_schemas_directory_cannot_be_examined(repo: Path) -> None:
     for path in (repo / "schemas").glob("*.json"):

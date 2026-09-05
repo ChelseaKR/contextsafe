@@ -21,12 +21,18 @@ from contextsafe.models import (
     OutcomeStatus,
 )
 
-_LIMITATIONS = [
+MANDATED_LIMITATIONS = (
     "Synthetic reference fixture only; not an approved clinical oracle.",
     "A passing result does not establish safety, compliance, or certification.",
     "Patient data is prohibited; bounded checks cannot prove an input is synthetic.",
     "This iteration does not ingest FHIR or sign artifacts.",
-]
+)
+"""The disclosure set every receipt payload carries, in publication order.
+
+Public so that a reader of receipt documents (``receipt_delta``) can require
+the exact set rather than restate it; the published contract pins the same
+wording, and ``tests/test_receipt_schema.py`` holds both to it.
+"""
 
 _TIMESTAMP_FORMAT = "%Y-%m-%dT%H:%M:%SZ"
 
@@ -78,7 +84,7 @@ def build_receipt(
             "result_sha256": sha256_json(results),
             "rule_set_sha256": sha256_json(bundle.rule_set.to_dict()),
         },
-        "limitations": list(_LIMITATIONS),
+        "limitations": list(MANDATED_LIMITATIONS),
         "results": results,
         "runner_version": __version__,
         "schema_version": RECEIPT_SCHEMA_VERSION,

@@ -33,6 +33,7 @@ from contextsafe.pack import compile_pack
 from contextsafe.plan import parse_plan, validate_plan
 from contextsafe.preflight import preflight_source
 from contextsafe.receipt import build_receipt_document, input_payload, render_receipt
+from contextsafe.receipt_delta import diff_receipts, parse_receipt_document
 from contextsafe.reference_fixtures import (
     DEFAULT_EXPORT_DIRECTORY,
     export_reference_fixtures,
@@ -163,6 +164,38 @@ def _parser() -> argparse.ArgumentParser:
         help=_HELP.text("cli.flag.lang"),
     )
     render_parser.add_argument("--output", type=Path)
+    # `render` stays a top-level command for now; it may move under the
+    # `receipt` group in a later pass, and its arguments would not change.
+    receipt_parser = subparsers.add_parser(
+        "receipt",
+        help="Compare receipt documents; verification and signing are not here.",
+    )
+    receipt_subparsers = receipt_parser.add_subparsers(
+        dest="receipt_command", required=True
+    )
+    diff_help = (
+        "emit the deterministic delta between two compatible receipt "
+        "documents: per rule, the status and reason in each, whether the "
+        "outcome changed, and whether the evidence hashes changed. Both "
+        "receipts are unsigned, so 'before' and 'after' are the caller's "
+        "labels and prove nothing about which run came first"
+    )
+    receipt_diff = receipt_subparsers.add_parser(
+        "diff", parents=[modes], help=diff_help, description=diff_help
+    )
+    receipt_diff.add_argument(
+        "--before",
+        required=True,
+        type=Path,
+        help="the receipt document the caller treats as the earlier one",
+    )
+    receipt_diff.add_argument(
+        "--after",
+        required=True,
+        type=Path,
+        help="the receipt document the caller treats as the later one",
+    )
+    receipt_diff.add_argument("--output", type=Path)
     pack_parser = subparsers.add_parser("pack", help=_HELP.text("cli.command.pack"))
     pack_subparsers = pack_parser.add_subparsers(dest="pack_command", required=True)
     pack_validate = pack_subparsers.add_parser(
@@ -421,13 +454,31 @@ def _conversion_command(args: argparse.Namespace) -> str | None:
     return None
 
 
-def _run(args: argparse.Namespace) -> str:
-    operator = _operator_command(args)
-    if operator is not None:
-        return operator
-    conversion = _conversion_command(args)
-    if conversion is not None:
-        return conversion
+def _receipt_command(args: argparse.Namespace) -> str | None:
+    """Handle the commands that read receipt documents, or return None."""
+
+    if args.command == "render":
+        return _render_command(args)
+    if args.command != "receipt":
+        return None
+    if args.receipt_command != "diff":
+        raise ContextSafeError(
+            "unsupported_command", "$", "receipt command is unsupported"
+        )
+    before = parse_receipt_document(load_json(args.before), path="$.before")
+    after = parse_receipt_document(load_json(args.after), path="$.after")
+    return f"{canonical_json(diff_receipts(before, after).to_dict())}\n"
+
+
+def _governance_command(args: argparse.Namespace) -> str | None:
+    """Run a pack, plan, or evidence command, or return None for another.
+
+    These three share a shape: a subcommand this iteration does not implement
+    is refused rather than ignored, and each emits one canonical artifact.
+    They live here rather than in ``_run`` so that adding a command group
+    does not push the dispatcher past the complexity the gate allows.
+    """
+
     if args.command == "pack":
         if args.pack_command != "validate":
             raise ContextSafeError(
@@ -472,6 +523,23 @@ def _run(args: argparse.Namespace) -> str:
         )
         result = preflight_source(args.source, scope)
         return f"{canonical_json(result.to_dict())}\n"
+    return None
+
+
+def _run(args: argparse.Namespace) -> str:
+    operator = _operator_command(args)
+    if operator is not None:
+        return operator
+    conversion = _conversion_command(args)
+    if conversion is not None:
+        return conversion
+
+    receipt = _receipt_command(args)
+    if receipt is not None:
+        return receipt
+    governance = _governance_command(args)
+    if governance is not None:
+        return governance
     case_value, observation_value, rule_value = _validated_inputs(args)
     bundle = parse_bundle(case_value, observation_value, rule_value)
     if args.command == "validate":
