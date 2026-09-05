@@ -155,15 +155,22 @@ SPCU_DECLARED_FORM_ONLY = (
 """What the F-015 and F-016 refusals do not cover, restated in the tables."""
 
 NAME_DECLARED_FORM_ONLY = (
-    "(declared form only; the same token in the usual slot is a value change, "
-    "and telling it from a legal name needs A-006/A-007, B-019)"
+    "(the declared name use alone, and not the substitution: the same "
+    "declaration over the faithful name is refused identically, and the same "
+    "token in the usual slot declares nothing and is only a value that "
+    "changed; telling either from a legal name needs A-006/A-007, B-019)"
 )
 """What the F-002 refusal does not cover, restated in the tables.
 
 ``_name_to_use`` admits one name use, so a boundary that says it wrote the
-official name is refused whole. A boundary that writes the legal token into
-the usual slot and says nothing declares nothing to refuse, and the receipt
-reports what it can see: a value that changed between two boundaries.
+official name is refused whole. Two things that refusal is not. It is not
+isolated to the fault: revert the substituted token and leave the declaration
+and the same code is raised at the same path, so what the gate refuses is the
+declaration a legal-name substitution would have to be made under, never the
+substitution. And it does not reach the undeclared form: a boundary that
+writes the legal token into the usual slot and says nothing declares nothing
+to refuse, and the receipt reports what it can see, a value that changed
+between two boundaries.
 """
 
 REFUSED_FAULTS: dict[str, tuple[str, str, str]] = {
@@ -302,7 +309,7 @@ class MissingItem(StrEnum):
 
 MISSING_ITEM_ISSUES: Mapping[MissingItem, int | None] = {
     MissingItem.LABORATORY_ORACLE: None,
-    MissingItem.LABORATORY_RECEIPT: 76,
+    MissingItem.LABORATORY_RECEIPT: None,
     MissingItem.SPCU_PREDICATES: 90,
     MissingItem.NAME_CONTEXTS: None,
     MissingItem.DISPLAY_OBSERVATION: None,
@@ -316,11 +323,32 @@ MISSING_ITEM_ISSUES: Mapping[MissingItem, int | None] = {
 
 B-048 closes when every row is exercised or waits on a dependency that has an
 issue of its own, so which dependencies have one is data here rather than
-prose: #90 holds the SPCU predicates pending clinical review, #81 holds the
-signing layer's ADR that blocks both B-035 and B-036, and #76 holds the
-laboratory receipt section. A ``None`` is not an omission but the finding
-itself, and :data:`BLOCKED_WITHOUT_AN_ISSUE` says which of them still stand
-between this corpus and that close.
+prose: #90 holds the SPCU predicates pending clinical review, and #81 holds
+the signing layer's ADR that blocks both B-035 and B-036. A ``None`` is not an
+omission but the finding itself, and :data:`BLOCKED_WITHOUT_AN_ISSUE` says
+which of them still stand between this corpus and that close.
+
+An issue number here is a hand-checked claim: nothing offline can confirm
+that an issue exists, is open, or is about what this docstring says it is, so
+a renumbered or closed issue would keep passing every gate. The laboratory
+receipt section was mapped to #76 until 2026-09-05, when checking by hand
+found #76 closed: it delivered the B-025/B-030 result observations and
+predicates and not a receipt section for their outcomes, so what the seven
+laboratory rows still wait on has no issue asking for it. Those rows are
+exercised outside the receipt rather than waiting, so this does not stand
+between the corpus and B-048's close; it is untracked all the same.
+"""
+
+DECISION_ONLY_ISSUES: frozenset[MissingItem] = frozenset(
+    {MissingItem.SIGNATURES, MissingItem.RECEIPT_VERIFIER}
+)
+"""Missing items whose issue is a decision that blocks them, not their own item.
+
+#81 is the ADR-0010 decision for the signing layer and says implementation is
+a separate item that it blocks. So B-035 and B-036 have no implementation
+issue: a row tracked this way is tracked by the thing that has to be decided
+before anyone can file one, which is less than a row tracked by its own item
+and is disclosed rather than counted as the same thing.
 """
 
 BLOCKED_WITHOUT_AN_ISSUE: tuple[MissingItem, ...] = (MissingItem.NAME_CONTEXTS,)
@@ -679,9 +707,9 @@ MATRIX: tuple[FaultRow, ...] = (
         "omit the owner or disposition for a mandatory failed outcome",
         "P0-10 finalization gate",
         "`tests/test_seeded_faults.py"
-        "::test_f036_a_disposition_that_omits_the_owner_is_refused`; "
-        "`tests/test_seeded_faults.py"
-        "::test_f036_a_finding_nobody_reviewed_is_reported_by_nothing_here`",
+        "::test_f036_a_disposition_that_omits_the_owner_is_refused` (the owner "
+        "half of the mutation; the omitted disposition is reported by nothing "
+        "here)",
         MissingItem.FINALIZATION_GATE,
     ),
 )
@@ -694,6 +722,36 @@ F-026's refusal is the evidence store's next read rather than a verifier over
 the receipt already issued; and F-020 is reported by the flag predicate rather
 than by the assertion its library row names, which
 ``REPORTED_BY_ANOTHER_ASSERTION`` says and docs/09 has to disclose.
+"""
+
+REFUSAL_DOES_NOT_COVER_THE_FAULT: Mapping[str, tuple[str, str | None]] = {
+    # fault: (what docs/09 must disclose, the test in this module that pins it)
+    "F-002": (
+        "the refusal is the declared name use alone",
+        "test_f002_the_refusal_is_the_declared_use_alone_and_not_the_substitution",
+    ),
+    "F-026": ("not the receipt verifier", None),
+    "F-036": (
+        "is reported by nothing here",
+        "test_f036_a_finding_nobody_reviewed_is_reported_by_nothing_here",
+    ),
+}
+"""Refused rows whose refusal is not the detection their fault names.
+
+The counterpart of :data:`REPORTED_BY_ANOTHER_ASSERTION` for the refused
+rows, and machine-checked the same way, because a refusal count is as capable
+as a detection count of implying coverage nobody has. F-002's gate refuses
+the declaration and not the substitution, and would refuse a faithful name
+declared the same way. F-026's bytes did reach the store and are refused on
+its next read, which is not the verifier that would notice the same mutation
+from the receipt's side (B-036). F-036's published mutation is the owner *or*
+the disposition; the owner half is refused before the log is appended, and a
+mandatory failed outcome that no event ever names is reported by nothing here
+at all. Each has to be disclosed in the docs/09 corpus status section, and
+where a test in this module pins the gap it has to exist, so a row can never
+count a refusal as more than it is. A row in here is still counted as
+``refused``: what is refused is real, and what it does not cover is the
+sentence beside it.
 """
 
 MATRIX_DATE = "2026-09-05"
@@ -1262,6 +1320,10 @@ def test_f002_a_name_declared_as_the_official_one_is_refused_whole() -> None:
     The EHR says it wrote the official (legal) name in place of the name to
     use. ``name_to_use`` admits ``usual`` and nothing else, so the whole
     observation set is refused before any rule runs and no receipt exists.
+
+    The fixture applies two changes to reach that shape, the declaration and
+    the substituted token, and this test says only that the pair is refused.
+    Which one the refusal turns on is the next test's claim, not this one's.
     """
 
     document = _load(REFUSED / "F-002.json")
@@ -1272,6 +1334,29 @@ def test_f002_a_name_declared_as_the_official_one_is_refused_whole() -> None:
         _bundle(document)
     assert raised.value.code == "invalid_name_use"
     assert "official" not in json.dumps(raised.value.to_dict())
+
+
+def test_f002_the_refusal_is_the_declared_use_alone_and_not_the_substitution() -> None:
+    """What the refusal is not isolated to, stated as a test rather than as prose.
+
+    Revert the substituted token and leave the declaration: the EHR now
+    carries the case's own name to use and still says it wrote it as the
+    official one, and the same code is raised at the same path. So the gate
+    refuses the declaration a legal-name substitution would have to be made
+    under, never the substitution, and this row may not be read as a
+    mechanism that tells one name from another. That is what A-006/A-007 and
+    the name contexts of B-019 would decide.
+    """
+
+    document = _load(REFUSED / "F-002.json")
+    ehr = document["observations"]["observations"][1]["value"]
+    ehr["value"] = document["case"]["concepts"]["name_to_use"]["value"]
+    assert ehr["value"] == document["observations"]["observations"][0]["value"]["value"]
+    assert ehr["use"] == "official"
+    with pytest.raises(ContextSafeError) as raised:
+        _bundle(document)
+    _, code, error_path = REFUSED_FAULTS["F-002"]
+    assert (raised.value.code, raised.value.path) == (code, error_path)
 
 
 def test_f002_the_undeclared_form_is_only_a_changed_value() -> None:
@@ -1300,8 +1385,15 @@ def test_f002_the_undeclared_form_is_only_a_changed_value() -> None:
         assert word not in rendered
 
 
-def test_f002_would_pass_if_the_name_to_use_had_survived() -> None:
-    """The substitution is what turned the outcome, not the rules."""
+def test_f002_a_fixture_carrying_neither_change_passes_every_rule() -> None:
+    """The rule set is clean over this fixture's case, and nothing more.
+
+    Both of the fixture's changes are reverted at once, so this says only
+    that the case and the rule set pass when neither is applied. It says
+    nothing about which change turned the outcome: the declaration alone is
+    refused, and the substituted token alone is a value that changed, which
+    the two tests above establish one at a time.
+    """
 
     document = _load(REFUSED / "F-002.json")
     document["observations"]["observations"][1]["value"] = json.loads(
@@ -1391,7 +1483,14 @@ def test_f032_the_misattached_observation_is_refused_not_reassigned() -> None:
 
 
 def test_every_refused_row_that_names_a_test_names_one_that_exists() -> None:
-    """Six rows point at a named test; every pointer must resolve."""
+    """Six rows point at a named test; every pointer must resolve.
+
+    A pointer here is evidence *for* the row's status, so a test that proves
+    a non-detection does not belong in the column: what F-036's refusal does
+    not cover is carried by :data:`REFUSAL_DOES_NOT_COVER_THE_FAULT` and the
+    test below, which would otherwise inflate this count with a pointer at a
+    test that guards nothing.
+    """
 
     pattern = re.compile(r"`tests/(test_[a-z0-9_]+\.py)::(test_[a-z0-9_]+)`")
     named = 0
@@ -1400,7 +1499,28 @@ def test_every_refused_row_that_names_a_test_names_one_that_exists() -> None:
             source = (ROOT / "tests" / module).read_text(encoding="utf-8")
             assert f"def {function}(" in source, row.fault
             named += 1
-    assert named == 9
+    assert named == 8
+
+
+def test_every_refusal_that_does_not_cover_its_fault_says_so() -> None:
+    """A refusal count may not imply coverage the gate does not have.
+
+    The register names, for each such row, a sentence the docs/09 corpus
+    status section has to carry and the test in this module that pins the
+    gap. Both directions are checked: a row in the register that the section
+    does not disclose is a finding, and so is a register entry whose row is
+    not refused at all.
+    """
+
+    section = _corpus_status_section()
+    source = Path(__file__).read_text(encoding="utf-8")
+    refused = {row.fault for row in _rows(CorpusStatus.REFUSED)}
+    for fault, (disclosure, pinned_by) in REFUSAL_DOES_NOT_COVER_THE_FAULT.items():
+        assert fault in refused, fault
+        assert fault in section, fault
+        assert disclosure in section, fault
+        if pinned_by is not None:
+            assert f"def {pinned_by}(" in source, fault
 
 
 # --- refused at the receipt document and at the review log -------------------
@@ -1450,7 +1570,6 @@ def test_f027_an_unnecessary_identity_field_never_reaches_a_page() -> None:
     """
 
     page = render_receipt_page(_sealed(_receipt_document("F-001")))
-    assert F027_INJECTED_VALUE not in page
     assert (
         _load(FAULTS / "F-001.json")["case"]["concepts"]["name_to_use"]["value"]
         not in page
@@ -1703,6 +1822,15 @@ def test_the_readme_carries_one_current_count_and_older_slices_defer_to_it() -> 
     The B-028 bullet was written when twenty-seven faults had no answer here;
     that count is dated to its slice and points at the bullet that carries the
     current one, whose figures are the matrix's.
+
+    The headline sentence is pinned here word for word, not only its four
+    per-status figures, because the arithmetic behind a summary word is what
+    drifts: a headline that quietly starts counting refusals as verdicts
+    rises without any row moving. So the sentence names its three figures and
+    what each is over, and every one of them is derived from the matrix. The
+    missing items the waiting rows name are pinned the same way, so the
+    README cannot compress one into a shorter dependency than the row waits
+    on.
     """
 
     older = _readme_item("B-028")
@@ -1720,6 +1848,18 @@ def test_the_readme_carries_one_current_count_and_older_slices_defer_to_it() -> 
         (CorpusStatus.NOT_EXERCISABLE, "are *not yet exercisable*"),
     ):
         assert f"{_NUMBER_WORDS[len(_rows(status))]} {phrase}" in current, phrase
+    with_a_verdict = len(_rows(CorpusStatus.EXERCISED)) + len(
+        _rows(CorpusStatus.EXERCISED_OUTSIDE_THE_RECEIPT)
+    )
+    assert (
+        f"{_NUMBER_WORDS[len(_rows(CorpusStatus.EXERCISED))]} of 36 at receipt level, "
+        f"{_NUMBER_WORDS[with_a_verdict].lower()} with a verdict in all, and "
+        f"{_NUMBER_WORDS[len(_rows(CorpusStatus.REFUSED))].lower()} more refused "
+        "before a verdict could exist" in current
+    )
+    for row in _rows(CorpusStatus.NOT_EXERCISABLE):
+        for item in row.missing:
+            assert item.value.split(" (")[0] in current, item
 
 
 def waiting_dependencies() -> tuple[tuple[MissingItem, int | None], ...]:
@@ -1751,7 +1891,9 @@ def test_the_docs_name_the_issue_behind_every_waiting_row() -> None:
     to say, for each thing the waiting rows wait on, either which issue tracks
     it or that none does -- and the sentences are derived from the matrix here
     rather than read from the prose, so a new waiting row cannot arrive
-    without one.
+    without one. An issue that only blocks the item, rather than asking for
+    it, is disclosed as that: :data:`DECISION_ONLY_ISSUES` says which, and the
+    section has to say so beside the number.
     """
 
     section = _corpus_status_section()
@@ -1760,6 +1902,8 @@ def test_the_docs_name_the_issue_behind_every_waiting_row() -> None:
             assert f"{item.value} has no issue of its own" in section, item
         else:
             assert f"{item.value} is issue #{issue}" in section, item
+        if item in DECISION_ONLY_ISSUES:
+            assert f"#{issue} is the decision that blocks it" in section, item
 
 
 def test_the_docs_say_what_this_corpus_is_not() -> None:

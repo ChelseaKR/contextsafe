@@ -877,31 +877,45 @@ backlog items stand after it:
   every analyte, unit, bound, and flag in them is a token invented for software
   tests: no laboratory medical director has supplied or approved any of them,
   and none of them is a reference range. Eleven
-  are *refused*: the faulted input never reaches the mechanism it would corrupt,
-  because a fail-closed gate refuses it whole with a named code at a structural
-  path — a declared GI-to-SPCU or RSG-to-SPCU mapping (F-015, F-016), a name a
+  are *refused*: a fail-closed gate refuses the faulted input with a named
+  code, in ten cases whole and at a structural path before the mechanism the
+  fault would corrupt ever sees it — a declared GI-to-SPCU or RSG-to-SPCU
+  mapping (F-015, F-016), a name a
   boundary declares as the official one where the contract carries one name use
   (F-002), an unsupported value that is refused rather than nearest-matched
   (F-024), an identifier outside the synthetic namespace (F-029), an
   observation naming another case (F-032), a legal-name field added to a
   receipt document, which the renderer refuses rather than renders around
   (F-027), a review event that disposes of a mandatory failed outcome without
-  an owner (F-036), a stored evidence object whose bytes were changed, refused
-  on the store's next read (F-026), and the pack validity and receipt contract
-  gates that already exist (F-028, F-030); a refusal is detection without a
-  receipt, so it is counted separately and never as localization, and where it
-  lands somewhere other than the fault's own claim the row still says so. Six
+  an owner (F-036), and the pack validity and receipt contract gates that
+  already exist (F-028, F-030) — and in the eleventh, F-026, after the fact:
+  those bytes did reach the evidence store and are refused on its next read,
+  which is why that row still names the receipt verifier it is not (B-036). A
+  refusal is detection without a receipt, so it is counted separately and never
+  as localization, and where a refusal is not the detection the fault's own
+  claim asks for the row says so: F-002's gate refuses the declaration and
+  would refuse it over a faithful name too, so it tells no legal name from any
+  other; F-036's covers the owner half of its mutation and nothing here reports
+  the omitted disposition; and F-027 is additionally carried by the
+  accessibility gate's minimization check, which is a finding over a rendered
+  page rather than a refusal. Six
   are *not yet exercisable*, and each
-  row names what it waits on from a closed vocabulary: the SPCU predicates and
-  their clinical review (F-011 to F-014), a name period the observation
-  contract does not carry (F-003), and signatures (F-034). This is not
+  row names what it waits on from a closed vocabulary: the SPCU predicates
+  awaiting clinical review (F-011 to F-014), the name contexts and periods in
+  the observation contract that nothing here carries (F-003), and signatures
+  and role thresholds (F-034), whose issue is the decision that blocks the
+  signing layer rather than an item asking for it. This is not
   the 41-fault evaluation B-048 defines: there is no hidden-fault set, no
   independent fault author has reviewed the corpus, no independent QA has run
   it, and every fault here was written by the implementer of the mechanism
-  that detects it. Twelve of 36 at receipt level, and thirty decided in all,
-  is deterministic corpus coverage over the
+  that detects it. Twelve of 36 at receipt level, nineteen with a verdict in
+  all, and eleven more refused before a verdict could exist, is deterministic
+  corpus coverage over the
   published library — not a sensitivity estimate over faults the library does
-  not contain, and not a population claim of any kind. Nothing here is
+  not contain, and not a population claim of any kind. Those are three figures
+  and not one: a refusal is not a verdict, it localizes nothing, and no
+  sentence here may add the two together into a single number and call the sum
+  coverage. Nothing here is
   governed content, and no clinical, laboratory, or community review has
   looked at any fixture.
 

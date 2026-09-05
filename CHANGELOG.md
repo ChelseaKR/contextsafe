@@ -92,15 +92,24 @@ rather than after it.
   to use is refused whole as `invalid_name_use`, pinned by a new fixture
   `tests/fixtures/seeded-faults/refused/F-002.json`. The counts move to 12
   exercised at receipt level, 7 exercised outside the receipt, 11 refused, and
-  6 not yet exercisable.
-  Three of the four refusals land somewhere other than the fault's own claim,
-  and the rows say so rather than letting the count imply otherwise: F-026's
-  refusal is the store's next read, not the verifier that would notice the
-  same mutation from a receipt's side (B-036); F-036's covers the owner, while
-  a mandatory failed outcome that no event ever names is silent, because
-  nothing reads a receipt's findings back against the log; and F-002's covers
-  only the form a boundary declares, because the same token in the usual slot
-  is, to every predicate here, a value that changed. F-034 stays not
+  6 not yet exercisable — which is 19 of 36 with a verdict and 11 more refused
+  before a verdict could exist, three figures rather than one, because a
+  refusal is not a verdict and localizes nothing.
+  Three of the four refusals are not the detection the fault's own claim asks
+  for, and the rows say so rather than letting the count imply otherwise:
+  F-026's refusal is the store's next read, not the verifier that would notice
+  the same mutation from a receipt's side (B-036); F-036's covers the owner
+  half of its published mutation, while a mandatory failed outcome that no
+  event ever names is reported by nothing here, because nothing reads a
+  receipt's findings back against the log; and F-002's is the declared name use
+  alone, refusing the declaration whether the name under it was substituted or
+  faithful, so that row is a contract that cannot express the declared form of
+  the fault rather than a mechanism that tells a legal name from any other.
+  Which rows those are is data —
+  `REFUSAL_DOES_NOT_COVER_THE_FAULT`, the counterpart of the laboratory
+  table's `REPORTED_BY_ANOTHER_ASSERTION` — and a test requires
+  `docs/09-TEST-AND-EVALUATION.md` to disclose each of them and the test that
+  pins the gap. F-034 stays not
   exercisable deliberately: the two-signer threshold on an accepted residual
   risk refuses a dropped signer and a shared organization, but both are shape
   checks on a declaration, every signer says `signature_status:
@@ -108,10 +117,17 @@ rather than after it.
   `MISSING_ITEM_ISSUES` and `BLOCKED_WITHOUT_AN_ISSUE` in
   `tests/test_seeded_faults.py` now hold, as data, which dependency a waiting
   row has an issue for — #90 for the SPCU predicates, #81 for the signing
-  layer, #76 for the laboratory receipt section — and which has none: the name
-  contexts and periods of B-019, which F-003 waits on. A test requires
+  layer — and which has none: the name contexts and periods of B-019, which
+  F-003 waits on, and the laboratory receipt section, whose #76 was found
+  closed by hand on 2026-09-05 having delivered the B-025/B-030 predicates
+  rather than a receipt section. A test requires
   `docs/09-TEST-AND-EVALUATION.md` to say so for every waiting row, so a new
-  one cannot arrive without naming what tracks it. B-048 is not closed and its
+  one cannot arrive without naming what tracks it, and `DECISION_ONLY_ISSUES`
+  holds the two whose issue is a decision that blocks them and not an item
+  asking for them: #81 is the signing layer's ADR, so neither B-035 nor B-036
+  has an implementation issue, which §4 now says beside the number. Whether
+  any of those numbers still names an open issue about what the row claims is
+  checked by hand and by nothing else. B-048 is not closed and its
   acceptance statement has not moved: there is still no hidden-fault set, no
   independent fault author, and no independent QA.
 

@@ -105,11 +105,14 @@ that disposes of a mandatory failed outcome without an owner is refused before
 a line is appended to the review log (F-036); a stored evidence object whose
 bytes were changed is refused on the store's next read (F-026); and a name a
 boundary declares as the official one is refused because the observation
-contract carries one name use and no other (F-002). Where the refusal lands
-somewhere other than the fault's own claim — the store's next read rather than
-a verifier over the receipt already issued — the row still names what would
-close that gap, and the refusal is never counted as the localization it is
-not. **Exercised outside the receipt** means the fault has a
+contract carries one name use and no other (F-002). Where a refusal is not the
+detection the fault's own claim asks for — the store's next read rather than a
+verifier over the receipt already issued, a gate that refuses the shape the
+fault needs whether or not the fault was applied, or a published mutation only
+half of which any mechanism sees — the row still names what would close that
+gap, the refusal is never counted as the localization it is not, and
+`REFUSAL_DOES_NOT_COVER_THE_FAULT` in the test module requires this section to
+say so row by row rather than leaving it to prose that no test derives. **Exercised outside the receipt** means the fault has a
 complete synthetic fixture and a verdict, from a family no receipt carries:
 the laboratory result predicates (B-030) report the seven laboratory faults
 with their own reasons, and because a laboratory outcome reaches no receipt
@@ -136,9 +139,17 @@ proves the run identity moves with the mapping version, not that a verifier
 would notice a claimed one; F-026's refusal is the evidence store's next read
 finding bytes that no longer hash to their own name, which is not the receipt
 verifier that would notice the same mutation from the receipt's side (B-036);
-and F-002's refusal covers only the form a boundary declares, because the
-same substituted token written into the usual slot is, to every predicate
-here, a value that changed. A row may also be reported by an assertion other
+for F-002 the refusal is the declared name use alone: `name_to_use` admits one
+use, so an EHR that says it wrote the official name is refused whether the
+name it wrote was substituted or faithful, which makes that row a contract
+that cannot express the declared form of the fault and not a mechanism that
+tells a legal name from any other — and the undeclared form, the same
+substituted token written into the usual slot, is to every predicate here a
+value that changed; and F-036's published mutation is the owner *or* the
+disposition, of which only the owner half is refused, because a mandatory
+failed outcome that no review event ever names is reported by nothing here at
+all, nothing reading a receipt's findings back against the log (B-032). A row
+may also be reported by an assertion other
 than the one its library row names: F-020 mutates the interval bounds and its
 row names A-027, but `reference_interval_present`, the only mechanism for
 A-027 here, **passes** over the faulted fixture, because both bounds, both
@@ -158,7 +169,7 @@ range or a clinical claim of any kind.
 | Fault | Status | Evidence | Missing item |
 |---|---|---|---|
 | F-001 | exercised | `F-001.json`: A-I02 `value_not_present` at `ehr` | patient-facing display observation (E-DISPLAY, B-019) |
-| F-002 | refused | `refused/F-002.json`: `invalid_name_use` at `$.observations[1].value.use` (declared form only; the same token in the usual slot is a value change, and telling it from a legal name needs A-006/A-007, B-019) | patient-facing display observation (E-DISPLAY, B-019); name contexts and periods in the observation contract (B-019) |
+| F-002 | refused | `refused/F-002.json`: `invalid_name_use` at `$.observations[1].value.use` (the declared name use alone, and not the substitution: the same declaration over the faithful name is refused identically, and the same token in the usual slot declares nothing and is only a value that changed; telling either from a legal name needs A-006/A-007, B-019) | patient-facing display observation (E-DISPLAY, B-019); name contexts and periods in the observation contract (B-019) |
 | F-003 | not yet exercisable | — | name contexts and periods in the observation contract (B-019) |
 | F-004 | exercised | `F-004.json`: A-I02 `value_not_present` at `ehr` | — |
 | F-005 | exercised | `F-005.json`: A-I01 `status_not_preserved` at `ehr` | — |
@@ -192,7 +203,7 @@ range or a clinical claim of any kind.
 | F-033 | exercised outside the receipt | `laboratory/F-033.json`: A-L03 `reference_interval_unit_mismatch` at `lis_return` | the laboratory oracle's approved fixture values (B-011); a receipt section for laboratory outcomes (B-030) |
 | F-034 | not yet exercisable | — | signatures and role thresholds (B-035) |
 | F-035 | exercised | `F-035.json`: trace names mapping `0.2.0`; `payload_sha256` moves | receipt verifier (B-036) |
-| F-036 | refused | `tests/test_seeded_faults.py::test_f036_a_disposition_that_omits_the_owner_is_refused`; `tests/test_seeded_faults.py::test_f036_a_finding_nobody_reviewed_is_reported_by_nothing_here` | a gate closing a receipt's findings against a review log (B-032) |
+| F-036 | refused | `tests/test_seeded_faults.py::test_f036_a_disposition_that_omits_the_owner_is_refused` (the owner half of the mutation; the omitted disposition is reported by nothing here) | a gate closing a receipt's findings against a review log (B-032) |
 
 Why the six remaining rows are not stretched: an SPCU that is absent at a
 boundary is indistinguishable, under the observation contract, from a boundary
@@ -221,9 +232,16 @@ receipt rather than as exercised.
 B-048 closes when every row is exercised, refused, or waiting on a dependency
 that has an issue of its own. Of what the six remaining rows wait on, SPCU
 predicates awaiting clinical review (B-029) is issue #90 and signatures and
-role thresholds (B-035) is issue #81; name contexts and periods in the
+role thresholds (B-035) is issue #81 — where #81 is the decision that blocks
+it and not an issue asking for it: #81 is ADR-0010's signing-layer decision
+and says implementation is a separate item, so neither B-035 nor the receipt
+verifier of B-036 has an issue of its own, and a row tracked this way is
+tracked by less than a row with its own item; name contexts and periods in the
 observation contract (B-019) has no issue of its own, and F-003 is the row
-that waits on it. Naming what a row waits on is not a schedule for it: two of
+that waits on it. That an issue exists, is open, and is about what the row
+says it is has been checked by hand and by nothing else: the numbers here and
+in `MISSING_ITEM_ISSUES` are constants, so a renumbered or closed issue would
+keep passing every gate. Naming what a row waits on is not a schedule for it: two of
 the three are people-gated — clinical review for the SPCU predicates, and the
 signing layer's undecided dependency for the signatures — and the third is a
 change to a published observation contract that no issue yet asks for.

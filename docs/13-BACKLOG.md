@@ -1213,19 +1213,28 @@ object whose bytes were changed is refused on the store's next read as
 `evidence_store_corrupt`. And F-002 is refused: the observation contract
 carries one name use, so a boundary that says it wrote the official name in
 place of the name to use is refused whole as `invalid_name_use`, pinned by a
-new fixture under `tests/fixtures/seeded-faults/refused/`. The corpus now
+new fixture under `tests/fixtures/seeded-faults/refused/` — the declaration
+alone, over a faithful name as much as a substituted one, which is a contract
+that cannot express the declared form of the fault and not a mechanism that
+tells one name from another. The corpus now
 reads 12 exercised at receipt level, 7 exercised outside the receipt, 11
 refused, and 6 not yet exercisable.
 
-Three of the four refusals land somewhere other than the fault's own claim,
-and the rows say so rather than letting the count imply coverage they do not
-have. F-026's refusal is the store's next read finding bytes that no longer
+Three of the four refusals are not the detection the fault's own claim asks
+for, and the rows say so rather than letting the count imply coverage they do
+not have. F-026's refusal is the store's next read finding bytes that no longer
 hash to their own name, not the verifier that would notice the same mutation
 from a receipt's side (B-036). F-036's covers the owner; a mandatory failed
 outcome that no event ever names is silent, because nothing reads a receipt's
 findings back against the log, and that gate is what the row now waits on.
-F-002's covers only the form a boundary declares, because the same token
-written into the usual slot is, to every predicate here, a value that changed.
+F-002's is the declared name use alone: it fires on the declaration whether or
+not the substitution happened, and the same token written into the usual slot
+declares nothing and is, to every predicate here, a value that changed. Which
+rows those are is data rather than prose —
+`REFUSAL_DOES_NOT_COVER_THE_FAULT` in `tests/test_seeded_faults.py`, the
+counterpart of the laboratory table's `REPORTED_BY_ANOTHER_ASSERTION` — and a
+test requires §4 to disclose each one and the test in that module that pins
+it, so a refusal count cannot imply a coverage no gate has.
 F-034 stays not exercisable deliberately: the two-signer threshold on an
 accepted residual risk refuses a dropped signer as `signer_threshold_unmet`
 and a shared organization as `signer_organizations_not_distinct`, but both are
@@ -1234,14 +1243,31 @@ not_verified`, and no receipt carries a signer at all, so nothing here can
 detect a receipt signer removed or substituted. `MISSING_ITEM_ISSUES` now
 holds, as data, which dependency a row waits on has an issue of its own — #90
 for the SPCU predicates, #81 for the signing layer that blocks B-035 and
-B-036, #76 for the laboratory receipt section — and `BLOCKED_WITHOUT_AN_ISSUE`
-holds the one that has none: the name contexts and periods of B-019, which
-F-003 waits on. A test requires §4 to say which is which for every waiting
-row. B-048 is not closed and its acceptance statement has not moved: there is
+B-036 — and `BLOCKED_WITHOUT_AN_ISSUE` holds the one that has none: the name
+contexts and periods of B-019, which F-003 waits on. The laboratory receipt
+section was mapped to #76 until checking by hand found #76 closed, having
+delivered the B-025/B-030 predicates and not a receipt section for their
+outcomes; it is a dependency of rows that are exercised outside the receipt
+rather than waiting, so it blocks no close, and it is untracked all the same.
+That check is the only thing that answers it: the numbers are constants, and
+no gate here can reach a tracker. A test requires §4 to say which is which for every waiting
+row, and `DECISION_ONLY_ISSUES` holds the two whose issue is a decision that
+blocks them rather than an item asking for them: #81 is ADR-0010's
+signing-layer decision, so neither B-035 nor B-036 has an implementation issue
+and §4 has to say so beside the number. B-048 is not closed and its acceptance
+statement has not moved: there is
 still no hidden-fault set, no independent fault author has reviewed the
-corpus, and no independent QA has run it, so 30 of 36 decided remains
+corpus, and no independent QA has run it, so 19 of 36 with a verdict, and 11
+more refused before a verdict could exist, remains
 deterministic corpus coverage over the published library and no
-population-sensitivity claim of any kind.
+population-sensitivity claim of any kind. Those stay three figures: the
+README's headline said "thirty decided in all" when this note was first
+written, which summed the verdicts and the refusals under a word that had
+excluded refusals the day before, and a rise of eleven that no row's movement
+accounts for is the defect class this repository names. The sentence now
+carries each figure over what it is, and a test in
+`tests/test_seeded_faults.py` pins the whole sentence rather than its
+per-status numbers, so the arithmetic behind it cannot drift again in silence.
 
 ## Phase 6 — pilot and v1
 
