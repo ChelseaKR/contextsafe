@@ -66,7 +66,7 @@ from the `verify` target in the `Makefile` and fails when they disagree.
 | Format | `make format` | `ruff format --check` |
 | Types | `make typecheck` | `mypy --strict` over `src` |
 | Tests + coverage | `make test` | pytest; branch coverage ≥90% overall, ≥95% on safety-critical modules |
-| Dependency audit | `make audit` | `pip-audit` against the locked environment |
+| Dependency audit | `make audit` | `pip-audit` against the locked environment, through `tools/audit_gate.py`, which separates the three states pip-audit's two exit codes ran together: exit 1 is an advisory the service reported, exit 2 is a service that did not answer, a report that could not be read, or a run that audited nothing. A transient failure is retried with backoff first. This stage still needs the network, so `make verify` is not runnable offline; what it no longer does is report an unreachable advisory service as the same failure as a vulnerability. See [ADR 0011](docs/adr/0011-dependency-audit-reachability-in-the-merge-gate.md) |
 | Hygiene | `make hygiene` | no TODO/FIXME/HACK in tracked files under `src`/`tests`/`tools`; no stray tool config within two path segments of the root. Exit 1 on a finding, exit 2 when it could not examine anything, and the clean line says how many files it read and how many exemptions it honored. |
 | Scope | `make scope` | every tracked Python file is inside the trees each analysis claims, read from `[tool.mypy] files`, `[tool.coverage.run] source`, and the marker scan's own `MARKER_ROOTS`. A file nobody claims, a claim with nothing under it, and a declared exception that excuses nothing are each a finding; exit 2 when a claim cannot be read. |
 | Published patterns | `make patterns` | every `pattern` in every `.json` file under `schemas/`, at any depth, against the constants the runtime compiles: equal to one, derived from named ones by a function the gate recomputes, or declared as having none with the reason printed on every run. A published pattern in none of the three is a finding, and so is a derivation or declaration that matches nothing published. Exit 2 when it read no contract, and when a file sits under `schemas/` that it can neither read as a contract nor place as documentation, because a grammar gate that examined nothing — or that skipped a file by the shape of its name — is not a clean one. The clean line names how many contracts it read. |
@@ -87,7 +87,7 @@ minutes rather than a second:
 
 | Gate | Command | What it checks |
 | --- | --- | --- |
-| Mutation evidence | `make mutants` | changes one operator or constant in a declared safety module and requires the suite to fail. Branch coverage says a line ran; this says a change to it would be noticed. Stdlib only, writes nothing into the working tree, and takes about two minutes, which is why it is not in `verify`. Exit 1 on a survivor, exit 2 when it produced no evidence. See [ADR 0009](docs/adr/0009-mutation-evidence-over-declared-safety-modules.md). |
+| Mutation evidence | `make mutants` | changes one operator or constant in a declared safety module and requires the suite to fail. Branch coverage says a line ran; this says a change to it would be noticed. Stdlib only, writes nothing into the working tree, and takes about two minutes, which is why it is not in `verify`. Exit 1 on a survivor, exit 2 when it produced no evidence. `.github/workflows/mutation.yml` runs it weekly and on any pull request touching the package, the suite or the gate, so it is no longer evidence that exists only when somebody remembers to produce it. See [ADR 0009](docs/adr/0009-mutation-evidence-over-declared-safety-modules.md). |
 | Full-history secret scan | `make secret-scan` | gitleaks over every ref, every object in the object database (including unreachable ones and every commit message), and the working tree. Needs gitleaks 8.30.1 on `PATH` (`brew install gitleaks`); CI and the release pipeline run this same target. Exit 1 on a finding; exit 2 when gitleaks is absent, is not the pinned version, cannot read an object it enumerated, or enumerated zero blobs. Its three states are covered by `tests/test_gate_exit_contract.py`, which drives it with a stand-in scanner and therefore runs without gitleaks installed. |
 
 `make package` is not a gate: it builds the sdist and wheel, exports the
@@ -115,7 +115,11 @@ not examined. `tests/test_wheel_quickstart.py` drives its real path on every
 - Keep changes small and single-purpose; update `CHANGELOG.md` under
   `## [Unreleased]` for anything user-visible.
 - Stage explicit paths (never `git add -A`).
-- CI must be green. `ci.yml` and `security.yml` both run on every pull request.
-  `ci.yml` carries `paths-ignore` for `**.md`, `docs/**` and `LICENSE`, so a
-  documentation-only change gets no `verify` run at all; attach the local
-  `make verify` output when that is the only evidence there is.
+- CI must be green. `ci.yml` and `security.yml` both run on every pull request,
+  including a documentation-only one: `ci.yml` carried `paths-ignore` for
+  `**.md`, `docs/**` and `LICENSE` until 2026-09-04, which meant the four
+  `verify` stages that exist to catch documentation drift — `claims`,
+  `publication-sweep`, `hygiene` and `i18n` — never saw a documentation change.
+  `mutation.yml` runs on top of those when a pull request touches the package,
+  the suite or the mutation gate. None of these is a *required* status check;
+  see `DEFINITION_OF_DONE.md` for what that does and does not mean.

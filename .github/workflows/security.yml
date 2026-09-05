@@ -34,7 +34,7 @@ jobs:
     container:
       image: semgrep/semgrep@sha256:59fbed6127ea7c5dde3ba6a85142733bb20ea9aaa36120c953904f1539aaf66e # 1.168.0
     steps:
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
       # `semgrep scan`, not `semgrep ci`. On a pull_request event `semgrep ci`
@@ -63,7 +63,7 @@ jobs:
       # It also brings down the packfile phase 2 enumerates. A shallow checkout
       # would let this job report success over a few commits.
       - name: Checkout (full history — this gate scans every ref and every object)
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
           persist-credentials: false
@@ -90,11 +90,11 @@ jobs:
       UV_PYTHON: "3.12"
       UV_PYTHON_DOWNLOADS: never
     steps:
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
       - name: Set up Python
-        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.3.0
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: "3.12"
           check-latest: false
@@ -103,18 +103,26 @@ jobs:
         with:
           version: "0.11.28"
           enable-cache: true
-      - name: pip-audit (same target as `make audit`)
+      # `make audit`, not a second copy of the command it runs. The two drifted
+      # apart the moment the target became `tools/audit_gate.py`, and a job that
+      # restates a gate's invocation is a job that can pass while the gate a
+      # contributor runs does something else. Exit 1 is an advisory; exit 2 is
+      # the advisory service failing to answer, which fails this job too and
+      # says so rather than looking like a vulnerability.
+      - name: Dependency audit (make audit)
         run: |
           uv sync --locked
-          uv run pip-audit --skip-editable --cache-dir .cache/pip-audit
+          make audit
 
   publication-sweep:
-    # `make verify` already runs this sweep, but ci.yml carries a `paths-ignore`
-    # for `**.md` and `docs/**` so that a docs-only change does not spend a full
-    # CI run. That skip would leave the one gate whose whole job is documentation
-    # hygiene unable to see documentation changes: a reintroduced personal path
-    # or internal hostname in a Markdown file would land unswept. This workflow
-    # has no paths-ignore, so the sweep runs on every change either way.
+    # This job existed because ci.yml carried a `paths-ignore` for `**.md` and
+    # `docs/**`, which left the one gate whose whole job is documentation
+    # hygiene unable to see a documentation change. That skip is gone as of
+    # 2026-09-04 (#102), so `make verify` now sweeps every pull request and this
+    # job is no longer the only sweep a Markdown-only change gets. It stays for
+    # the weekly schedule, which ci.yml does not have: the sweep reads pointers
+    # and paths that can go stale without anybody pushing, and a scheduled run
+    # is the only thing that looks at a repository nobody is committing to.
     name: publication sweep (no personal paths, internal hosts, dead pointers)
     runs-on: ubuntu-latest
     timeout-minutes: 10
@@ -124,11 +132,11 @@ jobs:
       UV_PYTHON: "3.12"
       UV_PYTHON_DOWNLOADS: never
     steps:
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
       - name: Set up Python
-        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.3.0
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: "3.12"
           check-latest: false

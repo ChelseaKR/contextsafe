@@ -1,0 +1,101 @@
+# Mutation evidence (ADR 0009), which until now ran nowhere automatically.
+#
+# `make test` holds 90% branch coverage overall and 95% across the modules named
+# in the Makefile's `SAFETY_MODULES`. Those numbers say a line ran. `make
+# mutants` says something else: it changes one operator or one constant in a
+# declared safety module and requires the suite to fail. It is deliberately
+# outside `make verify` — every mutant is a separate test run, so it costs
+# minutes against the second the rest of `verify` costs — and outside CI it was
+# evidence produced only when somebody remembered to run it by hand (#80).
+#
+# It stays out of `make verify`. This workflow is the other half of the sentence
+# ADR 0009 wrote and did not act on: a target a maintainer or a scheduled job
+# runs. It runs weekly and on any pull request that touches the package, the
+# suite, or the gate itself.
+#
+# Why `src/contextsafe/**` rather than the safety modules by name. The set is
+# decided in one place, `SAFETY_MODULES` in the Makefile, and a `paths:` filter
+# listing those files would be a second hand-maintained copy of it — the drift
+# shape `make claims` exists to catch, in a file no gate reads. The broad filter
+# is the fail-closed direction: it runs the gate on changes it did not strictly
+# need to, and never skips one it did.
+#
+# The exit-code contract is ADR 0008's, and this job does not soften it: 0 every
+# mutant died, 1 a mutant survived, 2 the gate produced no evidence — a suite
+# that does not pass unmutated, a declared target no test imports, or zero
+# mutants generated. Two is a failure, not a quiet pass, and the step below
+# names which of the three happened before exiting with it. There is no
+# `continue-on-error` here for the same reason.
+name: mutation
+
+on:
+  pull_request:
+    paths:
+      - "src/contextsafe/**"
+      - "tests/**"
+      - "tools/mutation_gate.py"
+      - ".github/workflows/mutation.yml"
+      - "Makefile"
+      - "pyproject.toml"
+      - "uv.lock"
+  schedule:
+    - cron: "0 9 * * 0" # weekly, Sunday, staggered off security.yml's 07:00
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: mutation-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  mutants:
+    name: mutation evidence (declared safety modules)
+    runs-on: ubuntu-24.04
+    # Three declared modules take roughly two minutes locally; survivors pay the
+    # whole suite, so a run that finds them is longer than a run that does not.
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    env:
+      UV_PYTHON: "3.12"
+      UV_PYTHON_DOWNLOADS: never
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.12"
+          check-latest: false
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
+        with:
+          version: "0.11.28"
+          enable-cache: true
+
+      # --locked fails on lockfile drift; --frozen exits 0 and cannot gate it.
+      - name: Install the locked dependency graph, failing on drift
+        run: uv sync --locked
+
+      # The status is always the job's status. The `case` only names which of
+      # the three states happened, so a reader of the log does not have to infer
+      # "the gate could not run" from a number.
+      - name: Mutation evidence (make mutants)
+        run: |
+          set +e
+          make mutants
+          status=$?
+          set -e
+          case "$status" in
+            0) echo "::notice::mutation evidence: every mutant died" ;;
+            1) echo "::error::mutation evidence: a mutant survived — the suite runs that line without checking it" ;;
+            2) echo "::error::mutation evidence: the gate produced no evidence, which is not a pass" ;;
+            *) echo "::error::mutation evidence: unexpected exit $status from make mutants" ;;
+          esac
+          exit "$status"

@@ -222,9 +222,13 @@ proof exists and the workflow does not.
 
 ### Phase 5 — Evidence that the suite can detect a regression
 
-**Status: built,** over a declared subset of two modules. See
-[ADR 0009](adr/0009-mutation-evidence-over-declared-safety-modules.md) and
-`make mutants`.
+**Status: built,** over a declared subset of three of the twenty-eight modules
+named in `SAFETY_MODULES`, and running automatically since 2026-09-04. See
+[ADR 0009](adr/0009-mutation-evidence-over-declared-safety-modules.md),
+`make mutants`, and `.github/workflows/mutation.yml`, which runs it weekly and
+on any pull request touching the package, the suite or the gate. Widening the
+declared subset is a runtime decision and has not been taken; twenty-five safety
+modules still have no mutation evidence.
 
 Everything above proves a gate can fail. None of it proves the *test suite* can
 fail — that the assertions covering the safety modules would actually catch a
@@ -312,7 +316,7 @@ cannot, and saying so is part of the plan rather than an omission from it.
 | 5 | yes, bounded to a declared module set | judgement on where the bound sits |
 | 6 | **no** | a named independent reviewer, funded per B-040, and a release dossier that does not exist yet |
 
-Built, as of 2026-08-27:
+Built, as of 2026-09-04:
 
 | Phase | State | Where it landed |
 |---|---|---|
@@ -320,7 +324,7 @@ Built, as of 2026-08-27:
 | 2 | built | ADR 0006; provenance grammars and the boundary scan on `parse_evidence_metadata`, closing issue #35 |
 | 3 | built | ADR 0007; `make scope` |
 | 4 | built, with one substitution | ADR 0008; the three-state contract, proved locally rather than by a CI job nobody has watched run |
-| 5 | built over two of sixteen safety modules | ADR 0009; `make mutants` |
+| 5 | built over three of twenty-eight safety modules | ADR 0009; `make mutants`, run by `.github/workflows/mutation.yml` since 2026-09-04 |
 | 6 | **blocked on people and money** | nothing, deliberately |
 
 Phase 6 is blocked on people and money, not on code. Nothing in this repository
