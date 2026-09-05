@@ -118,6 +118,17 @@ a clean clone lacks.
   `make secret-scan`. Adding a workflow nobody has watched execute is not
   evidence.
 
+  (Wired in on 2026-09-04, closing #80: `.github/workflows/mutation.yml` is the
+  scheduled job this sentence anticipated, weekly plus any pull request touching
+  the package, the suite or the gate. It stays out of `make verify` for the
+  runtime reason below. The caution above still holds and is not waived — this
+  ADR's authors have not watched that workflow execute, and its first real run
+  is the evidence, not its existence. What the tree can assert without one is
+  asserted: `tests/test_ci_workflows.py` requires the workflow to exist, to run
+  without being asked, to keep `mutants` out of `verify`, and to carry no
+  `continue-on-error` or `|| true` that would turn any of the three exit codes
+  into a pass.)
+
 ## What this is not
 
 - **It is not B-048.** B-048 requires all 41 published and hidden faults to be

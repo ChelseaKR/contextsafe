@@ -1,6 +1,6 @@
 .PHONY: a11y a11y-full a11y-install audit claims format format-fix hygiene i18n lint mutants package patterns publication-sweep scope secret-scan sync test typecheck verify
 
-SAFETY_MODULES := src/contextsafe/identifiers.py,src/contextsafe/models.py,src/contextsafe/validation.py,src/contextsafe/evaluator.py,src/contextsafe/receipt.py,src/contextsafe/contract_validation.py,src/contextsafe/jsonio.py,src/contextsafe/pack.py,src/contextsafe/plan.py,src/contextsafe/evidence.py,src/contextsafe/preflight.py,src/contextsafe/evidence_store.py,src/contextsafe/safe_value.py,src/contextsafe/diagnostics.py,src/contextsafe/eventlog.py,src/contextsafe/importers/__init__.py,src/contextsafe/importers/base.py,src/contextsafe/importers/canonical_json.py,src/contextsafe/importers/fhir_r4_json.py,src/contextsafe/importers/hl7v2_er7.py,src/contextsafe/importers/lis.py,src/contextsafe/importers/lis_csv.py,src/contextsafe/importers/mapping.py,src/contextsafe/mapping_profile.py,src/contextsafe/divergence.py,src/contextsafe/html_receipt.py,src/contextsafe/receipt_delta.py,src/contextsafe/review.py
+SAFETY_MODULES := src/contextsafe/identifiers.py,src/contextsafe/models.py,src/contextsafe/validation.py,src/contextsafe/evaluator.py,src/contextsafe/laboratory.py,src/contextsafe/receipt.py,src/contextsafe/contract_validation.py,src/contextsafe/jsonio.py,src/contextsafe/pack.py,src/contextsafe/plan.py,src/contextsafe/evidence.py,src/contextsafe/preflight.py,src/contextsafe/evidence_store.py,src/contextsafe/safe_value.py,src/contextsafe/diagnostics.py,src/contextsafe/eventlog.py,src/contextsafe/importers/__init__.py,src/contextsafe/importers/base.py,src/contextsafe/importers/canonical_json.py,src/contextsafe/importers/fhir_r4_json.py,src/contextsafe/importers/hl7v2_er7.py,src/contextsafe/importers/lis.py,src/contextsafe/importers/lis_csv.py,src/contextsafe/importers/mapping.py,src/contextsafe/mapping_profile.py,src/contextsafe/divergence.py,src/contextsafe/html_receipt.py,src/contextsafe/receipt_delta.py,src/contextsafe/review.py
 
 verify: sync lint format typecheck test audit hygiene scope patterns publication-sweep i18n a11y claims
 
@@ -28,8 +28,16 @@ test:
 	uv run pytest --cov --cov-branch --cov-report=term-missing --cov-fail-under=90
 	uv run coverage report --include='$(SAFETY_MODULES)' --fail-under=95
 
+# pip-audit answers with two exit codes: clean, and everything else. A dropped
+# PyPI connection therefore failed this stage -- and so the whole merge gate --
+# with the same code as a real advisory, which is what happened on PR #61. The
+# gate program keeps the same audit and separates the third state: exit 1 is an
+# advisory the service reported, exit 2 is a service that did not answer, and a
+# transient failure is retried with backoff before the gate says so. It still
+# needs the network, so `verify` is still not runnable offline; what it no
+# longer does is report that as the same failure as a vulnerability.
 audit:
-	uv run pip-audit --skip-editable --cache-dir .cache/pip-audit
+	uv run python tools/audit_gate.py
 
 # Deliberately not part of `verify`: it needs a pinned gitleaks on PATH, which a
 # clean clone does not have, and `verify` must stay the byte-for-byte gate that

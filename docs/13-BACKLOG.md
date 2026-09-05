@@ -7,6 +7,35 @@ Owners: F product/delivery pool (0.8-FTE founder plus the scheduled product/rese
 
 An item is done only when its acceptance statement has objective evidence. Estimates include implementation and tests but not procurement delay.
 
+### The `Status` column, and where it comes from
+
+Each phase table carries a `Status` cell, and **`make claims` re-derives every
+one of them from the implementation notes in this file.** A cell that disagrees
+with the notes is a build failure, and so is a row that stops carrying one; a
+figure nothing re-derives decays silently, and this file had grown long enough
+that an item's row and its status were separated by the notes for four other
+items.
+
+The column has exactly two values, and both begin with `Open`, because
+**no item in this backlog is closed.** Every implementation note ends by saying
+which acceptance conditions its item still fails, and none of them has been
+retracted.
+
+| Cell | What it means |
+|---|---|
+| `Open — note YYYY-MM-DD` | an implementation note below names this item; the date is that of the most recent one. Read it for what landed and what the item still waits on |
+| `Open — no note` | no implementation note names this item, so nothing here has been written about work against it |
+
+The notes stay chronological, which is what they are: a dated record of what
+was built, in the order it was built, each one saying in its own words why the
+item it names is not finished. The column is the index into them, not a
+replacement for reading them. It carries no judgment about quality, coverage,
+or readiness, and an item with a recent note may still be waiting on every
+person its row names.
+[The 2026-09 wave record](ROADMAP-WAVE-2026-09.md) is the dated snapshot of
+where all fifty-seven items stood after the last wave, with the blocking person
+or decision named per item.
+
 ### Core-team role allocation
 
 Each pair below is `F/E` ideal days and accounts for every P0 item. The task table's owner is accountable; this ledger is the delivery-capacity split. Within `F`, the founder and delivery lead receive named task assignments before each stage; the delivery lead does not inherit any independent clinical, community, security, or legal approval authority.
@@ -35,27 +64,27 @@ The week-21 `E` reserve is six days. No additional pre-pilot engineering scope m
 
 ## Phase 0 — discovery and authority
 
-| ID | Trace | Deliverable and acceptance | Owner | Dependency | Estimate |
-|---|---|---|---|---|---:|
-| B-001 | H-01..06, DG-01 | Recruit and complete 15–20 interviews; synthesis includes disconfirming evidence and buyer path | F | none | 10d |
-| B-002 | P0-15, R-09 | Obtain design-partner LOI naming sponsor, technical/clinical/lab/privacy owners, pathway, and target release | F/DP | B-001 | 3d |
-| B-003 | P0-15, R-06 | Map partner non-production topology, exports, synthetic suppression, and cleanup | F/DP | B-002 | 5d |
-| B-004 | P0-10, R-01/R-05 | Recruit governance roster and sign charter/conflicts/compensation | F/CL/COM | none | 5d + 24h reviewers |
-| B-005 | P0-11, R-07/R-11 | Counsel memo on FDA/CDS, UPL/UPM, HIPAA/BA, claims, contract, and insurance | LEG | B-002 | 2d + 20h counsel |
-| B-006 | G-06 | Paper receipt comprehension test with five cross-role reviewers | F/A11Y | B-001 | 3d + 5h reviewers |
-| B-007 | DG-01 | Discovery decision memo scores every continue/kill gate | F/CL/COM | B-001..006 | 2d |
+| ID | Trace | Deliverable and acceptance | Owner | Dependency | Estimate | Status |
+|---|---|---|---|---|---:|---|
+| B-001 | H-01..06, DG-01 | Recruit and complete 15–20 interviews; synthesis includes disconfirming evidence and buyer path | F | none | 10d | Open — no note |
+| B-002 | P0-15, R-09 | Obtain design-partner LOI naming sponsor, technical/clinical/lab/privacy owners, pathway, and target release | F/DP | B-001 | 3d | Open — no note |
+| B-003 | P0-15, R-06 | Map partner non-production topology, exports, synthetic suppression, and cleanup | F/DP | B-002 | 5d | Open — no note |
+| B-004 | P0-10, R-01/R-05 | Recruit governance roster and sign charter/conflicts/compensation | F/CL/COM | none | 5d + 24h reviewers | Open — no note |
+| B-005 | P0-11, R-07/R-11 | Counsel memo on FDA/CDS, UPL/UPM, HIPAA/BA, claims, contract, and insurance | LEG | B-002 | 2d + 20h counsel | Open — no note |
+| B-006 | G-06 | Paper receipt comprehension test with five cross-role reviewers | F/A11Y | B-001 | 3d + 5h reviewers | Open — no note |
+| B-007 | DG-01 | Discovery decision memo scores every continue/kill gate | F/CL/COM | B-001..006 | 2d | Open — no note |
 
 ## Phase 1 — governed pack and contracts
 
-| ID | Trace | Deliverable and acceptance | Owner | Dependency | Estimate |
-|---|---|---|---|---|---:|
-| B-008 | P0-01 | Define pack/case/assertion/source/approval JSON Schemas with invalid examples | F | B-007 | 5d |
-| B-009 | P0-02, CTP-001..012, R-25 | Author canonical case manifests with necessity and prohibited-inference fields | F/CL/COM | B-004/B-008, adopted [publication policy](17-PUBLICATION-POLICY.md) | 5d + 16h review |
-| B-010 | A-001..A-036 | Author assertion predicates, applicability, states, evidence, and severity rubric | F/CL/LAB | B-008/B-009 | 8d + 40h review |
-| B-011 | A-025..A-030 | Define INV/CTX/XFAIL reference fixtures and boundary values; label them non-clinical reference data | LAB/F | B-010 | 4d + 16h lab |
-| B-012 | P0-01, R-03 | Implement approval, validity, withdrawal, and pack compatibility rules | F/CL/COM | B-008..011 | 4d |
-| B-013 | P0-02, R-01 | Complete independent clinical and community pack review; unresolved content excluded/experimental | CL/COM/LAB | B-009..012 | 2d + 40h reviewers |
-| B-014 | P0-01/P0-12 | Build deterministic pack compiler/validator and source manifest | F | B-008/B-012 | 5d |
+| ID | Trace | Deliverable and acceptance | Owner | Dependency | Estimate | Status |
+|---|---|---|---|---|---:|---|
+| B-008 | P0-01 | Define pack/case/assertion/source/approval JSON Schemas with invalid examples | F | B-007 | 5d | Open — no note |
+| B-009 | P0-02, CTP-001..012, R-25 | Author canonical case manifests with necessity and prohibited-inference fields | F/CL/COM | B-004/B-008, adopted [publication policy](17-PUBLICATION-POLICY.md) | 5d + 16h review | Open — no note |
+| B-010 | A-001..A-036 | Author assertion predicates, applicability, states, evidence, and severity rubric | F/CL/LAB | B-008/B-009 | 8d + 40h review | Open — no note |
+| B-011 | A-025..A-030 | Define INV/CTX/XFAIL reference fixtures and boundary values; label them non-clinical reference data | LAB/F | B-010 | 4d + 16h lab | Open — no note |
+| B-012 | P0-01, R-03 | Implement approval, validity, withdrawal, and pack compatibility rules | F/CL/COM | B-008..011 | 4d | Open — no note |
+| B-013 | P0-02, R-01 | Complete independent clinical and community pack review; unresolved content excluded/experimental | CL/COM/LAB | B-009..012 | 2d + 40h reviewers | Open — no note |
+| B-014 | P0-01/P0-12 | Build deterministic pack compiler/validator and source manifest | F | B-008/B-012 | 5d | Open — no note |
 
 Publication gate on this phase: B-009 and B-010 are the first artifacts that would
 state which fields at which boundaries carry trans identity data, so the
@@ -67,17 +96,18 @@ deciding under pressure, with the artifact already written.
 
 ## Phase 2 — execution plan and evidence core
 
-| ID | Trace | Deliverable and acceptance | Owner | Dependency | Estimate |
-|---|---|---|---|---|---:|
-| B-015 | P0-03 | Define engagement/plan schemas and approved environment/namespace/cleanup contract | F/SEC | B-003/B-008 | 3d |
-| B-016 | P0-03, T-PLAN | Implement plan validation that blocks production, unallowlisted host, missing owner, and namespace mismatch | F | B-015 | 4d |
-| B-017 | P0-11, T-PRIVACY | Implement streaming size/type/field/namespace/free-text/canary preflight before persistence | F/SEC | B-015 | 8d |
-| B-018 | P0-04 | Implement content-addressed raw evidence store and append-only SQLite index | F | B-017 | 5d |
-| B-019 | P0-04/P0-12 | Define canonical observation/evidence models with source pointers and ambiguity | F | B-008/B-018 | 5d |
-| B-020 | P0-14 | Implement CLI shell, stable JSON errors, exit codes, quiet/no-color modes | F/A11Y | B-014/B-016 | 4d |
-| B-021 | P0-14, R-10 | Implement normalized deterministic payload and timestamp/signature envelope separation | F | B-019/B-020 | 4d |
+| ID | Trace | Deliverable and acceptance | Owner | Dependency | Estimate | Status |
+|---|---|---|---|---|---:|---|
+| B-015 | P0-03 | Define engagement/plan schemas and approved environment/namespace/cleanup contract | F/SEC | B-003/B-008 | 3d | Open — no note |
+| B-016 | P0-03, T-PLAN | Implement plan validation that blocks production, unallowlisted host, missing owner, and namespace mismatch | F | B-015 | 4d | Open — no note |
+| B-017 | P0-11, T-PRIVACY | Implement streaming size/type/field/namespace/free-text/canary preflight before persistence | F/SEC | B-015 | 8d | Open — note 2026-07-13 |
+| B-018 | P0-04 | Implement content-addressed raw evidence store and append-only SQLite index | F | B-017 | 5d | Open — note 2026-07-13 |
+| B-019 | P0-04/P0-12 | Define canonical observation/evidence models with source pointers and ambiguity | F | B-008/B-018 | 5d | Open — note 2026-07-13 |
+| B-020 | P0-14 | Implement CLI shell, stable JSON errors, exit codes, quiet/no-color modes | F/A11Y | B-014/B-016 | 4d | Open — note 2026-07-17 |
+| B-021 | P0-14, R-10 | Implement normalized deterministic payload and timestamp/signature envelope separation | F | B-019/B-020 | 4d | Open — note 2026-08-15 |
 
-Implementation note (2026-07-13): internal risk-reduction code now exercises B-017
+Implementation note (2026-07-13, B-017, B-018, B-019): internal risk-reduction
+code now exercises B-017
 for one strict canonical JSON envelope, B-018 through a non-executable local store, and
 part of B-019 through published raw-evidence and ambiguity-preserving observation
 contracts. These backlog items are not closed: authorized import still depends on
@@ -114,7 +144,19 @@ closed there with `input_path_unsupported` while
 [Operations](10-OPERATIONS-SRE.md) still lists Windows 11 as a planned supported
 platform. Closing that gap needs a decision, not a test.
 
-Implementation note (2026-07-17): the payload/envelope-separation part of B-021 is
+Corrected 2026-09-04 (the paragraph above is left as it was written, on
+2026-08-15): [Operations](10-OPERATIONS-SRE.md) section 3.1 now states the
+Windows matrix command by command, so it no longer lists Windows 11 without
+qualification. Six commands refuse there rather than three — `evidence
+preflight`, `import` in every format, `finding review`, `finding list`, `pack
+validate`, and `plan validate` — and `pack validate` and `plan validate` report
+`component_path_escape`, not `input_path_unsupported`, because the pack
+compiler maps an unsupported platform onto the same code as an escaping
+component path. The fail-closed behaviour itself is unchanged, and no decision
+to drop or keep Windows has been taken.
+
+Implementation note (2026-07-17, B-021): the payload/envelope-separation part of
+B-021 is
 now exercised: `contextsafe evaluate` emits a receipt document whose deterministic
 payload is hashed separately (`payload_sha256`) from an untrusted envelope carrying
 caller-declared `claimed_generated_at`, `signature_status: not_signed`, and
@@ -124,18 +166,18 @@ and cross-platform three-run reproducibility evidence remains outstanding.
 
 ## Phase 3 — adapters and evaluator
 
-| ID | Trace | Deliverable and acceptance | Owner | Dependency | Estimate |
-|---|---|---|---|---|---:|
-| B-022 | P0-04 | Canonical JSON import with schema and property tests | F | B-017..021 | 3d |
-| B-023 | P0-04 | FHIR R4 JSON parser for allowlisted resources/extensions; any narrative, contained resource, unrelated field/resource, or unapproved free text rejects the entire source before persistence—never strip and accept | F | B-017..021 | 7d + 8h interop |
-| B-024 | P0-04 | HL7 v2 ER7 parser for approved PID/GSP/OBR/OBX profile with bounded input | F | B-017..021 | 8d + 12h interop |
-| B-025 | P0-04/P0-07 | LIS CSV/JSON mapping and fixture importer | F/LAB | B-011/B-017..021 | 5d + 4h lab |
-| B-026 | P0-04, R-08 | Versioned mapping profile with ambiguity retention and fixture approval | F | B-022..025 | 5d |
-| B-027 | P0-08 | Implement status algebra and pure evaluator; all ten safety invariants property-tested | F | B-010/B-019/B-026 | 6d |
-| B-028 | P0-05 | Implement identity/NtU/pronoun/RSG predicates A-005..A-015 | F | B-027 | 5d |
-| B-029 | P0-06 | Implement SPCU context/provenance/period predicates A-016..A-024 | F/CL | B-027 | 6d + 8h review |
-| B-030 | P0-07 | Implement result/range/flag predicates A-025..A-031 | F/LAB | B-025/B-027 | 6d + 8h lab |
-| B-031 | P0-08/P0-12 | Implement first-observed-divergence and evidence trace A-032..A-035 | F | B-027..030 | 4d |
+| ID | Trace | Deliverable and acceptance | Owner | Dependency | Estimate | Status |
+|---|---|---|---|---|---:|---|
+| B-022 | P0-04 | Canonical JSON import with schema and property tests | F | B-017..021 | 3d | Open — note 2026-09-04 |
+| B-023 | P0-04 | FHIR R4 JSON parser for allowlisted resources/extensions; any narrative, contained resource, unrelated field/resource, or unapproved free text rejects the entire source before persistence—never strip and accept | F | B-017..021 | 7d + 8h interop | Open — note 2026-09-04 |
+| B-024 | P0-04 | HL7 v2 ER7 parser for approved PID/GSP/OBR/OBX profile with bounded input | F | B-017..021 | 8d + 12h interop | Open — note 2026-09-04 |
+| B-025 | P0-04/P0-07 | LIS CSV/JSON mapping and fixture importer | F/LAB | B-011/B-017..021 | 5d + 4h lab | Open — note 2026-09-04 |
+| B-026 | P0-04, R-08 | Versioned mapping profile with ambiguity retention and fixture approval | F | B-022..025 | 5d | Open — note 2026-09-04 |
+| B-027 | P0-08 | Implement status algebra and pure evaluator; all ten safety invariants property-tested | F | B-010/B-019/B-026 | 6d | Open — note 2026-07-17 |
+| B-028 | P0-05 | Implement identity/NtU/pronoun/RSG predicates A-005..A-015 | F | B-027 | 5d | Open — note 2026-09-04 |
+| B-029 | P0-06 | Implement SPCU context/provenance/period predicates A-016..A-024 | F/CL | B-027 | 6d + 8h review | Open — no note |
+| B-030 | P0-07 | Implement result/range/flag predicates A-025..A-031 | F/LAB | B-025/B-027 | 6d + 8h lab | Open — note 2026-09-04 |
+| B-031 | P0-08/P0-12 | Implement first-observed-divergence and evidence trace A-032..A-035 | F | B-027..030 | 4d | Open — note 2026-09-04 |
 
 Implementation note (2026-07-17, B-027): the property-test layer from
 [Test and evaluation §2](09-TEST-AND-EVALUATION.md) is now seeded with
@@ -282,10 +324,11 @@ export reader exists as `contextsafe import --format lis-csv` and
 column, so a result export that repeats the identity per row is not
 ambiguous with itself and rows that disagree stay ambiguous. The result
 columns (`analyte`, `value`, `unit`, `range`, `flag`, `order`, `specimen`)
-are recognized, bounded, scanned, and counted and produce no observation;
-the source gets the closed warning `result_columns_not_observed`. The column
-set is the versioned profile constant `LIS_PROFILE` 0.1.0 with
-`profile_reviewed` false and a type that refuses true. An unknown column or
+were recognized, bounded, scanned, and counted and produced no observation,
+under the closed warning `result_columns_not_observed`; the B-030 note below
+is where that changed. The column
+set is the versioned profile constant `LIS_PROFILE`, 0.1.0 then and 0.2.0
+since B-030, with `profile_reviewed` false and a type that refuses true. An unknown column or
 key, a formula-leading cell, an empty identity cell, a non-synthetic
 identifier anywhere, free text in any cell, a malformed record, or a bound
 overrun rejects the whole file by position. CSV is an RFC 4180 subset read
@@ -299,14 +342,103 @@ fixture per rule sits under `tests/fixtures/lis/`.
 B-025 is not closed: the profile is reference-only and the 4h laboratory
 review the row budgets has not happened, so no reviewer has said this is
 the shape of any export; the laboratory half — result, range, flag, order,
-and specimen observations — does not exist, because the observation contract
-has no concept for them and A-025..A-030 wait on B-030 and the B-011
-fixtures; values are carried as tokens with no mapping profile (B-026) to
+and specimen observations — was built by B-030 below and is ungoverned, and
+the B-011 fixture values are still the laboratory medical director's to
+supply; values are carried as tokens with no mapping profile (B-026) to
 bind them, so a pronoun token or a laboratory-context sex value reports
 `semantic_mismatch` against the case manifest rather than pass or fail on
 its merits; an empty identity cell rejects rather than reading as `absent`,
 because deciding what an LIS's empty cell means is a profile decision; and
 the result's counts and warnings stay in process.
+
+Implementation note (2026-09-04, B-025/B-030): the laboratory result half.
+`src/contextsafe/laboratory.py` carries a laboratory result observation
+family and four pure predicates over it, and the LIS readers emit the
+family. A result carries `analyte_code`, `value` (a decimal as a string),
+`unit`, `order_id`, `specimen_id`, a reference interval that is either
+present with `low`, `low_inclusive`, `high`, `high_inclusive` and a unit,
+absent, or `not_typed`, and an abnormal flag in the same three states, plus
+the checkpoint, the evidence pointer and digest, and the mapping version.
+**A separate observation kind, not a sixth `ConceptKind`,** and that is the
+decision the item asked for: gender identity, recorded sex or gender, sex
+parameter for clinical use, name to use and pronouns are untouched, and the
+alternative would have added a required key to the case manifest's closed
+concept set, put a laboratory value on the identity divergence section, and
+moved every identity contract for a laboratory change. The family has its
+own documents, `schemas/contextsafe-result-set-v0.1.schema.json` and
+`schemas/contextsafe-result-rule-set-v0.1.schema.json`, each with an
+agreement test, and `schemas/README.md` counts twenty-one contracts.
+
+The predicates, all ungoverned mechanism: `result_linked` (A-025 — the
+order and specimen are the ones the rule declares; the case half is a
+refusal at parse and the analyte half is A-026's),
+`analyte_value_unit_preserved` (A-026, exact, so `4.10` and `4.100` are one
+quantity and two round trips; three of the four things A-026 names, because
+the family carries no result status and nothing here decides whether one
+survived), `reference_interval_present` (A-027/A-029 — bounds,
+inclusivity and a unit that fits the value; a blank interval is a `fail`,
+one in an unreadable dialect is `indeterminate`, and one in another unit is
+a `fail`), and `flag_consistent_with_interval` (A-028/A-030 — the flag the
+fixture's own bounds imply at below, lower bound, in range, upper bound and
+above; an out-of-range value with no flag is a `fail`, an in-range value
+with no flag is `indeterminate` because a flag nobody sent is not evidence
+of normality, and no interval, an unreadable interval, a mismatched unit, an
+uncomparable value, or an unreadable flag is `indeterminate` and never
+`pass`). `REASON_STATUSES` says which statuses each reason may be published
+under, and only four reasons can reach `pass`.
+
+The LIS readers (`LIS_PROFILE` 0.2.0) build one result per row from the
+result columns they already recognised and counted, whenever the table
+carries the whole result column set and the row names an analyte, value,
+unit, order and specimen; any other row leaves its result cells counted and
+unclaimed. A range or flag cell in a dialect this ungoverned profile cannot
+type is carried as `not_typed` rather than normalized to the nearest thing
+it resembles (A-033), so a partner export's own dialect reads as
+undecidable rather than as a finding. The evidence pointer is the row
+(`$.rows[3]`) and not a cell, deliberately: a cell word such as `analyte`
+would widen `STRUCTURAL_POINTER_SEGMENTS`, which the receipt contract's
+pointer pattern copies, and widening that is a receipt version bump this
+change does not make. `laboratory.py` is a safety module; the profile
+version moved with what the profile emits, so the two pinned LIS import
+digests moved with it; and the packaged `lis-export` fixtures were rewritten
+so every result cell is an invented token, because a real unit or a
+real-looking range beside a synthetic analyte code would otherwise have
+entered an observation.
+
+Fixtures: the INV, CTX and XFAIL classes of `docs/05` §4 with all six edge
+values each, under `tests/fixtures/laboratory/`, and F-017 to F-022 and
+F-033 with a clean counterpart each under
+`tests/fixtures/laboratory/seeded-faults/`. The corpus matrix gains a
+fourth status, `exercised outside the receipt`, and reads 12 exercised at
+receipt level, 7 exercised outside it, 7 refused, 10 not yet exercisable.
+One of those seven, F-020, is reported by an assertion other than the one
+its library row names: `reference_interval_present` passes over the faulted
+fixture, because both bounds, both inclusivities and a fitting unit are all
+there, and what fails is the A-028/A-030 flag predicate, only because the
+fixture left a flag the moved bounds contradict. `docs/09` says so in the
+corpus status section, and a test derives the set from the corpus table so
+a later row of that shape cannot be counted without the same disclosure.
+Comparing returned bounds against approved ones is the oracle's job
+(B-011).
+
+**What remains ungoverned, and what this does not close.** Nothing here is
+clinical content. Every analyte code, unit, bound, inclusivity and flag is
+a token invented for software tests; no laboratory medical director,
+clinical reviewer or community reviewer has supplied or approved any value,
+any interval or any predicate; and no interval in this repository is a
+reference range for any analyte, person or population. `docs/05` §4 is
+explicit that the partner's laboratory medical director supplies the real
+fixture analyte code, units, bounds, inclusivity, age band, effective
+version and expected flag, and B-011 is still open for exactly that: the
+shipped family carries no age band and no effective oracle version at all,
+so no rule written in it can be a governed assertion, and A-025 to A-031
+remain unproved. A-031 is not implemented here at all — a result-facing
+name and pronoun display needs the display observation (B-019). No
+laboratory outcome reaches a receipt, no divergence section locates one,
+and no command writes a result set: the readers produce the family in
+process under the closed warning `result_observations_not_written`. B-030
+is not closed, B-025 is not closed, and the 8h laboratory review the B-030
+row budgets has not happened.
 
 Implementation note (2026-09-04, B-026): the versioned mapping profile
 exists as `schemas/contextsafe-mapping-profile-v1.schema.json`, a closed
@@ -557,15 +689,15 @@ beside it.
 
 ## Phase 4 — review and receipts
 
-| ID | Trace | Deliverable and acceptance | Owner | Dependency | Estimate |
-|---|---|---|---|---|---:|
-| B-032 | P0-10, R-05 | Append-only review/finding/disposition state machine with role and signature checks; accepted clinical residual risk requires distinct customer-clinical-owner and ContextSafe-clinical-chair review signatures | F/CL | B-027 | 5d |
-| B-033 | P0-09 | Define receipt JSON Schema and claim-minimal deterministic payload | F/SEC | B-031/B-032 | 4d |
-| B-034 | P0-09/P0-13 | Build script-free semantic HTML renderer from JSON | F/A11Y | B-033 | 6d |
-| B-035 | P0-12 | Implement pinned root trust, role/purpose manifest, plan-enrolled customer keys, explicit plan/pack/mapping/review/receipt thresholds, `plan sign/verify` and `pack sign/verify` plus other Ed25519 signing paths, rotation, detached signatures, revocation freshness, and compromise recovery | E/F/SEC | B-033 | 8d |
-| B-036 | P0-09/P0-12 | Implement verification of schema, graph, hashes, approvals, signatures, and withdrawal | F | B-035 | 5d |
-| B-037 | P0-12 | Implement deterministic receipt delta for compatible partner profiles; incompatible profiles fail with reason | E | B-036 | 4d |
-| B-038 | P0-13 | Implement print stylesheet and evidence-minimized presentation A-036 | F/A11Y | B-034 | 3d |
+| ID | Trace | Deliverable and acceptance | Owner | Dependency | Estimate | Status |
+|---|---|---|---|---|---:|---|
+| B-032 | P0-10, R-05 | Append-only review/finding/disposition state machine with role and signature checks; accepted clinical residual risk requires distinct customer-clinical-owner and ContextSafe-clinical-chair review signatures | F/CL | B-027 | 5d | Open — note 2026-09-04 |
+| B-033 | P0-09 | Define receipt JSON Schema and claim-minimal deterministic payload | F/SEC | B-031/B-032 | 4d | Open — note 2026-08-04 |
+| B-034 | P0-09/P0-13 | Build script-free semantic HTML renderer from JSON | F/A11Y | B-033 | 6d | Open — note 2026-08-15 |
+| B-035 | P0-12 | Implement pinned root trust, role/purpose manifest, plan-enrolled customer keys, explicit plan/pack/mapping/review/receipt thresholds, `plan sign/verify` and `pack sign/verify` plus other Ed25519 signing paths, rotation, detached signatures, revocation freshness, and compromise recovery | E/F/SEC | B-033 | 8d | Open — note 2026-09-04 |
+| B-036 | P0-09/P0-12 | Implement verification of schema, graph, hashes, approvals, signatures, and withdrawal | F | B-035 | 5d | Open — note 2026-09-04 |
+| B-037 | P0-12 | Implement deterministic receipt delta for compatible partner profiles; incompatible profiles fail with reason | E | B-036 | 4d | Open — note 2026-09-04 |
+| B-038 | P0-13 | Implement print stylesheet and evidence-minimized presentation A-036 | F/A11Y | B-034 | 3d | Open — note 2026-09-04 |
 
 Implementation note (2026-08-04, B-033): the receipt schema named in
 [Architecture §8](04-ARCHITECTURE.md) is now published as
@@ -714,18 +846,18 @@ a new, empty log behind, which replays to the empty state.
 
 ## Phase 5 — trust and operations
 
-| ID | Trace | Deliverable and acceptance | Owner | Dependency | Estimate |
-|---|---|---|---|---|---:|
-| B-039 | P0-11, F-029 | Build direct-identifier, Unicode, free-text, near-miss, log, and crash-dump canary suite | SEC/F | B-017 | 5d + 8h review |
-| B-040 | R-07/R-13 | Independent threat-model/security design review; all critical/high findings closed | SEC | B-023..036 | 2d + 20h review |
-| B-041 | P0-13 | Externalize all strings; add en-US/es-US catalogs, parity, and pseudolocale gates | F/A11Y | B-034 | 5d |
-| B-042 | P0-13 | Professional Spanish translation and independent community review | A11Y/COM | B-041 | 2d + 24h translation/review |
-| B-043 | P0-13, RG-14 | Automated axe/pa11y/HTML/contrast/no-color/print tests | F/A11Y | B-034/B-041 | 4d |
-| B-044 | P0-13, RG-14 | Manual NVDA/VoiceOver/keyboard/zoom/high-contrast EN/ES evaluation | A11Y | B-042/B-043 | 2d + 20h review |
-| B-045 | P0-14 | Package and fresh-install test Windows/macOS/Ubuntu artifacts with SBOM/signatures | F/SEC | B-020..036 | 6d |
-| B-046 | P0-15 | Implement diagnostics, cleanup enumerator, redacted support bundle, and local logs | F/SEC | B-018/B-020 | 5d |
-| B-047 | P0-15 | Exercise PHI, critical finding, wrong result, pack withdrawal, key compromise runbooks | F/SEC/CL/DP | B-035/B-040/B-046 | 3d + 12h participants |
-| B-048 | G-01, F-001..036 | Full 36-published-regression-fault and five-hidden-challenge-fault evaluation; all 41/41 must be detected and correctly localized, with any miss blocking release; corpus-bounded result makes no population-sensitivity claim | E/independent QA | B-028..046 | 6d + 16h QA |
+| ID | Trace | Deliverable and acceptance | Owner | Dependency | Estimate | Status |
+|---|---|---|---|---|---:|---|
+| B-039 | P0-11, F-029 | Build direct-identifier, Unicode, free-text, near-miss, log, and crash-dump canary suite | SEC/F | B-017 | 5d + 8h review | Open — note 2026-08-15 |
+| B-040 | R-07/R-13 | Independent threat-model/security design review; all critical/high findings closed | SEC | B-023..036 | 2d + 20h review | Open — no note |
+| B-041 | P0-13 | Externalize all strings; add en-US/es-US catalogs, parity, and pseudolocale gates | F/A11Y | B-034 | 5d | Open — note 2026-09-04 |
+| B-042 | P0-13 | Professional Spanish translation and independent community review | A11Y/COM | B-041 | 2d + 24h translation/review | Open — no note |
+| B-043 | P0-13, RG-14 | Automated axe/pa11y/HTML/contrast/no-color/print tests | F/A11Y | B-034/B-041 | 4d | Open — note 2026-08-15 |
+| B-044 | P0-13, RG-14 | Manual NVDA/VoiceOver/keyboard/zoom/high-contrast EN/ES evaluation | A11Y | B-042/B-043 | 2d + 20h review | Open — no note |
+| B-045 | P0-14 | Package and fresh-install test Windows/macOS/Ubuntu artifacts with SBOM/signatures | F/SEC | B-020..036 | 6d | Open — note 2026-09-04 |
+| B-046 | P0-15 | Implement diagnostics, cleanup enumerator, redacted support bundle, and local logs | F/SEC | B-018/B-020 | 5d | Open — note 2026-09-04 |
+| B-047 | P0-15 | Exercise PHI, critical finding, wrong result, pack withdrawal, key compromise runbooks | F/SEC/CL/DP | B-035/B-040/B-046 | 3d + 12h participants | Open — no note |
+| B-048 | G-01, F-001..036 | Full 36-published-regression-fault and five-hidden-challenge-fault evaluation; all 41/41 must be detected and correctly localized, with any miss blocking release; corpus-bounded result makes no population-sensitivity claim | E/independent QA | B-028..046 | 6d + 16h QA | Open — note 2026-09-04 |
 
 Implementation note (2026-08-15, B-039): the canary suite is seeded in
 `tests/test_privacy_canaries.py` for the one source profile that exists. It
@@ -933,6 +1065,56 @@ and add none, because neither the diagnostics nor the bundle enumerates the
 importer registry's formats. No independent security review of the bundle contents has happened
 (B-040).
 
+Implementation note (2026-09-04, B-046, issue #97): the log now has a reader.
+`contextsafe events summarize --directory DIR` prints the record count, the
+count of each command, of each outcome, and of each error code, and the
+SHA-256 of the bytes it read, and that is the whole document. It is the
+operator surface the note above left out: the log was written from the first
+commit of this slice and nothing read it, so the only way to answer "how many
+evaluations failed closed, and with which codes" was to parse the file by
+hand — and [User research and pilot §7](02-USER-RESEARCH-AND-PILOT.md) measures partner
+hours against a pilot where this log is the only record of what was run.
+
+It is derived the way the rest of the operator surface reports: closed keys,
+counts, one digest, and no timestamp, path, or free text, because the record
+shape it reads has nowhere for one to have come from. It refuses rather than
+skips — any line that is not one canonical record refuses the whole summary at
+`$.log[N]` and the field, with neither the value nor the log's path in the
+error — since a count over the lines that happened to parse would understate
+exactly the runs being counted. The log is opened once, no-follow, required to
+be a regular file within the writer's own size limit, never written to, and an
+`--output` naming it is refused as `output_path_unsafe`; a directory holding no
+log is a rejection, not an empty summary. The summary is published as
+`schemas/contextsafe-event-log-summary-v0.1.schema.json`, and because it names
+every command the log's vocabulary publishes, the next command added to that
+vocabulary moves the summary contract's version.
+
+Building the reader found one thing the writer had been getting wrong since
+`fixtures export` was added: `fixtures` was not in the log's command
+vocabulary, so `fixtures export --log-dir DIR` refused the record as
+`unloggable_command`, printed that on stderr, and exited 0. It is in the
+vocabulary now, and the test derives the set from the argument parser rather
+than restating it, in both directions.
+
+This does not close B-046, and the paragraph above still says why. It adds no
+governed cleanup, no security review, and no clock: correlating these records
+with anything outside the tool still needs a timestamp captured outside it. The
+summary says what ran and what was refused, never what a run found; findings
+live in a receipt, and dispositions in the B-032 review log, which is a
+different file with a different contract.
+
+Adversarial review of that reader found two things and both are fixed here. The
+reader's strictest check was on a value the writer cannot guarantee: a record's
+`sequence` is the count of lines the writer saw before appending, derived
+without a lock, so commands run at once against one shared `--log-dir` all
+write the same number. Requiring it to equal the line's position refused the
+whole log, permanently, for logs this tool had written correctly — the operator
+in issue #97, exactly. The reader now enforces the one-sided invariant an
+append-only file does hold, that no writer counted more records than precede
+its line, which still catches the removed line that check existed for. And
+`--output` naming the log `--log-dir` writes to truncated that log and exited
+0, for every command, since B-046; it is refused now, before the command runs.
+
 Implementation note (2026-09-04, B-048): the part of the seeded-fault
 corpus that needs no external person is committed. For every one of F-001 to
 F-036 in [Test and evaluation §4](09-TEST-AND-EVALUATION.md),
@@ -961,10 +1143,16 @@ identifier outside the synthetic namespace (`invalid_synthetic_identifier`,
 beside the preflight canary suite), F-032 as an observation naming another
 case (`case_mismatch`), and F-028 and F-030 by the pack validity and receipt
 contract tests that already exist; each fixture also exits 2 through the CLI
-with no receipt written and no value in the error object. Seventeen are not
+with no receipt written and no value in the error object. Seven are exercised outside the receipt: the
+laboratory rows F-017 to F-022 and F-033, each a fixture under
+`tests/fixtures/laboratory/seeded-faults/` reported as `fail` by one
+laboratory predicate with that predicate's own reason, beside a clean
+counterpart that passes every rule. They are counted apart from the twelve
+because no receipt carries a laboratory outcome, so nothing localizes them,
+and because every value in them is invented for software tests and no
+laboratory medical director has approved any of it (B-011). Ten are not
 yet exercisable, and every row names what it waits on from a closed
-vocabulary: seven laboratory rows (F-017 to F-022, F-033) on the laboratory
-fixture and importer (B-011, B-025, B-030); F-011 to F-014 on the SPCU
+vocabulary: F-011 to F-014 on the SPCU
 predicates and the clinical review they need (B-029); F-002 and F-003 on name
 contexts and periods the observation contract does not carry; F-026 on the
 receipt verifier (B-036); F-027 on the evidence-minimized presentation pass
@@ -974,11 +1162,12 @@ acceptance statement: there is no hidden-fault set; no independent fault
 author has reviewed the corpus and no independent QA has run it, because both
 are people (B-004, B-013, and the 16 QA hours the row budgets) and neither
 exists yet; every fault here was written by the implementer of the mechanism
-that detects it; 12 of 36 is deterministic corpus coverage over the published
-library and makes no population-sensitivity claim; and the 41/41 detection
-and localization figure the row requires cannot be computed until the
-seventeen waiting rows have a mechanism and the five hidden faults have an
-author.
+that detects it; 12 of 36 at receipt level, and 19 decided in all, is
+deterministic corpus coverage over the published library and makes no
+population-sensitivity claim; and the 41/41 detection and localization figure
+the row requires cannot be computed until the ten waiting rows have a
+mechanism, the seven laboratory rows can be localized in a receipt, and the
+five hidden faults have an author.
 
 Implementation note (2026-09-04, B-045): the part CI can do.
 `.github/workflows/package.yml` builds the sdist and wheel with `uv build`,
@@ -1009,17 +1198,17 @@ workflow has never fired, since no tag exists.
 
 ## Phase 6 — pilot and v1
 
-| ID | Trace | Deliverable and acceptance | Owner | Dependency | Estimate |
-|---|---|---|---|---|---:|
-| B-049 | P0-15 | After DG-04 passes, complete contract/charter activation, comparable-release time-study baseline, dry run, and one-case cleanup at the design partner; preparatory contracting before DG-04 cannot authorize execution | F/E/DP | B-002..005/B-047/B-048 | 5d (3 F + 2 E) |
-| B-050 | G-01..06 | Execute 12-case baseline and issue reviewed receipt | F/E/DP/CL/LAB | B-048/B-049 | 10d (4 F + 6 E) + 16h review |
-| B-051 | G-03/G-05 | Support finding dispositions and partner remediation without configuring care; natural defects reported but not quota-gated | F/E/DP | B-050 | 8d elapsed, 5d effort (1 F + 4 E) |
-| B-052 | G-02/G-05 | Rerun affected/full pack; partner uses P0 delta receipt and utility/control-value evidence in release decision | F/E/DP | B-051 | 5d (2 F + 3 E) |
-| B-053 | G-06 | EN/ES cross-role comprehension study meets 90% target or blocks release | A11Y/F | B-050 | 3d + 20h participants |
-| B-054 | RG-01..20 | Assemble independent release dossier and close all P0/risks/checklist evidence | F/all | B-048/B-052/B-053; B-057 if invoked | 5d |
-| B-055 | G-05 | Annual-assurance proposal and conversion/objection decision | F | B-052 | 2d |
-| B-056 | v1.0 | Sign and publish private/public artifacts consistent with claims policy | F/CL/COM/SEC/LEG | B-054/B-055 | 2d |
-| B-057 | G-05 | Conditional one-time evidence extension in global weeks 34–37 with frozen measures and separate change order; no new scope or safety remediation | F/E/DP | B-052; only joint-authority invocation | 10d (4 F-pool + 6 E-pool) + 8h paid review |
+| ID | Trace | Deliverable and acceptance | Owner | Dependency | Estimate | Status |
+|---|---|---|---|---|---:|---|
+| B-049 | P0-15 | After DG-04 passes, complete contract/charter activation, comparable-release time-study baseline, dry run, and one-case cleanup at the design partner; preparatory contracting before DG-04 cannot authorize execution | F/E/DP | B-002..005/B-047/B-048 | 5d (3 F + 2 E) | Open — no note |
+| B-050 | G-01..06 | Execute 12-case baseline and issue reviewed receipt | F/E/DP/CL/LAB | B-048/B-049 | 10d (4 F + 6 E) + 16h review | Open — no note |
+| B-051 | G-03/G-05 | Support finding dispositions and partner remediation without configuring care; natural defects reported but not quota-gated | F/E/DP | B-050 | 8d elapsed, 5d effort (1 F + 4 E) | Open — no note |
+| B-052 | G-02/G-05 | Rerun affected/full pack; partner uses P0 delta receipt and utility/control-value evidence in release decision | F/E/DP | B-051 | 5d (2 F + 3 E) | Open — no note |
+| B-053 | G-06 | EN/ES cross-role comprehension study meets 90% target or blocks release | A11Y/F | B-050 | 3d + 20h participants | Open — no note |
+| B-054 | RG-01..20 | Assemble independent release dossier and close all P0/risks/checklist evidence | F/all | B-048/B-052/B-053; B-057 if invoked | 5d | Open — no note |
+| B-055 | G-05 | Annual-assurance proposal and conversion/objection decision | F | B-052 | 2d | Open — no note |
+| B-056 | v1.0 | Sign and publish private/public artifacts consistent with claims policy | F/CL/COM/SEC/LEG | B-054/B-055 | 2d | Open — no note |
+| B-057 | G-05 | Conditional one-time evidence extension in global weeks 34–37 with frozen measures and separate change order; no new scope or safety remediation | F/E/DP | B-052; only joint-authority invocation | 10d (4 F-pool + 6 E-pool) + 8h paid review | Open — no note |
 
 ## P1 parking lot
 

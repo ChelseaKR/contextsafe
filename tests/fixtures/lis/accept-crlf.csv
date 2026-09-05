@@ -1,2 +1,2 @@
 patient_id,name_to_use,pronouns,sex,analyte,value,unit,range,flag,order,specimen
-CSYN-CTP-I01,CSYN-ASTER,CSYN-PRONOUN-THEY-THEM,X,CSYN-ANALYTE-K,4.1,mmol/L,3.5-5.5,N,ORDER-CSYN-I01-A,CSYN-SPECIMEN-I01-A
+CSYN-CTP-I01,CSYN-ASTER,CSYN-PRONOUN-THEY-THEM,X,fixture-analyte-1,4.100,fixture-unit-alpha,fixture-range-1,fixture-flag-1,ORDER-CSYN-I01-A,CSYN-SPECIMEN-I01-A

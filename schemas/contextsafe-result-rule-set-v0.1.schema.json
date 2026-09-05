@@ -1,0 +1,135 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://contextsafe.invalid/schemas/contextsafe-result-rule-set-v0.1.schema.json",
+  "title": "ContextSafe laboratory result rule set 0.1",
+  "description": "Reference-only and ungoverned. A set of pure rules over the laboratory result observations of one synthetic case, each naming one predicate from a closed set. The predicates are mechanisms for the assertions A-025 to A-030 in docs/05-DATA-AND-EVIDENCE.md section 5, not the assertions themselves: no clinical, laboratory, or community review stands behind any rule written in this shape, and a rule set of this shape authorizes nothing.",
+  "$comment": "Deliberately separate from contextsafe-rule-set-v0.2: a laboratory rule reads a laboratory result, whose family is a separate observation kind rather than a sixth canonical concept, so widening this contract can never widen the identity rule set, the case manifest, or the receipt. JSON Schema validates structure; contextsafe.laboratory additionally enforces the x-contextsafe-semantic-constraints below.",
+  "x-contextsafe-semantic-constraints": [
+    "every rule's case_id equals the case document's case_id",
+    "a rule identifier appears at most once in the set",
+    "a rule reads the one result whose case_id, checkpoint, and result_id it names; no matching result is indeterminate with missing_evidence, never a pass",
+    "reference_interval_present and flag_consistent_with_interval declare no expectation at all: the first is a presence claim and the second is computed from the fixture's own bounds"
+  ],
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "rules"],
+  "properties": {
+    "schema_version": { "const": "contextsafe.result-rule-set/0.1.0" },
+    "rules": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 512,
+      "items": { "$ref": "#/$defs/rule" }
+    }
+  },
+  "$defs": {
+    "resultToken": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9<>][A-Za-z0-9:/_.%<>-]{0,63}$"
+    },
+    "rule": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "rule_id",
+        "version",
+        "case_id",
+        "checkpoint",
+        "result_id",
+        "predicate",
+        "required"
+      ],
+      "properties": {
+        "rule_id": {
+          "type": "string",
+          "pattern": "^A-L[0-9]{2}$",
+          "description": "A laboratory rule identifier, distinct from the identity family's A-Inn so the two can never be confused in an outcome."
+        },
+        "version": {
+          "type": "string",
+          "maxLength": 128,
+          "pattern": "^(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)$"
+        },
+        "case_id": { "type": "string", "pattern": "^CTP-[A-Z0-9]{3,16}$" },
+        "checkpoint": { "enum": ["registration", "ehr", "interface", "lis_return"] },
+        "result_id": { "type": "string", "pattern": "^RES-[A-Z0-9][A-Z0-9-]{2,47}$" },
+        "predicate": {
+          "enum": [
+            "result_linked",
+            "analyte_value_unit_preserved",
+            "reference_interval_present",
+            "flag_consistent_with_interval"
+          ]
+        },
+        "required": { "type": "boolean" },
+        "expected_order_id": {
+          "type": "string",
+          "maxLength": 128,
+          "pattern": "^(?:ORDER-)?CSYN-[A-Z0-9][A-Z0-9_.:-]{0,95}$"
+        },
+        "expected_specimen_id": {
+          "type": "string",
+          "maxLength": 128,
+          "pattern": "^(?:ORDER-)?CSYN-[A-Z0-9][A-Z0-9_.:-]{0,95}$"
+        },
+        "expected_analyte_code": { "$ref": "#/$defs/resultToken" },
+        "expected_value": { "$ref": "#/$defs/resultToken" },
+        "expected_unit": { "$ref": "#/$defs/resultToken" }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "predicate": { "const": "result_linked" } } },
+          "then": {
+            "required": ["expected_order_id", "expected_specimen_id"],
+            "not": {
+              "anyOf": [
+                { "required": ["expected_analyte_code"] },
+                { "required": ["expected_value"] },
+                { "required": ["expected_unit"] }
+              ]
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "predicate": { "const": "analyte_value_unit_preserved" }
+            }
+          },
+          "then": {
+            "required": ["expected_analyte_code", "expected_value", "expected_unit"],
+            "not": {
+              "anyOf": [
+                { "required": ["expected_order_id"] },
+                { "required": ["expected_specimen_id"] }
+              ]
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "predicate": {
+                "enum": [
+                  "reference_interval_present",
+                  "flag_consistent_with_interval"
+                ]
+              }
+            }
+          },
+          "then": {
+            "not": {
+              "anyOf": [
+                { "required": ["expected_order_id"] },
+                { "required": ["expected_specimen_id"] },
+                { "required": ["expected_analyte_code"] },
+                { "required": ["expected_value"] },
+                { "required": ["expected_unit"] }
+              ]
+            }
+          }
+        }
+      ]
+    }
+  }
+}

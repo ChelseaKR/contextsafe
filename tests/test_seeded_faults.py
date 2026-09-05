@@ -6,6 +6,13 @@ library plus five hidden faults, run by independent QA. This module is the
 part of B-048 that needs no external person: for every published fault it
 holds one of three things, and a committed matrix (``MATRIX``) says which.
 
+* **exercised outside the receipt** — a complete synthetic fixture under
+  ``tests/fixtures/laboratory/seeded-faults/`` and a verdict from the
+  laboratory result predicates (B-030), which reach no receipt: there is no
+  divergence section to locate the fault in, so the row is counted apart
+  from the receipt-level ones rather than claiming a localization the
+  mechanism does not make. Each also has a clean counterpart proving the
+  fault, not the rule, is what turned the outcome.
 * **exercised** — a complete synthetic fixture under
   ``tests/fixtures/seeded-faults/`` (case, rule set, and observation set
   with exactly one fault applied), and tests proving the fault is reported
@@ -54,6 +61,14 @@ from contextsafe.cli import main
 from contextsafe.divergence import ConceptDivergence, compute_divergence
 from contextsafe.errors import ContextSafeError
 from contextsafe.evaluator import Outcome, evaluate
+from contextsafe.laboratory import (
+    AFFIRMATIVE_RESULT_REASONS,
+    REASON_STATUSES,
+    ResultOutcome,
+    ResultOutcomeReason,
+    evaluate_results,
+    parse_result_bundle,
+)
 from contextsafe.models import (
     FAILURE_REASONS,
     Checkpoint,
@@ -219,9 +234,21 @@ fault of absence (F-023) or of identity (F-035) agrees everywhere observed.
 
 
 class CorpusStatus(StrEnum):
-    """The three things the matrix may say about a published fault."""
+    """The four things the matrix may say about a published fault."""
 
     EXERCISED = "exercised"
+    """A fixture, a receipt-level verdict, and a located boundary."""
+
+    EXERCISED_OUTSIDE_THE_RECEIPT = "exercised outside the receipt"
+    """A fixture and a verdict from a family no receipt carries yet.
+
+    The laboratory result predicates (B-030) decide these faults and report
+    them with their own reasons, but a laboratory outcome reaches no receipt
+    and no divergence section, so there is no localization to check and the
+    row is counted apart from the receipt-level ones. Counting it as
+    ``exercised`` would claim a localization the mechanism does not make.
+    """
+
     REFUSED = "refused"
     NOT_EXERCISABLE = "not yet exercisable"
 
@@ -229,7 +256,8 @@ class CorpusStatus(StrEnum):
 class MissingItem(StrEnum):
     """The closed vocabulary of what a fault waits on, each a backlog item."""
 
-    LABORATORY_RESULTS = "laboratory results (B-011, B-025, B-030)"
+    LABORATORY_ORACLE = "the laboratory oracle's approved fixture values (B-011)"
+    LABORATORY_RECEIPT = "a receipt section for laboratory outcomes (B-030)"
     SPCU_PREDICATES = "SPCU predicates awaiting clinical review (B-029)"
     NAME_CONTEXTS = "name contexts and periods in the observation contract (B-019)"
     DISPLAY_OBSERVATION = "patient-facing display observation (E-DISPLAY, B-019)"
@@ -239,6 +267,111 @@ class MissingItem(StrEnum):
     SIGNATURES = "signatures and role thresholds (B-035)"
     RECEIPT_VERIFIER = "receipt verifier (B-036)"
     HTML_PRESENTATION = "evidence-minimized presentation (B-038)"
+
+
+LABORATORY = ROOT / "tests" / "fixtures" / "laboratory" / "seeded-faults"
+LABORATORY_CLEAN = LABORATORY / "clean"
+
+LABORATORY_DETECTION: dict[str, tuple[str, str, str, ResultOutcomeReason]] = {
+    # fault: (mutation, assertion -- both verbatim from docs/09 section 4 --
+    #         detector rule id, reason)
+    "F-017": (
+        "attach order to wrong synthetic patient",
+        "A-025",
+        "A-L01",
+        ResultOutcomeReason.RESULT_NOT_LINKED,
+    ),
+    "F-018": (
+        "alter analyte code/value/unit",
+        "A-026",
+        "A-L02",
+        ResultOutcomeReason.ANALYTE_VALUE_UNIT_CHANGED,
+    ),
+    "F-019": (
+        "omit required reference interval",
+        "A-027/A-029",
+        "A-L03",
+        ResultOutcomeReason.REFERENCE_INTERVAL_ABSENT,
+    ),
+    "F-020": (
+        "return wrong interval bounds",
+        "A-027",
+        "A-L04",
+        ResultOutcomeReason.FLAG_INCONSISTENT_WITH_INTERVAL,
+    ),
+    "F-021": (
+        "omit abnormal flag above bound",
+        "A-028/A-030",
+        "A-L04",
+        ResultOutcomeReason.FLAG_MISSING_OUT_OF_RANGE,
+    ),
+    "F-022": (
+        "report out-of-range result as normal",
+        "A-028/A-030",
+        "A-L04",
+        ResultOutcomeReason.FLAG_INCONSISTENT_WITH_INTERVAL,
+    ),
+    "F-033": (
+        "preserve a numeric range with the wrong unit",
+        "A-027/A-028",
+        "A-L03",
+        ResultOutcomeReason.REFERENCE_INTERVAL_UNIT_MISMATCH,
+    ),
+}
+"""The laboratory faults, each reported as ``fail`` by one laboratory predicate.
+
+Restated here rather than read from the fixture, like every other expectation
+in this module. The reason is the predicate's own, from the closed laboratory
+vocabulary; there is no receipt and therefore no divergence entry to locate,
+which is what ``exercised outside the receipt`` says.
+"""
+
+LABORATORY_RULE_ASSERTIONS: dict[str, frozenset[str]] = {
+    "A-L01": frozenset({"A-025"}),
+    "A-L02": frozenset({"A-026"}),
+    "A-L03": frozenset({"A-027", "A-029"}),
+    "A-L04": frozenset({"A-028", "A-030"}),
+}
+"""Which assertions each laboratory predicate is offered as mechanism for.
+
+Restated from the B-025/B-030 implementation note in ``docs/13-BACKLOG.md``,
+which names the assertion behind each predicate. It says what a predicate is
+offered *for*, never that the assertion is proved: none of these is a
+governed assertion, because the approved bounds, the age band, and the
+effective oracle version they would need are the laboratory oracle's to
+supply (B-011).
+"""
+
+REPORTED_BY_ANOTHER_ASSERTION: tuple[str, ...] = ("F-020",)
+"""Laboratory faults no predicate for their declared assertion reports.
+
+F-020 mutates the interval bounds, and its library row names A-027. Over the
+faulted fixture ``reference_interval_present`` -- the only mechanism for
+A-027 here -- passes, because both bounds, both inclusivities, and a unit
+that fits the value are all present, which is the whole of what that
+predicate checks. What reports the fault is A-L04, the A-028/A-030 flag
+predicate, and only because the fixture left a flag the moved bounds
+contradict. Comparing returned bounds against approved ones needs the
+oracle (B-011). The set is derived from the table above and compared with
+this tuple, and every member has to be disclosed in the docs/09 corpus
+status section, so a row can never quietly count a detection the mechanism
+does not make.
+"""
+
+_LAB_MISSING = (MissingItem.LABORATORY_ORACLE, MissingItem.LABORATORY_RECEIPT)
+"""What a laboratory row still waits on once its predicate exists.
+
+The values in these fixtures are invented for software tests, and the real
+ones come from a partner's laboratory medical director (B-011); and no
+receipt carries a laboratory outcome, so nothing localizes one.
+"""
+
+
+def _laboratory_evidence(fault: str) -> str:
+    """Render the evidence column for one laboratory row."""
+
+    _mutation, _assertion, rule_id, reason = LABORATORY_DETECTION[fault]
+    return f"`laboratory/{fault}.json`: {rule_id} `{reason.value}` at `lis_return`"
 
 
 @dataclass(frozen=True, slots=True)
@@ -265,6 +398,19 @@ def _exercised(
     )
 
 
+def _outside_the_receipt(
+    fault: str, mutation: str, detector: str, evidence: str, *missing: MissingItem
+) -> FaultRow:
+    return FaultRow(
+        fault,
+        mutation,
+        detector,
+        CorpusStatus.EXERCISED_OUTSIDE_THE_RECEIPT,
+        evidence,
+        missing,
+    )
+
+
 def _refused(
     fault: str, mutation: str, detector: str, evidence: str, *missing: MissingItem
 ) -> FaultRow:
@@ -279,7 +425,6 @@ def _waiting(
     )
 
 
-_LAB = MissingItem.LABORATORY_RESULTS
 _SPCU = MissingItem.SPCU_PREDICATES
 
 MATRIX: tuple[FaultRow, ...] = (
@@ -360,12 +505,17 @@ MATRIX: tuple[FaultRow, ...] = (
         + SPCU_DECLARED_FORM_ONLY,
         _SPCU,
     ),
-    _waiting("F-017", "attach order to wrong synthetic patient", "A-025", _LAB),
-    _waiting("F-018", "alter analyte code/value/unit", "A-026", _LAB),
-    _waiting("F-019", "omit required reference interval", "A-027/A-029", _LAB),
-    _waiting("F-020", "return wrong interval bounds", "A-027", _LAB),
-    _waiting("F-021", "omit abnormal flag above bound", "A-028/A-030", _LAB),
-    _waiting("F-022", "report out-of-range result as normal", "A-028/A-030", _LAB),
+    *(
+        _outside_the_receipt(
+            fault,
+            mutation,
+            detector,
+            _laboratory_evidence(fault),
+            *_LAB_MISSING,
+        )
+        for fault, (mutation, detector, _rule, _reason) in LABORATORY_DETECTION.items()
+        if fault != "F-033"
+    ),
     _exercised(
         "F-023",
         "omit checkpoint but report pass",
@@ -431,8 +581,11 @@ MATRIX: tuple[FaultRow, ...] = (
         "`refused/F-032.json`: `case_mismatch` at `$.observations`",
         MissingItem.AUTHORED_ASSERTIONS,
     ),
-    _waiting(
-        "F-033", "preserve a numeric range with the wrong unit", "A-027/A-028", _LAB
+    _outside_the_receipt(
+        "F-033",
+        *LABORATORY_DETECTION["F-033"][:2],
+        _laboratory_evidence("F-033"),
+        *_LAB_MISSING,
     ),
     _waiting(
         "F-034",
@@ -459,7 +612,10 @@ MATRIX: tuple[FaultRow, ...] = (
 
 An exercised row may still name a missing item: F-001 is reported at the
 EHR as a value change, not at a patient-facing display (A-006); F-035
-proves the identity moves, not that a verifier would notice a claimed one.
+proves the identity moves, not that a verifier would notice a claimed one;
+and F-020 is reported by the flag predicate rather than by the assertion its
+library row names, which ``REPORTED_BY_ANOTHER_ASSERTION`` says and docs/09
+has to disclose.
 """
 
 MATRIX_DATE = "2026-09-04"
@@ -545,8 +701,9 @@ def test_the_matrix_counts_are_the_ones_the_documents_state() -> None:
     counts = {status: len(_rows(status)) for status in CorpusStatus}
     assert counts == {
         CorpusStatus.EXERCISED: 12,
+        CorpusStatus.EXERCISED_OUTSIDE_THE_RECEIPT: 7,
         CorpusStatus.REFUSED: 7,
-        CorpusStatus.NOT_EXERCISABLE: 17,
+        CorpusStatus.NOT_EXERCISABLE: 10,
     }
     assert sum(counts.values()) == 36
 
@@ -1121,11 +1278,20 @@ def _doc_lines() -> list[str]:
     return TEST_PLAN.read_text(encoding="utf-8").splitlines()
 
 
+def _corpus_status_section() -> str:
+    """The dated corpus-status section of docs/09, whitespace collapsed."""
+
+    text = TEST_PLAN.read_text(encoding="utf-8")
+    start = text.index(f"### Corpus status, {MATRIX_DATE}")
+    return " ".join(text[start : text.index("## 5.", start)].split())
+
+
 _LIBRARY_ROW = re.compile(r"^\| (F-0\d\d) \| ([^|]+) \| ([^|]+) \|$")
 _STATUS_ROW = re.compile(r"^\| (F-0\d\d) \| ([^|]+) \| ([^|]+) \| ([^|]+) \|$")
 _COUNTS = re.compile(
     r"As of (\d{4}-\d{2}-\d{2}): (\d+) of 36 exercised at receipt level, "
-    r"(\d+) refused before evaluation, and (\d+) not yet exercisable\."
+    r"(\d+) exercised outside the receipt, (\d+) refused before evaluation, "
+    r"and (\d+) not yet exercisable\."
 )
 
 
@@ -1162,10 +1328,11 @@ def test_the_docs_counts_are_the_matrix_counts_and_carry_the_date() -> None:
         match for line in _doc_lines() if (match := _COUNTS.search(line)) is not None
     ]
     assert len(matches) == 1
-    date, exercised, refused, waiting = matches[0].groups()
+    date, exercised, outside, refused, waiting = matches[0].groups()
     assert date == MATRIX_DATE
-    assert (int(exercised), int(refused), int(waiting)) == (
+    assert (int(exercised), int(outside), int(refused), int(waiting)) == (
         len(_rows(CorpusStatus.EXERCISED)),
+        len(_rows(CorpusStatus.EXERCISED_OUTSIDE_THE_RECEIPT)),
         len(_rows(CorpusStatus.REFUSED)),
         len(_rows(CorpusStatus.NOT_EXERCISABLE)),
     )
@@ -1212,31 +1379,42 @@ _NUMBER_WORDS = [
 ]
 
 
-def _readme_subsection(heading: str) -> str:
-    """The README text under ``### heading`` up to the next heading of any level."""
+def _readme_item(item: str) -> str:
+    """One iteration bullet group, located by the item its lead-in names.
+
+    The 2026-09 wave's per-item ``### B-0xx`` subsections were consolidated
+    into the README's iteration-6 bullet list on 2026-09-04, so a heading is no
+    longer what holds these counts; the bullet that names the item is. A bullet
+    runs from its own ``- **`` to the next one, or to the end of the list.
+    """
 
     text = README.read_text(encoding="utf-8")
-    start = text.index(f"### {heading}\n")
-    following = re.compile(r"\n##+ ").search(text, start + 1)
-    assert following is not None
+    named = text.index(f"({item}).**")
+    start = text.rindex("\n- **", 0, named)
+    following = re.compile(r"\n- \*\*|\n#+ ").search(text, named)
+    assert following is not None, item
     return " ".join(text[start : following.start()].split())
 
 
 def test_the_readme_carries_one_current_count_and_older_slices_defer_to_it() -> None:
-    """A slice subsection may say what it detected, never what the tree detects.
+    """A slice's bullet may say what it detected, never what the tree detects.
 
-    The B-028 subsection was written when twenty-seven faults had no answer
-    here; that count is dated to its slice and points at the subsection that
-    carries the current one, whose figures are the matrix's.
+    The B-028 bullet was written when twenty-seven faults had no answer here;
+    that count is dated to its slice and points at the bullet that carries the
+    current one, whose figures are the matrix's.
     """
 
-    older = _readme_subsection("B-028")
+    older = _readme_item("B-028")
     assert "are not detectable by anything here" not in older
     assert "were not detectable by that slice" in older
-    assert "the B-048 subsection below carries the current count" in older
-    current = _readme_subsection("B-048")
+    assert "the B-048 bullet below carries the current count" in older
+    current = _readme_item("B-048")
     for status, phrase in (
         (CorpusStatus.EXERCISED, "are *exercised*"),
+        (
+            CorpusStatus.EXERCISED_OUTSIDE_THE_RECEIPT,
+            "are *exercised outside the receipt*",
+        ),
         (CorpusStatus.REFUSED, "are *refused*"),
         (CorpusStatus.NOT_EXERCISABLE, "are *not yet exercisable*"),
     ):
@@ -1246,9 +1424,7 @@ def test_the_readme_carries_one_current_count_and_older_slices_defer_to_it() -> 
 def test_the_docs_say_what_this_corpus_is_not() -> None:
     """The disclaimers B-048 requires travel with the table, not only with this file."""
 
-    text = TEST_PLAN.read_text(encoding="utf-8")
-    start = text.index(f"### Corpus status, {MATRIX_DATE}")
-    section = " ".join(text[start : text.index("## 5.", start)].split())
+    section = _corpus_status_section()
     for phrase in (
         "not the 41-fault evaluation",
         "no hidden-fault set",
@@ -1329,3 +1505,180 @@ def test_no_fault_fixture_carries_a_non_synthetic_identifier() -> None:
             if observation["concept"] == "name_to_use":
                 value = observation["value"]["value"]
                 assert value is None or value.startswith("CSYN-")
+
+
+# --- exercised outside the receipt: the laboratory faults --------------------
+
+LABORATORY_FILES = sorted(LABORATORY.glob("F-*.json"))
+LABORATORY_CLEAN_FILES = sorted(LABORATORY_CLEAN.glob("F-*.json"))
+
+
+def _laboratory_outcomes(path: Path) -> tuple[ResultOutcome, ...]:
+    document = _load(path)
+    return evaluate_results(
+        parse_result_bundle(document["case"], document["results"], document["rules"])
+    )
+
+
+def _laboratory_by_rule(
+    outcomes: tuple[ResultOutcome, ...], rule_id: str
+) -> ResultOutcome:
+    return next(item for item in outcomes if item.rule_id == rule_id)
+
+
+def test_the_laboratory_library_holds_exactly_the_faults_the_table_expects() -> None:
+    """Seven faults, each with a fixture and a clean counterpart, and no others."""
+
+    assert [path.stem for path in LABORATORY_FILES] == sorted(LABORATORY_DETECTION)
+    assert [path.stem for path in LABORATORY_CLEAN_FILES] == sorted(
+        LABORATORY_DETECTION
+    )
+    assert not set(LABORATORY_DETECTION) & set(EXERCISED)
+    assert not set(LABORATORY_DETECTION) & set(REFUSED_FAULTS)
+    assert {
+        row.fault for row in _rows(CorpusStatus.EXERCISED_OUTSIDE_THE_RECEIPT)
+    } == set(LABORATORY_DETECTION)
+
+
+def test_every_laboratory_fault_file_names_the_assertion_the_table_names() -> None:
+    for path in (*LABORATORY_FILES, *LABORATORY_CLEAN_FILES):
+        document = _load(path)
+        mutation, assertion, _rule_id, _reason = LABORATORY_DETECTION[path.stem]
+        assert document["fault"] == path.stem
+        assert document["mutation"] == mutation
+        assert document["assertion"] == assertion
+        assert set(document) == {
+            "fault",
+            "mutation",
+            "assertion",
+            "case",
+            "results",
+            "rules",
+        }
+
+
+@pytest.mark.parametrize(
+    "path", LABORATORY_FILES, ids=[path.stem for path in LABORATORY_FILES]
+)
+def test_each_laboratory_fault_is_reported_by_its_predicate_and_never_as_pass(
+    path: Path,
+) -> None:
+    _mutation, _assertion, rule_id, reason = LABORATORY_DETECTION[path.stem]
+    outcomes = _laboratory_outcomes(path)
+    detector = _laboratory_by_rule(outcomes, rule_id)
+    assert detector.status is OutcomeStatus.FAIL
+    assert detector.reason is reason
+    assert detector.observed_sha256s
+    # "never as pass" is a property of every outcome of the faulted fixture,
+    # not of the detector alone: no outcome may sit under a status its reason
+    # does not admit, which is what keeps a `pass` out of a finding reason and
+    # a finding out of an affirmative one, on the three rules the fault is not
+    # aimed at as much as on the one it is.
+    assert all(item.status in REASON_STATUSES[item.reason] for item in outcomes)
+    assert AFFIRMATIVE_RESULT_REASONS.isdisjoint(
+        item.reason for item in outcomes if item.rule_id == rule_id
+    )
+
+
+@pytest.mark.parametrize(
+    "path", LABORATORY_FILES, ids=[path.stem for path in LABORATORY_FILES]
+)
+def test_each_laboratory_fault_leaves_exactly_one_failing_rule(path: Path) -> None:
+    """One fault, one fail: the other predicates are not collateral damage."""
+
+    _mutation, _assertion, rule_id, _reason = LABORATORY_DETECTION[path.stem]
+    outcomes = _laboratory_outcomes(path)
+    failed = [item for item in outcomes if item.status is OutcomeStatus.FAIL]
+    assert [item.rule_id for item in failed] == [rule_id]
+
+
+@pytest.mark.parametrize(
+    "path", LABORATORY_CLEAN_FILES, ids=[path.stem for path in LABORATORY_CLEAN_FILES]
+)
+def test_each_laboratory_fixture_passes_every_rule_before_its_fault_is_applied(
+    path: Path,
+) -> None:
+    """The fault turned the outcome, not the rule set."""
+
+    outcomes = _laboratory_outcomes(path)
+    assert outcomes
+    assert all(item.status is OutcomeStatus.PASSED for item in outcomes)
+
+
+def test_no_laboratory_fault_of_a_missing_range_is_ever_reported_normal() -> None:
+    """A-030: F-019 fails the presence claim and decides no flag at all."""
+
+    outcomes = _laboratory_outcomes(LABORATORY / "F-019.json")
+    flag = _laboratory_by_rule(outcomes, "A-L04")
+    assert flag.status is OutcomeStatus.INDETERMINATE
+    assert flag.reason is ResultOutcomeReason.REFERENCE_INTERVAL_ABSENT
+
+
+def test_the_wrong_unit_fault_decides_no_flag_either() -> None:
+    """F-033: a range in another unit cannot be compared with the value."""
+
+    outcomes = _laboratory_outcomes(LABORATORY / "F-033.json")
+    flag = _laboratory_by_rule(outcomes, "A-L04")
+    assert flag.status is OutcomeStatus.INDETERMINATE
+    assert flag.reason is ResultOutcomeReason.REFERENCE_INTERVAL_UNIT_MISMATCH
+
+
+def test_every_laboratory_row_names_its_detector_and_reason() -> None:
+    """The prose evidence column cannot say something the test data does not."""
+
+    by_fault = {row.fault: row for row in MATRIX}
+    for fault, (_m, _a, rule_id, reason) in LABORATORY_DETECTION.items():
+        evidence = by_fault[fault].evidence
+        assert f"`laboratory/{fault}.json`" in evidence
+        assert rule_id in evidence
+        assert f"`{reason.value}`" in evidence
+        assert by_fault[fault].missing == _LAB_MISSING
+
+
+def test_a_laboratory_fault_its_declared_assertion_misses_is_disclosed() -> None:
+    """A row may not count a detection its declared assertion does not make.
+
+    F-020's library row names A-027, and the only mechanism for A-027 here
+    passes over the faulted fixture: what reports the fault is the A-028/A-030
+    flag predicate, and only because the fixture left a flag the moved bounds
+    contradict. That is disclosable, not countable in silence, so the docs/09
+    corpus status section has to name the fault, the assertion its row
+    declares, the assertions that actually fire, and the predicate that
+    passes over the faulted fixture. The set is derived here rather than
+    read from the prose, so a new laboratory row of this shape fails until
+    it is disclosed too.
+    """
+
+    section = _corpus_status_section()
+    reported_elsewhere = []
+    for fault, (_mutation, assertion, rule_id, _reason) in LABORATORY_DETECTION.items():
+        declared = frozenset(assertion.split("/"))
+        if declared & LABORATORY_RULE_ASSERTIONS[rule_id]:
+            continue
+        reported_elsewhere.append(fault)
+        passing = sorted(
+            item.predicate.value
+            for item in _laboratory_outcomes(LABORATORY / f"{fault}.json")
+            if item.status is OutcomeStatus.PASSED
+            and declared & LABORATORY_RULE_ASSERTIONS[item.rule_id]
+        )
+        assert passing, fault
+        for phrase in (
+            fault,
+            *sorted(declared),
+            *sorted(LABORATORY_RULE_ASSERTIONS[rule_id]),
+            *passing,
+        ):
+            assert phrase in section, (fault, phrase)
+    assert reported_elsewhere == list(REPORTED_BY_ANOTHER_ASSERTION)
+
+
+def test_no_laboratory_fixture_carries_a_real_analyte_unit_or_range() -> None:
+    """Every token in the laboratory corpus is invented for software tests."""
+
+    for path in (*LABORATORY_FILES, *LABORATORY_CLEAN_FILES):
+        for result in _load(path)["results"]["results"]:
+            assert result["analyte_code"].startswith("fixture-analyte-")
+            assert result["unit"].startswith("fixture-unit-")
+            assert result["order_id"].startswith("ORDER-CSYN-")
+            assert result["specimen_id"].startswith("CSYN-SPEC-")

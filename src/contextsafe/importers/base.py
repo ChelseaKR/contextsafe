@@ -47,6 +47,7 @@ from typing import Protocol
 from contextsafe.canonical import JsonValue
 from contextsafe.contract_validation import bounded_string, contract_error
 from contextsafe.errors import ContextSafeError
+from contextsafe.laboratory import LaboratoryResult, result_set_document
 from contextsafe.mapping_profile import SourceToken
 from contextsafe.models import (
     OBSERVATION_SET_SCHEMA_VERSION,
@@ -162,7 +163,25 @@ class ImportWarningCode(StrEnum):
     """The source cannot state a checkpoint; the requested one was applied."""
 
     RESULT_COLUMNS_NOT_OBSERVED = "result_columns_not_observed"
-    """The source carries laboratory result columns that became no observation."""
+    """The source carries laboratory result columns that became no observation.
+
+    Attached when a row's result cells became no laboratory result: the
+    source names only some of the result columns, or the row leaves a column
+    that identifies a result empty. The cells are recognized, bounded,
+    scanned, and counted, and nothing is claimed from them. It can appear
+    beside ``result_observations_not_written`` when some rows became results
+    and others did not.
+    """
+
+    RESULT_OBSERVATIONS_NOT_WRITTEN = "result_observations_not_written"
+    """The conversion produced laboratory result observations that no file carries.
+
+    ``contextsafe import`` writes the observation-set document and nothing
+    else, and no receipt section carries a laboratory outcome yet, so a
+    caller that wants the results holds the :class:`ImportResult` in
+    process. The warning exists so that a caller reading only the written
+    document cannot mistake it for everything the source produced.
+    """
 
     MAPPING_PROFILE_ROW_UNMATCHED = "mapping_profile_row_unmatched"
     """A profile was applied and at least one token had no row; it stays verbatim."""
@@ -202,11 +221,23 @@ class ImportResult:
     always ``False`` here and is not a field a caller sets.
 
     ``unobserved_cell_count`` is the number of cells the importer recognized
-    under a column its profile names and deliberately did not convert: the
-    laboratory result columns of an LIS export, whose observation family is
-    a later item. It counts what was read and not claimed, so a caller
-    holding the result can see that the source carried more than the
-    observations say. It is zero for a format with no such column.
+    under a column its profile names and read without claiming anything
+    from: the laboratory result cells of a row that became no result,
+    because the source names only some of the result columns or the row
+    leaves one of the columns that identify a result empty. It counts what
+    was read and not claimed, so a caller holding the result can see that
+    the source carried more than its output says. A zero is not a statement
+    that the source had no result column: it is equally the count for a
+    format with no such column and for a source whose every row became a
+    laboratory result. What was claimed from those cells is ``results``,
+    and ``warnings`` says what was not.
+
+    ``results`` is the laboratory result observation family
+    (:mod:`contextsafe.laboratory`): one result per row of a source that
+    carries the whole result column set. It is a separate observation kind
+    with its own document, so it is not counted in ``record_count`` and
+    never appears in ``observation_set()``; no command writes it, which is
+    what ``result_observations_not_written`` says.
 
     ``source_tokens`` is one :class:`SourceToken` per observation, in the
     same order: what the source said before anything bound it. Every
@@ -224,6 +255,7 @@ class ImportResult:
     warnings: tuple[ImportWarningCode, ...]
     profile_reviewed: bool = False
     unobserved_cell_count: int = 0
+    results: tuple[LaboratoryResult, ...] = ()
     source_tokens: tuple[SourceToken, ...] = ()
     profile_sha256: str | None = None
     profile_version: str | None = None
@@ -273,6 +305,27 @@ class ImportResult:
             "schema_version": OBSERVATION_SET_SCHEMA_VERSION,
         }
 
+    def result_set(self) -> dict[str, JsonValue] | None:
+        """Return the laboratory result-set document, or ``None`` if there is none.
+
+        A separate contract from the observation set
+        (``contextsafe.result-set/0.1.0``) because a laboratory result is a
+        separate observation kind, not a sixth canonical concept. No command
+        writes it yet.
+
+        A conversion may produce no result at all -- a source that names
+        only some of the result columns, or whose rows leave one of them
+        empty -- and ``contextsafe.result-set/0.1.0`` requires at least one
+        result, so there is no document to return for that conversion.
+        This returns ``None`` rather than a document its own contract would
+        reject: a caller reads ``results`` for what was claimed, and the
+        warnings for what was not.
+        """
+
+        if not self.results:
+            return None
+        return result_set_document(self.results)
+
     def to_dict(self) -> dict[str, JsonValue]:
         """Return the value-minimized report of this conversion.
 
@@ -291,6 +344,7 @@ class ImportResult:
             "profile_sha256": self.profile_sha256,
             "profile_version": self.profile_version,
             "record_count": self.record_count,
+            "result_count": len(self.results),
             "source_byte_count": self.source_byte_count,
             "source_sha256": self.source_sha256,
             "unobserved_cell_count": self.unobserved_cell_count,

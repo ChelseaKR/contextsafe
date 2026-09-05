@@ -30,6 +30,11 @@ rather than after it.
   carrying findings about an artifact nobody received. Which of the two the
   reader is looking at therefore does not depend on where in the command the
   failure happened.
+  The published list carries `result_observations_not_written` alongside
+  `result_columns_not_observed`: the laboratory readers emit both, and the log
+  writes its list out rather than importing the importers', so a code the
+  readers can raise and the log does not publish is a command the log refuses
+  to record at all. `tests/test_diagnostics.py` pins the two sets equal.
 
 - **The receipt contract is 0.3: `contextsafe.receipt/0.3.0`,
   `schemas/contextsafe-receipt-v0.3.schema.json`.** The payload gains the
@@ -410,7 +415,177 @@ rather than after it.
   receipt binding held leaves a new, empty log behind, which replays to the
   empty state.
 
+- **Two SHA-pinned actions that Dependabot had stopped offering were bumped by
+  hand.** `actions/checkout` v7.0.0 to v7.0.1 and `actions/setup-python` v6.3.0
+  to v7.0.0, across all five workflows, each SHA read from the upstream tag
+  rather than guessed and each version comment kept beside its pin. Closing a
+  Dependabot pull request tells it not to raise that version again, and #18 and
+  #19 were closed on 2026-08-16, so neither bump was ever coming back on its own
+  (#91). `docs/PR-TRIAGE.md` declined the setup-python major bump as an untested
+  workflow change; that caution is answered rather than ignored -- v7.0.0's one
+  breaking change is the removal of the `pip-install` input, and every
+  `setup-python` step here passes `python-version` and `check-latest` and
+  nothing else -- and it remains a change only a CI run can validate.
+
+  `tests/test_ci_workflows.py` pins what a checkout can check: every action is
+  pinned to a full commit SHA, every pin carries the version it is, and one
+  action is pinned to one SHA in every workflow, so a bump cannot half-happen.
+  Those checks read only `uses:` lines of the form `owner/repo@ref`, so a
+  further assertion requires every `uses:` line to be one of that form or a
+  local `./` action: a `uses: docker://image:tag` step would otherwise sit
+  outside "every action is pinned to a full SHA" while the statement stayed
+  true of the set it had matched.
+  Whether a pin is current against upstream is the one supply-chain fact no gate
+  here re-derives, because it needs a network call; the README's Security and
+  Supply-Chain row carries that disclosure.
+
+- **The LIS profile is 0.2.0, and both pinned LIS import digests moved with
+  it.** The version a profile records is what tells two behaviours apart, so
+  it moved with what the profile emits. The identity observations themselves
+  are unchanged in value and shape.
+- **The two packaged `lis-export` reference fixtures were rewritten so that
+  every result cell is an invented token.** They carried a synthetic analyte
+  code beside a real unit and a real-looking numeric range; once a result row
+  becomes an observation, that would have put both into one. The
+  publication-readiness synthetic-data table and byte total moved with them.
+- **A laboratory result's evidence pointer is the row it was read from, not a
+  cell.** A cell word such as `analyte` would widen
+  `STRUCTURAL_POINTER_SEGMENTS`, which the receipt contract's pointer pattern
+  copies verbatim, and widening that is a receipt version bump. The row is
+  where a result is read from; the cells are what it is built out of. When a
+  laboratory outcome does reach a receipt, both sets widen together and the
+  receipt contract moves with them.
+
+- **`ImportResult.result_set()` returns `None` for a conversion that claimed
+  no result, and `convert_table` refuses a repeated column.** A source that
+  names only some of the result columns produces no result, and
+  `contextsafe.result-set/0.1.0` requires at least one, so the accessor used
+  to be able to hand a caller a document its own published contract rejects;
+  it now says there is no document instead. `convert_table` is an entry point
+  of its own, and a table whose header repeats a column has two cells under
+  one name: the file readers already refused that, and the entry point now
+  does too, rather than reading one of the two cells and forgetting the
+  other. No command's behaviour changes: nothing writes a result set.
+
+- **The 2026-09 wave is consolidated into one "Iteration 6" block, and the
+  README status line reaches it (#77).** The wave had appended a subsection per
+  item to the end of "Internal implementation slice", on the explicit
+  instruction that a later pass would consolidate them; this is that pass.
+  Thirteen `### B-0xx` subsections become one iteration block in the shape of
+  iterations 1 to 5 — one bullet group per shipped item, every limit kept,
+  nothing aspirational — and the `iteration-6` status line makes the claims
+  gate's iteration check pass against what the README now documents. Three
+  sentences that had gone stale with it were corrected rather than carried: the
+  lead paragraph said "Twelve subcommands" on one line and "Eleven" on the
+  duplicate line below it, where there are fourteen; the closing summary still
+  said these slices have no "HL7/LIS adapters" or "HTML report", both of which
+  it documents above; and the Windows sentence named
+  `input_path_unsupported` for `pack validate` and `plan validate`, which
+  report `component_path_escape` (see below). The `[Unreleased]` section of
+  this file is also tidied into one heading of each kind — it carried two
+  `### Fixed` headings when this pass was written — with every one of its
+  entries kept, and four entries describing a new command or document moved
+  from `Changed` to `Added`.
+
+- **`docs/13-BACKLOG.md` phase tables carry a derived `Status` column, and
+  `make claims` re-derives every cell from the implementation notes (#98).**
+  The notes had outgrown their shape: an item's row was separated from its
+  status by the notes for four other items, and the wave added nine more. The
+  notes stay chronological, which is what they are, and the column is now the
+  index into them — `Open — note YYYY-MM-DD` where a note names the item,
+  `Open — no note` where none does. Both values begin with `Open` because no
+  item in the backlog is closed, and a derived column may not be the place that
+  first says one is. `tools/claims_gate.py` grows a tenth check,
+  `backlog-status`, which fails in both directions: a cell that disagrees with
+  the notes, and a row that stops carrying one. Two note headers that named no
+  item although their bodies did (2026-07-13, B-017/B-018/B-019; 2026-07-17,
+  B-021) now name them, since the header is where the derivation binds, and one
+  note that had been glued to the paragraph above it got its blank line back.
+  The gate's printed boundary gains the matching limit: it derives that a note
+  exists and when it was written, never whether the work moved the item toward
+  its acceptance statement.
+
+- **`docs/10-OPERATIONS-SRE.md` no longer lists Windows 11 as supported without
+  qualification (#79).** Six commands read a caller-named file through the
+  evidence boundary — `evidence preflight`, `import` in every format, both
+  `finding` commands, `pack validate`, and `plan validate` — and Windows
+  provides neither `O_NOFOLLOW` nor `dir_fd`, so they refuse rather than read
+  with a weaker guarantee. That behaviour is correct and is unchanged; the
+  documentation claim was what had gone out of date, and the cross-platform
+  determinism matrix had been recording the gap since 2026-08-15. Section 3.1
+  is a command-by-command matrix saying what runs on Windows and what refuses,
+  with the code each refusal carries, so a reader learns before running one.
+  Three limits are recorded rather than corrected, because correcting any of
+  them changes behaviour: `pack validate` and `plan validate` report
+  `component_path_escape`, not `input_path_unsupported`, because the pack
+  compiler maps an unsupported platform onto the same code as an escaping
+  component path; the opt-in `--log-dir` event log appends without the
+  no-follow guarantee rather than refusing; and `src/contextsafe/evidence_store.py`
+  drops `O_NOFOLLOW` and skips its owner-only permission refusals off POSIX,
+  which `cleanup` and `diagnostics` reach. Those are the places where a missing
+  platform capability degrades instead of failing closed, and none of them
+  reads a caller-named source. The `diagnostics` row names all three capability
+  flags the command emits, `owner_only_permissions` included, so an operator
+  can see which are false. The 2026-08-15 implementation note in
+  `docs/13-BACKLOG.md` that recorded the gap carries a dated correction rather
+  than a rewrite: it had said three commands, `input_path_unsupported` for all
+  of them, and Operations listing Windows 11 unqualified. No decision to drop
+  Windows has been taken and none is claimed.
+
 ### Fixed
+
+- **The summariser refused, in whole and forever, any log two commands had
+  written at once.** `append_event` derives a record's sequence by counting the
+  file's lines and then appending, with no lock between the two, so commands
+  run at once against one shared `--log-dir` all see the same count and all
+  write it, and a writer delayed between the count and the append writes a
+  number below the position its line lands at. The reader required
+  `sequence == index` and answered `log_sequence_mismatch` at exit 2 for the
+  whole log, with no flag to relax it and no recovery path — for a log every
+  byte of which this tool wrote. Four concurrent writers appending forty
+  records each were enough. That is exactly the operator issue #97 describes,
+  holding a week of runs and asking how many failed closed, and it falsified
+  the module's own claim that the writer cannot produce a line its reader
+  refuses.
+
+  The reader now enforces the invariant the append-only writer actually holds,
+  which is one-sided: a writer can never have counted more records than precede
+  its own line, so a `sequence` above its index is refused and a repeated or
+  lagging one is read. The one edit that check exists to catch is unaffected —
+  a line removed from a log still leaves a later record above its position, and
+  still refuses the summary at `$.log[N].sequence`. A `sequence` that is not a
+  JSON integer, boolean included, is now `invalid_integer` at the field rather
+  than a comparison that happened to fail. `tests/test_event_log_summary.py`
+  appends from four concurrent writers to one `--log-dir` — synchronised by a
+  barrier, so the race is certain rather than likely — and summarises what they
+  wrote; the safety-negative that missed this wrote one record from one process.
+
+- **`--output` naming the log `--log-dir` writes to truncated it, and exited
+  0.** `--output` is a plain truncating write and it happens before the record
+  for the run is appended, so `contextsafe diagnostics --log-dir C --output
+  C/contextsafe-events.jsonl` replaced every record in `C`'s append-only event
+  log with one command's document and then appended a record to what was left.
+  `events summarize` guarded the log it *reads* and nothing guarded the log
+  every command *writes*. It was cosmetic while nothing read the event log;
+  once a reader exists it is not, because the summary refuses a whole log over
+  a single line it cannot parse, so a truncated log can never be summarised
+  again. Every command that accepts `--log-dir` now refuses such an `--output`
+  as `output_path_unsafe`, before the command runs and while the log is still
+  intact, using the same two-comparison guard `finding` has used over the
+  review log. The refusal is itself recorded in the log it protected.
+
+- **`fixtures export --log-dir DIR` logged nothing and said so on stderr.**
+  `fixtures` was never added to the event log's command vocabulary, so the
+  record was refused as `unloggable_command`, the error object was printed to
+  stderr, and the command still exited 0 — a run that happened and left no
+  trace in the file whose purpose is to record what ran. Found while building
+  the reader above, and fixed here rather than later because the new summary
+  contract names every command in that vocabulary, so a command added to it
+  after this lands moves a published contract's version.
+  `tests/test_event_log_summary.py` now derives the check from the argument
+  parser: every command the CLI publishes is loggable, and every entry in the
+  vocabulary is a command the CLI publishes, so neither side can gain a member
+  alone.
 
 - **The receipt contract and the runtime disagreed about how long a source
   pointer may be (#72).** The published `structural_pointer` carried
@@ -551,6 +726,65 @@ rather than after it.
   exclusive would have passed the whole suite. A test now builds exactly
   `MAX_ROWS` rows and asserts the profile parses.
 
+- **A dropped PyPI connection failed the merge gate with the same exit code as
+  a real advisory.** `make audit` was `uv run pip-audit ...`, and pip-audit
+  answers with two exit codes where every other gate here answers with three.
+  On pull request #61 the audit died with `ConnectionResetError(104,
+  'Connection reset by peer')`, `verify` went red on a change that touched no
+  dependency, and the same commit passed on a re-run (#74).
+
+  `make audit` runs `tools/audit_gate.py` now. Same pip-audit, same locked
+  environment, same `--skip-editable`, three states: 0 every non-editable
+  distribution was audited and none carried an advisory, 1 at least one did, 2
+  the advisory service did not answer, the report could not be read, or the run
+  audited nothing. The report decides, not the exit code and not a string match
+  on stderr -- pip-audit writes its JSON report when the audit completes and
+  writes none when it does not, which was measured rather than assumed, so a
+  parsed report naming an advisory is a finding whatever the process exited
+  with, and a non-zero exit over a report naming none is an unexplained
+  disagreement and therefore not a clean audit. "Could not be read" reaches
+  inside the report as well as at it: a dependency entry whose `vulns` field is
+  not a list -- absent, `null`, a string, an object -- refuses the whole report
+  rather than counting as one more audited distribution with nothing against it,
+  because its advisory status was never established and a gate that filed it
+  under "clean" would be the fail-open reading of the one field it exists to
+  read. An empty `vulns` list is an answer and stays one. A transient failure is
+  retried three times with doubling backoff before the gate answers 2; an
+  advisory is never retried, because asking the same service again is not a
+  second opinion.
+
+  **This does not make `make verify` runnable offline, and #74's second half is
+  refused rather than quietly dropped.** An audit needs the advisory service.
+  Offline, `verify` now fails at `audit` with exit 2 and a sentence saying the
+  service was not reached, instead of exit 1 and a traceback. The alternative --
+  a stage that answers 0 without reaching the service -- is the defect the gate
+  exists to remove. #74's own "Done when" is *a PyPI outage cannot fail an
+  unrelated pull request*, and that is met for the dropped connection #61
+  observed and not met for a sustained outage, which now fails as "did not
+  examine" rather than as a vulnerability. The issue is closed against that
+  sentence rather than closed as though it read something else. `security.yml`
+  runs `make audit` rather than its own copy of the command line, so CI and a
+  contributor run the identical gate. The three
+  states are driven by a stand-in auditor in `tests/test_audit_gate.py`, with no
+  network call anywhere: a test that reached PyPI would be the flake it tests
+  for. The "did not examine" case joins the one contract in
+  `tests/test_gate_exit_contract.py`, whose derivation would have failed had it
+  not. See
+  [ADR 0011](docs/adr/0011-dependency-audit-reachability-in-the-merge-gate.md).
+
+- **A documentation-only pull request skipped the four gates that exist to read
+  documentation.** `ci.yml` carried `paths-ignore` for `**.md`, `docs/**` and
+  `LICENSE`, and `make verify` runs `claims` (which re-derives the figures and
+  lists the README and `CONTRIBUTING.md` state), `publication-sweep`, `hygiene`
+  and `i18n`. So a README-only change could break `make claims` and merge green,
+  and the next code pull request inherited a failure it did not cause (#102).
+  The `paths-ignore` is gone from both triggers; `verify` runs on every pull
+  request and every push to `main`. `tests/test_ci_workflows.py` fails if one
+  comes back, in any workflow. This also removes the mechanical reason `verify`
+  could not be a required status check -- a required check that never runs
+  leaves a documentation-only pull request pending forever -- but **making it
+  required is a repository-settings change and has not been made** (#75).
+
 - **The full-history secret scan has been red on `main` since B-026 landed, on
   four false positives.** gitleaks' `generic-api-key` rule reads
   `SOURCE_TOKEN_PATTERN, max_length=96` as a credential because the assignment
@@ -611,6 +845,82 @@ rather than after it.
   repository; it does not rewrite history.
 
 ### Added
+
+- **`contextsafe events summarize --directory DIR`, the reader the event log
+  never had (issue #97).** Every command has accepted `--log-dir` since B-046
+  and appended one closed-vocabulary record to a local append-only log, and
+  nothing read it. An operator with a week of runs had a JSON-lines file and
+  no supported way to ask how many evaluations failed closed and with which
+  codes, which matters for a pilot where the event log is the only record of
+  what was actually run.
+
+  The summary is a document, not a listing: the record count, the count of
+  each command, of each outcome, and of each error code, and the SHA-256 of
+  the bytes read. Every key is drawn from the vocabularies the writer draws
+  from, so there is no field a timestamp, a path, or a sentence could occupy;
+  the counts are of records, never of anything a logged command read. A
+  command with no record is a zero rather than an absent key, so the shape
+  does not change with the log's contents. The digest is of the bytes, which
+  is what lets one summary be told from another without naming the file — it
+  is not a chain, and a log cut back to an earlier line summarises as a valid
+  shorter log.
+
+  It refuses rather than skips. A line that is not one canonical record — bad
+  JSON, an unknown or missing field, a command or outcome outside the closed
+  set, an error code that is a message, a version that is not the published
+  one, a sequence number ahead of the records before it, or a line whose
+  fields are all valid but whose bytes are not the canonical form — refuses
+  the whole summary at `$.log[N]` and the field, carrying neither the value
+  nor the path of the log. A summary derived from the lines that happened to
+  parse would understate exactly the runs an operator is counting, and would
+  do it silently. The log is opened once, no-follow, and required to be a
+  regular file within the size limit the writer already enforces; it is never
+  written to, an `--output` naming it is refused as `output_path_unsafe` the
+  way `finding` refuses one over the review log, and a directory with no log
+  in it is a rejection rather than an empty summary, because absence must not
+  read as "nothing failed". Like the other descriptor-anchored commands it
+  fails closed with `input_path_unsupported` where the platform lacks
+  `O_NOFOLLOW`.
+
+  Two contract notes. The log's closed command vocabulary gains `events` and
+  `fixtures`, and that does not move the record's schema version, as adding
+  `receipt`,
+  `mapping`, and `finding` did not: a record is not one of the published
+  contracts in `schemas/`, every log an earlier vocabulary wrote stays exactly
+  as readable, and bumping the version would instead make an operator's
+  existing log unreadable by the reader that exists to read it. (What did move
+  it, in the entry above, is a widened field set: `contextsafe.event-log/0.2.0`
+  carries `warnings`, and the reader here reads that record.) The residual is
+  that a record does not say which command vocabulary was in force when it was
+  written. What is published is the summary:
+  `schemas/contextsafe-event-log-summary-v0.1.schema.json`, the twenty-second
+  contract in `schemas/README.md`, with `tests/test_event_log_summary_schema.py` holding
+  it against the runtime — including that it names every command the log
+  publishes, so the next command added to that vocabulary moves *this*
+  contract's version. Separately, an error code is now held to one grammar
+  (`^[a-z][a-z0-9_]{2,63}$`) at both ends instead of an `isalnum` check at the
+  writer, so the writer cannot produce a line its own reader would refuse;
+  every one of the 162 codes this package raises already matched it.
+
+  What this does not do: it reads one log, and correlating its records with
+  anything else still needs a timestamp captured outside the tool, because
+  neither the log nor the summary reads a clock. It is not an audit trail, it
+  proves nothing about which run came first, and it says nothing about what
+  any run found — a receipt is where findings live. A `sequence` is the count
+  of records the writer saw before it appended, not a unique key and not an
+  ordering: the writer takes no lock, so two commands run at once against one
+  `--log-dir` write the same number, and the reader is written to that
+  guarantee rather than to a stricter one it cannot hold. The command keys and
+  outcome keys are closed sets; the error-code keys are a grammar, so a
+  hand-written log line carrying a conforming string this package never raises
+  summarises to that string as a key — the tool cannot write such a line, and
+  the contract's semantic constraints say so. Because widening the log's
+  command vocabulary does not move the record's schema version, a log
+  holding a `fixtures` or `events` record would be refused in whole as
+  `invalid_enum` by a reader built against a narrower vocabulary; no such
+  reader has ever existed, and that is the failure mode the next command added
+  to that set will produce. `docs/13-BACKLOG.md` B-046 stays open for the
+  reasons it already lists.
 
 - **`make patterns`: every published pattern now has to have a runtime constant
   behind it (#73).** The name-target defect fixed in #58 had one root cause
@@ -1333,6 +1643,159 @@ rather than after it.
   claim, not a correctness claim; and the pack contract still pins the
   exact-only rule-set shape, so a 0.2.0 rule set is refused as a pack
   component by name (`incompatible_component`) until that contract moves.
+
+- **Mutation evidence now runs without anybody remembering to produce it.**
+  `make mutants` changes one operator or constant in a declared safety module
+  and requires the suite to fail, and ADR 0009 left it deliberately outside
+  `make verify` for runtime and outside CI entirely, which meant the only
+  evidence that the suite would *notice* a change rather than merely execute the
+  line was evidence somebody produced by hand (#80).
+  `.github/workflows/mutation.yml` runs it weekly and on any pull request
+  touching `src/contextsafe/**`, the suite, the gate, the `Makefile` or the
+  lock. It stays out of `make verify`.
+
+  The path filter is `src/contextsafe/**` rather than the safety modules by
+  name: that set is decided in the `Makefile`'s `SAFETY_MODULES`, and a filter
+  enumerating those files would be a second hand-maintained copy of it in a file
+  no gate reads. Broad is the fail-closed direction here -- it runs the gate on
+  changes that did not need it and never skips one that did. ADR 0008's exit
+  codes are not softened: the job has no `continue-on-error` and no `|| true`,
+  it always exits with the gate's own status, and it names which of the three
+  states happened first, so "the gate produced no evidence" does not have to be
+  inferred from a number. ADR 0009's caution against a workflow nobody has
+  watched execute is recorded there as still standing rather than waived:
+  its first real run is the evidence, not its existence.
+  `docs/18-ASSURANCE-PROGRAM.md` now says the same in the one file whose whole
+  purpose is separating claimed assurance from demonstrated assurance -- Phase 5
+  is wired into CI on a date, not running since one, and its first run has not
+  been observed -- and `tests/test_ci_workflows.py` fails if that ledger goes
+  back to dating a run no checkout can see.
+
+  What this does **not** do is widen the declared subset. `DECLARED_TARGETS` is
+  still three modules of the twenty-eight in `SAFETY_MODULES`, so the six that
+  the 2026-09 wave added still have no mutation evidence; widening it is a
+  runtime decision ADR 0009 leaves open and this change does not take.
+
+  Running the gate before wiring it up found one survivor, which is the argument
+  for the job stated as a defect: **nothing asserted the permissions the review
+  log is created with.** `_open_log` passes `0o600` to `os.open`, the mutant
+  moved it to `0o601` -- an execute bit for every account on the machine -- and
+  all 2915 tests stayed green, because every one of them reads what the log says
+  and none reads what the filesystem says about who may read it. A review log
+  carries decision hashes, signer roles and the chain that makes tampering
+  visible. `tests/test_review.py` now clears the umask and pins the literal
+  `0o600`, rather than asserting only that the group and other bits are clear:
+  that weaker assertion killed the mutant on this machine and on the ubuntu
+  runners because both default to umask 022, and would have passed under the
+  umask 077 a hardened account uses, where a missing mode argument yields
+  `0o700`. A test that holds only on the umask it happened to run under pins
+  the environment, not the module. 123 mutants over 590 covered lines, all
+  killed.
+
+- **Laboratory result observations, and the range and flag predicates over
+  them (B-025 result half, B-030 mechanism half).** The LIS readers already
+  recognised, bounded, scanned and counted the result columns of an export
+  and emitted nothing from them. They now build a laboratory result
+  observation from a row that carries the whole result column set: an analyte
+  code, a value carried as a decimal string, a unit, an order and a specimen,
+  a reference interval with both bounds, both inclusivities and a unit, and an
+  abnormal flag. Four pure predicates read them — `result_linked` (A-025),
+  `analyte_value_unit_preserved` (A-026, exact), `reference_interval_present`
+  (A-027/A-029) and `flag_consistent_with_interval` (A-028/A-030, computed
+  from the fixture's own bounds at below, lower bound, in range, upper bound
+  and above).
+
+  **A separate observation kind, not a sixth concept.** The five Gender
+  Harmony concepts are untouched: `ConceptKind` still has exactly its five
+  members, no result field is read as or derived from any of them, and no
+  identity value chooses an interval. A sixth `ConceptKind` would have added a
+  required key to the case manifest's closed concept set, put a laboratory
+  value on the identity divergence section, and moved every identity contract
+  for a laboratory change. The family carries its own two contracts instead.
+
+  **Absence is never normal.** A blank interval fails the presence claim
+  (A-029) and decides no flag (A-030); an out-of-range value returned with no
+  flag fails; an in-range value with no flag is indeterminate, because a flag
+  nobody sent is not evidence that a result is normal; and a range or flag in
+  a dialect this ungoverned profile cannot type is carried as `not_typed`
+  rather than normalized to whatever it most resembles (A-033), with every
+  outcome that would have read it indeterminate. `REASON_STATUSES` names the
+  statuses each reason may be published under, and four reasons can reach
+  `pass`.
+
+  **Nothing here is clinical content.** Every analyte code, unit, bound,
+  inclusivity and flag in the repository is a token invented for software
+  tests; no laboratory medical director, clinical reviewer or community
+  reviewer has supplied or approved any value, any interval or any predicate;
+  and no interval here is a reference range for any analyte, person or
+  population. `docs/05-DATA-AND-EVIDENCE.md` §4 is unchanged in substance: the
+  partner's laboratory medical director supplies the real fixture values, and
+  B-011 is open for exactly that. The shipped family carries no age band and
+  no effective oracle version, and no result status either, so each predicate
+  decides less than the assertion it is offered for and no rule written in it
+  can be a governed assertion; A-031 is not implemented at all, and A-025 to
+  A-030 are mechanisms rather than assertions.
+
+  Fixtures: the INV, CTX and XFAIL classes of `docs/05` §4 with all six edge
+  values each, and the seeded faults F-017 to F-022 and F-033 with a clean
+  counterpart each. The corpus matrix gains a fourth status, `exercised
+  outside the receipt`, and now reads 12 exercised at receipt level, 7
+  exercised outside it, 7 refused, 10 not yet exercisable — a laboratory
+  outcome reaches no receipt and no divergence section, so nothing localizes
+  one, and counting those rows as exercised would claim a localization the
+  mechanism does not make. One of those rows is reported by an assertion
+  other than the one its library row names, and `docs/09` says so: F-020
+  mutates the interval bounds, and `reference_interval_present` -- the only
+  mechanism for A-027 here -- passes over the faulted fixture, because both
+  bounds, both inclusivities and a fitting unit are all present. What reports
+  F-020 is the A-028/A-030 flag predicate, and only because the fixture left a
+  flag the moved bounds contradict; wrong bounds returned with a flag that
+  agrees with them would pass all four rules, and comparing bounds against
+  approved ones is what B-011 is for. The test module derives that set from
+  the corpus table and requires the disclosure, so a later row of the same
+  shape cannot be counted in silence.
+
+- **`docs/ROADMAP-WAVE-2026-09.md`, a dated state table for all fifty-seven
+  backlog items (#77).** One row per item, in one of four states derived from
+  the implementation notes in `docs/13-BACKLOG.md` and the git log and nothing
+  else: shipped in this wave with the commit, previously shipped, blocked on a
+  named person or a maintainer decision with the open issue beside it, or not
+  started. Twelve items had a mechanism land in this wave, seventeen had one
+  before it, twenty-eight are waiting on somebody who does not exist yet, and
+  no row is "not started", because every unstarted item has a named blocker in
+  front of it. The preface says what the wave did **not** establish — no
+  governance, no pilot, no clinical approval, no signing — and the table says
+  in its own header that "shipped" means a mechanism landed, never that a
+  backlog item closed. Two limits of the derivation are stated in the document:
+  five Phase 1 and Phase 2 rows are read from a commit subject that does not
+  name the item, and no state here is a judgment about quality or readiness.
+
+- **A README walkthrough that runs a reader, and a test that runs it from the
+  wheel (#95).** The Quickstart evaluated observations somebody had already
+  authored, which is the one path that exercises no importer: a visitor saw the
+  fixture path rather than the thing the project is for. A second block under
+  `### From a source file to a receipt` now takes the packaged synthetic FHIR
+  R4 `Patient` through `import --format fhir-r4-json --mapping`, `evaluate`,
+  and `render`, using only fixtures that ship in the wheel, and says what the
+  receipt reports: three passes at the EHR and two `missing_evidence`
+  indeterminates for the boundaries this one source never crossed.
+  `tools/fresh_install_gate.py` grows `documented_commands(readme, heading)`,
+  so the Quickstart parser and the walkthrough parser are one function pointed
+  at two headings, and `tests/test_wheel_quickstart.py` runs the walkthrough
+  from the same built wheel in the same directory outside the checkout. The
+  walkthrough is deliberately **not** part of `run_gate`: `import` fails closed
+  where the platform has no descriptor-relative no-follow read, and
+  `package.yml` runs that gate on Windows. No fixture, command, or digest
+  changed.
+
+### Contracts
+
+- Added `contextsafe-result-set-v0.1.schema.json` and
+  `contextsafe-result-rule-set-v0.1.schema.json`, each with an agreement test
+  holding it to the runtime's vocabularies; `schemas/README.md` now counts
+  twenty-one contracts. No existing contract's version moved: the case
+  manifest, the observation set, the rule set and the receipt are all
+  untouched, and no closed set in any of them widened.
 
 ## [0.1.0] - 2026-09-02
 

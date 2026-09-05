@@ -1,18 +1,22 @@
+# This workflow runs on every pull request and every push to main, with no
+# `paths-ignore`. It carried one for `**.md`, `docs/**` and `LICENSE` until
+# 2026-09-04, on the reasoning that a documentation-only change has no code to
+# gate. Four stages of `make verify` are documentation gates: `claims`
+# re-derives the figures and lists the README and CONTRIBUTING.md state,
+# `publication-sweep` reads every tracked file for personal paths and internal
+# hosts, `hygiene` scans for unowned markers, and `i18n` reads the catalogs
+# whose surfaces the Markdown documents. So a README-only change could break
+# `make claims` and merge green, leaving the next code pull request to inherit
+# a failure it did not cause. The skip also made `verify` unusable as a
+# required status check, because a required check that never runs leaves a
+# documentation-only pull request pending forever (#75, #102).
 name: CI
 
 on:
   pull_request:
-    paths-ignore:
-      - "**.md"
-      - "docs/**"
-      - "LICENSE"
   push:
     branches:
       - main
-    paths-ignore:
-      - "**.md"
-      - "docs/**"
-      - "LICENSE"
 
 permissions:
   contents: read
@@ -33,12 +37,12 @@ jobs:
       UV_PYTHON_DOWNLOADS: never
     steps:
       - name: Check out repository
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
 
       - name: Set up Python
-        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.3.0
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: "3.12"
           check-latest: false
@@ -74,12 +78,12 @@ jobs:
       UV_PYTHON_DOWNLOADS: never
     steps:
       - name: Check out repository
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
 
       - name: Set up Python
-        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.3.0
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: "3.12"
           check-latest: false
@@ -114,12 +118,12 @@ jobs:
       UV_PYTHON_DOWNLOADS: never
     steps:
       - name: Check out repository
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
 
       - name: Set up Python
-        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.3.0
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: "3.12"
           check-latest: false

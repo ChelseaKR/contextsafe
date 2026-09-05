@@ -1,0 +1,120 @@
+{
+  "fault": "F-017",
+  "mutation": "attach order to wrong synthetic patient",
+  "assertion": "A-025",
+  "case": {
+    "schema_version": "contextsafe.case/0.1.0",
+    "case_id": "CTP-L01",
+    "synthetic_identifier": {
+      "system": "urn:contextsafe:synthetic",
+      "value": "CSYN-CTP-L01"
+    },
+    "concepts": {
+      "gender_identity": {
+        "status": "specified",
+        "value": "fixture-gender-1",
+        "code_system": "urn:contextsafe:fixture"
+      },
+      "recorded_sex_or_gender": [
+        {
+          "value": "unknown",
+          "context": "laboratory",
+          "source": "synthetic-fixture"
+        }
+      ],
+      "sex_parameter_for_clinical_use": [],
+      "name_to_use": {
+        "status": "specified",
+        "value": "CSYN-INV-L01",
+        "use": "usual"
+      },
+      "pronouns": {
+        "status": "specified",
+        "value": "they/them"
+      }
+    },
+    "prohibited_inferences": [
+      "gender_identity_to_spcu",
+      "recorded_sex_or_gender_to_spcu"
+    ]
+  },
+  "results": {
+    "schema_version": "contextsafe.result-set/0.1.0",
+    "results": [
+      {
+        "schema_version": "contextsafe.result/0.1.0",
+        "result_id": "RES-CTP-L01-0001",
+        "case_id": "CTP-L01",
+        "checkpoint": "lis_return",
+        "analyte_code": "fixture-analyte-1",
+        "value": "5.000",
+        "unit": "fixture-unit-alpha",
+        "order_id": "ORDER-CSYN-CTP-L09-A",
+        "specimen_id": "CSYN-SPEC-CTP-L01-0001",
+        "reference_interval": {
+          "status": "typed",
+          "low": "2.500",
+          "low_inclusive": true,
+          "high": "7.500",
+          "high_inclusive": true,
+          "unit": "fixture-unit-alpha"
+        },
+        "abnormal_flag": {
+          "status": "typed",
+          "flag": "fixture-flag-in-range"
+        },
+        "evidence": {
+          "source_sha256": "c8300d12bb4e14ffa26265f5daf14ae9332d9a066fc5365774402ed1c84532f7",
+          "source_pointer": "$.rows[0]"
+        },
+        "mapping_version": "0.1.0"
+      }
+    ]
+  },
+  "rules": {
+    "schema_version": "contextsafe.result-rule-set/0.1.0",
+    "rules": [
+      {
+        "rule_id": "A-L01",
+        "version": "0.1.0",
+        "case_id": "CTP-L01",
+        "checkpoint": "lis_return",
+        "result_id": "RES-CTP-L01-0001",
+        "required": true,
+        "predicate": "result_linked",
+        "expected_order_id": "ORDER-CSYN-CTP-L01-A",
+        "expected_specimen_id": "CSYN-SPEC-CTP-L01-0001"
+      },
+      {
+        "rule_id": "A-L02",
+        "version": "0.1.0",
+        "case_id": "CTP-L01",
+        "checkpoint": "lis_return",
+        "result_id": "RES-CTP-L01-0001",
+        "required": true,
+        "predicate": "analyte_value_unit_preserved",
+        "expected_analyte_code": "fixture-analyte-1",
+        "expected_value": "5.000",
+        "expected_unit": "fixture-unit-alpha"
+      },
+      {
+        "rule_id": "A-L03",
+        "version": "0.1.0",
+        "case_id": "CTP-L01",
+        "checkpoint": "lis_return",
+        "result_id": "RES-CTP-L01-0001",
+        "required": true,
+        "predicate": "reference_interval_present"
+      },
+      {
+        "rule_id": "A-L04",
+        "version": "0.1.0",
+        "case_id": "CTP-L01",
+        "checkpoint": "lis_return",
+        "result_id": "RES-CTP-L01-0001",
+        "required": true,
+        "predicate": "flag_consistent_with_interval"
+      }
+    ]
+  }
+}

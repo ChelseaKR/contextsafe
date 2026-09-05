@@ -1,0 +1,154 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://contextsafe.invalid/schemas/contextsafe-result-set-v0.1.schema.json",
+  "title": "ContextSafe laboratory result set 0.1",
+  "description": "Reference-only and ungoverned. A set of laboratory result observations for one synthetic case. Every analyte code, unit, bound, and flag in a document of this shape is a fixture token invented for software tests: no laboratory medical director, clinical reviewer, or community reviewer has approved any of them, and nothing here is a reference-interval recommendation for any analyte, person, or population. docs/05-DATA-AND-EVIDENCE.md section 4 is where a partner's laboratory medical director supplies the real fixture values.",
+  "$comment": "A laboratory result is a separate observation kind, not a sixth canonical concept: gender_identity, recorded_sex_or_gender, sex_parameter_for_clinical_use, name_to_use, and pronouns are unchanged by this contract and no field here is derived from, or may be substituted for, any of them. A result reaches no receipt, so the receipt contract's closed outcome-reason set and structural-pointer vocabulary are untouched. JSON Schema validates structure; contextsafe.laboratory additionally enforces the x-contextsafe-semantic-constraints below.",
+  "x-contextsafe-semantic-constraints": [
+    "every result's case_id equals the case document's case_id",
+    "a result identifier appears at most once in the set",
+    "a typed reference interval admits at least one decimal: low is not above high, and equal bounds require both to be inclusive",
+    "a source pointer is built only from contextsafe.validation.STRUCTURAL_POINTER_SEGMENTS; an importer points a result at the row it read, never at a cell",
+    "no field here is read as, derived from, or written into any Gender Harmony concept"
+  ],
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "results"],
+  "properties": {
+    "schema_version": { "const": "contextsafe.result-set/0.1.0" },
+    "results": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 512,
+      "items": { "$ref": "#/$defs/result" }
+    }
+  },
+  "$defs": {
+    "decimal": {
+      "description": "A decimal carried as a string: optional sign, bounded digits, no exponent. Compared exactly, never as a float.",
+      "type": "string",
+      "pattern": "^-?(?:0|[1-9][0-9]{0,11})(?:\\.[0-9]{1,6})?$"
+    },
+    "resultToken": {
+      "description": "An analyte code, value, or unit as the source carried it: a bounded token with no whitespace. Bounding what a token may look like says nothing about what it means; binding it to an approved analyte or unit is a mapping profile's job, and no profile is reviewed.",
+      "type": "string",
+      "pattern": "^[A-Za-z0-9<>][A-Za-z0-9:/_.%<>-]{0,63}$"
+    },
+    "referenceInterval": {
+      "description": "What the source returned where a reference interval belongs. absent: it returned nothing. not_typed: it returned something in a dialect this ungoverned profile cannot type, which is a different fact from absence and is never guessed at. typed: bounds, inclusivity, and a unit, all present.",
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["status"],
+          "properties": { "status": { "enum": ["absent", "not_typed"] } }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "status",
+            "low",
+            "low_inclusive",
+            "high",
+            "high_inclusive",
+            "unit"
+          ],
+          "properties": {
+            "status": { "const": "typed" },
+            "low": { "$ref": "#/$defs/decimal" },
+            "low_inclusive": { "type": "boolean" },
+            "high": { "$ref": "#/$defs/decimal" },
+            "high_inclusive": { "type": "boolean" },
+            "unit": { "$ref": "#/$defs/resultToken" }
+          }
+        }
+      ]
+    },
+    "abnormalFlag": {
+      "description": "What the source returned where an abnormal flag belongs. The typed vocabulary is invented for fixtures and is deliberately not any laboratory's flag alphabet; a partner's own flag is not_typed until a reviewed mapping profile binds it.",
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["status"],
+          "properties": { "status": { "enum": ["absent", "not_typed"] } }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["status", "flag"],
+          "properties": {
+            "status": { "const": "typed" },
+            "flag": {
+              "enum": [
+                "fixture-flag-below-low",
+                "fixture-flag-in-range",
+                "fixture-flag-above-high"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "result": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "result_id",
+        "case_id",
+        "checkpoint",
+        "analyte_code",
+        "value",
+        "unit",
+        "order_id",
+        "specimen_id",
+        "reference_interval",
+        "abnormal_flag",
+        "evidence",
+        "mapping_version"
+      ],
+      "properties": {
+        "schema_version": { "const": "contextsafe.result/0.1.0" },
+        "result_id": { "type": "string", "pattern": "^RES-[A-Z0-9][A-Z0-9-]{2,47}$" },
+        "case_id": { "type": "string", "pattern": "^CTP-[A-Z0-9]{3,16}$" },
+        "checkpoint": { "enum": ["registration", "ehr", "interface", "lis_return"] },
+        "analyte_code": { "$ref": "#/$defs/resultToken" },
+        "value": { "$ref": "#/$defs/resultToken" },
+        "unit": { "$ref": "#/$defs/resultToken" },
+        "order_id": {
+          "type": "string",
+          "maxLength": 128,
+          "pattern": "^(?:ORDER-)?CSYN-[A-Z0-9][A-Z0-9_.:-]{0,95}$"
+        },
+        "specimen_id": {
+          "type": "string",
+          "maxLength": 128,
+          "pattern": "^(?:ORDER-)?CSYN-[A-Z0-9][A-Z0-9_.:-]{0,95}$"
+        },
+        "reference_interval": { "$ref": "#/$defs/referenceInterval" },
+        "abnormal_flag": { "$ref": "#/$defs/abnormalFlag" },
+        "evidence": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["source_sha256", "source_pointer"],
+          "properties": {
+            "source_sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+            "source_pointer": {
+              "type": "string",
+              "maxLength": 128,
+              "pattern": "^(\\$[.\\[\\]A-Za-z0-9_-]{1,127}|(/[A-Za-z0-9_.-]+){1,16})$",
+              "description": "Where in its source the result was read from. Structural only; never a source value. The words are the same closed vocabulary the observation set is held to."
+            }
+          }
+        },
+        "mapping_version": {
+          "type": "string",
+          "maxLength": 128,
+          "pattern": "^(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)$"
+        }
+      }
+    }
+  }
+}

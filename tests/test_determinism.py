@@ -39,6 +39,7 @@ import pytest
 from contextsafe import jsonio
 from contextsafe.cli import main
 from contextsafe.errors import ContextSafeError
+from contextsafe.eventlog import LOG_FILE_NAME
 from contextsafe.models import Checkpoint
 from contextsafe.reference_fixtures import REFERENCE_ROOT
 
@@ -108,8 +109,8 @@ document, or the importer's mapping version.
 """
 
 LIS_OBSERVATIONS_SHA256: dict[str, str] = {
-    "lis-csv": "f05fccb363fc34fe65aa0b05b414206208b46e1ad025e6b690caab83704756c3",
-    "lis-json": "d76e4d08e02538ca6d8499de5c55893dca6d42b52feadd3027dd115e5138e395",
+    "lis-csv": "06e69099d28c12ec6e86a27038c8f22d78d69b80e339240a5192679eb052dd64",
+    "lis-json": "19ce395255f2b3343dab40521a33d431c7fff7773718a0b9ada53c6531721072",
 }
 """SHA-256 of ``import`` over each reference LIS export, terminal newline included.
 
@@ -117,15 +118,18 @@ Two constants because the two exports are different bytes and every
 observation carries its source's digest; everything else in the two
 documents is identical, which ``tests/test_lis_import.py`` pins. They move
 only with the reference exports, the case document, or the LIS profile
-version.
+version -- and both moved on 2026-09-04 for the last of those reasons: the
+profile is 0.2.0 since it began emitting laboratory result observations, and
+the version every identity observation records moved with what the profile
+emits, so two behaviours of one profile can never share a run identity.
 """
 
 MAPPED_OBSERVATIONS_SHA256: dict[str, str] = {
     "canonical-json": "4433f908c6075efe1954b6f3830215879d5d4631f5b47e9ba0e2c0fdad1b4327",
     "fhir-r4-json": "fb9511062f9b8e4673fb9b1d64caf3d967a7ad50baa00816db72a5031604022a",
     "hl7v2-er7": "9931fceddc9d9199f5468188f716e8a426b9dd084cb32d996560cc0d54dcba21",
-    "lis-csv": "806bce429f12329bef50f79830d4d4c94b09b1247e034b96aea1258c8129e39e",
-    "lis-json": "e60f8b50f05839d9b7ffc3853e90444c1393b0252bdb62872096ecee86733b17",
+    "lis-csv": "4118a0d9bd552026082b372033c118130943c88fc7d4149c6458265b31067381",
+    "lis-json": "2fe48e2102f18acc019a7a6f67b3a0d7b5aa73b9d6643ad4de4bb994ebc8e844",
 }
 """SHA-256 of ``import --mapping`` over each reference source with its profile.
 
@@ -134,6 +138,19 @@ profile's digest and version beside the source's digest, so a platform that
 changed one byte of a profile's canonical form would change every bound
 observation set. They move only with the reference sources, the case
 document, the importers' mapping versions, or the reference profiles.
+"""
+
+EVENT_LOG_SUMMARY_SHA256 = (
+    "04e77cc5033f71b2c13de4ebd7aa0af379ad3a05866000223510d0a60fa76077"
+)
+"""SHA-256 of ``events summarize`` over the three-record reference log.
+
+The log itself is written by three commands in this module, so this constant
+covers both halves of the claim: that the same three runs write the same log
+bytes on every platform, and that the summary derived from them is the same
+document. It moves with the event-log record shape, the summary contract, or
+the three commands the log is built from -- not with a clock, because neither
+the log nor the summary reads one.
 """
 
 COMPILED_MAPPING_PROFILE_SHA256 = (
@@ -1083,6 +1100,71 @@ def test_finding_review_and_list_are_byte_identical_across_runs(
     assert listed[0].stdout == artifact
 
 
+def _event_log_directories(root: Path) -> tuple[Path, ...]:
+    """Three event logs, each written by the same three commands in order."""
+
+    directories: list[Path] = []
+    for index in range(3):
+        log_dir = root / f"events-{index}"
+        logged = ["--quiet", "--log-dir", str(log_dir)]
+        assert main([*_fixture_argv("validate", REFERENCE), *logged]) == 0
+        assert main(["diagnostics", *logged]) == 0
+        assert (
+            main(
+                [
+                    "cleanup",
+                    "--workspace",
+                    str(root / "no-such-workspace"),
+                    "--remove",
+                    *logged,
+                ]
+            )
+            == 2
+        )
+        directories.append(log_dir)
+    return tuple(directories)
+
+
+@pytest.mark.skipif(os.name == "nt", reason=_WINDOWS_UNSUPPORTED)
+def test_event_log_summary_is_byte_identical_across_runs_and_pinned(
+    tmp_path: Path,
+) -> None:
+    """The same runs write the same log, and it summarises to one document.
+
+    Three identical logs, one per environment, so the summary cannot be
+    reproducible only because the three runs read the same file. What an
+    operator would report from a week of runs is a constant here.
+    """
+
+    directories = _event_log_directories(tmp_path)
+    logs = {(directory / LOG_FILE_NAME).read_bytes() for directory in directories}
+    assert len(logs) == 1
+    handed_out = iter(directories)
+    runs = _three_runs(
+        tmp_path,
+        lambda _reference: [
+            "events",
+            "summarize",
+            "--directory",
+            str(next(handed_out)),
+        ],
+        with_output=True,
+    )
+    _assert_identical(runs)
+    assert runs[0].returncode == 0
+    assert runs[0].stdout == b""
+    assert runs[0].stderr == b""
+    artifact = runs[0].artifact
+    assert artifact is not None
+    _assert_canonical_line(artifact)
+    assert hashlib.sha256(artifact).hexdigest() == EVENT_LOG_SUMMARY_SHA256
+    summary = json.loads(artifact.decode("utf-8"))
+    assert summary["record_count"] == 3
+    assert summary["counts_by_error_code"] == {"cleanup_not_confirmed": 1}
+    for fragment in (str(tmp_path), str(ROOT), "Kiritimati", "en_US", LOG_FILE_NAME):
+        assert fragment.encode("utf-8") not in artifact
+
+
 def test_platforms_without_descriptor_relative_open_fail_closed(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -1111,3 +1193,57 @@ def test_text_only_stream_still_receives_the_identical_payload(
     monkeypatch.setattr(sys, "stdout", stream)
     assert main(_fixture_argv("validate", REFERENCE)) == 0
     assert json.loads(stream.getvalue())["valid"] is True
+
+
+# --- the laboratory result family (B-030) ------------------------------------
+
+LABORATORY_OUTCOMES_SHA256 = (
+    "b923bec92cd2c69c0b7019d04c1d8d250786230467ae571a885f60f3a8466fd9"
+)
+"""SHA-256 of the canonical outcome report over the INV laboratory fixture.
+
+The laboratory predicates reach no command, so this is evaluated in a child
+process rather than through the CLI: the same script, three environments,
+three working directories, and one digest. It moves only with the fixture,
+the predicates, or the outcome shape.
+"""
+
+_LABORATORY_SCRIPT = """
+import json, sys
+from contextsafe.canonical import canonical_json
+from contextsafe.laboratory import (
+    evaluate_results,
+    outcome_report,
+    parse_result_bundle,
+)
+
+document = json.loads(open(sys.argv[1], encoding="utf-8").read())
+bundle = parse_result_bundle(
+    document["case"], document["results"], document["rules"]
+)
+sys.stdout.buffer.write(
+    canonical_json(outcome_report(evaluate_results(bundle))).encode("utf-8")
+)
+"""
+
+
+def test_laboratory_evaluation_is_deterministic_and_pinned(tmp_path: Path) -> None:
+    """One bundle, three environments, three directories, one digest."""
+
+    fixture = ROOT / "tests" / "fixtures" / "laboratory" / "inv.json"
+    outputs: list[bytes] = []
+    for index, environment in enumerate(_ENVIRONMENTS):
+        child_environment = dict(os.environ)
+        child_environment.update(environment)
+        completed = subprocess.run(
+            [sys.executable, "-c", _LABORATORY_SCRIPT, str(fixture)],
+            cwd=(ROOT, tmp_path, ROOT / "tests")[index],
+            env=child_environment,
+            capture_output=True,
+            check=False,
+        )
+        assert completed.returncode == 0, completed.stderr
+        outputs.append(completed.stdout)
+    assert len(set(outputs)) == 1
+    assert hashlib.sha256(outputs[0]).hexdigest() == LABORATORY_OUTCOMES_SHA256
+    assert json.loads(outputs[0])["summary"]["pass"] == 22

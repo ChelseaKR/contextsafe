@@ -449,6 +449,18 @@ def _mutation_unavailable(tmp_path: Path) -> int:
     return int(gate.main(["--root", str(root)]))
 
 
+def _audit_unavailable(tmp_path: Path) -> int:
+    """No auditor to run: the advisory service was never reached.
+
+    One attempt and no backoff, because the retry behaviour is
+    `tests/test_audit_gate.py`'s subject and this file's subject is the code.
+    """
+
+    gate = _load("audit_gate")
+    absent = tmp_path / "audit" / "no-such-auditor"
+    return int(gate.main(["--auditor", str(absent), "--attempts", "1"]))
+
+
 def _claims_unavailable(tmp_path: Path) -> int:
     gate = _load("claims_gate")
     root = tmp_path / "claims"
@@ -482,6 +494,7 @@ UNAVAILABLE_CASES: tuple[tuple[str, Callable[[Path], int]], ...] = (
     ("tools/a11y_gate.py", _a11y_unavailable),
     ("tools/mutation_gate.py", _mutation_unavailable),
     ("tools/claims_gate.py", _claims_unavailable),
+    ("tools/audit_gate.py", _audit_unavailable),
     ("tools/fresh_install_gate.py", _fresh_install_unavailable),
     ("tools/secret-scan-full-history.sh", _secret_scan_unavailable),
 )

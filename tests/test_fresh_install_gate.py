@@ -589,6 +589,58 @@ def test_quickstart_parser_round_trips_any_command_block(
     assert gate.quickstart_commands(text) == tails
 
 
+# --- the walkthrough parser ---------------------------------------------------
+
+
+WALKTHROUGH = (
+    "# T\n\n## Quickstart\n\n```sh\nuv run contextsafe evaluate\n```\n\n"
+    "### From a source file to a receipt\n\n```sh\n"
+    "uv run contextsafe import \\\n  --format fhir-r4-json \\\n"
+    "  --source fixtures/reference/fhir-patient.json   # read-only\n"
+    "uv run contextsafe render --receipt r.json\n```\n"
+)
+
+
+def test_the_walkthrough_parser_reads_its_own_block_not_the_quickstart() -> None:
+    """Two blocks, two headings; each parser reads the one it was pointed at."""
+
+    assert gate.quickstart_commands(WALKTHROUGH) == [["evaluate"]]
+    assert gate.walkthrough_commands(WALKTHROUGH) == [
+        [
+            "import",
+            "--format",
+            "fhir-r4-json",
+            "--source",
+            "fixtures/reference/fhir-patient.json",
+        ],
+        ["render", "--receipt", "r.json"],
+    ]
+
+
+@pytest.mark.parametrize(
+    ("text", "reason"),
+    [
+        (
+            "# T\n\n## Quickstart\n\n```sh\nuv run contextsafe x\n```\n",
+            "From a source file",
+        ),
+        (
+            "# T\n\n### From a source file to a receipt\n\nprose only\n",
+            "no closed ```sh block",
+        ),
+        (
+            "# T\n\n### From a source file to a receipt\n\n```sh\ncurl x\n```\n",
+            "not a `uv run",
+        ),
+    ],
+)
+def test_a_walkthrough_the_gate_cannot_run_is_not_examined(
+    text: str, reason: str
+) -> None:
+    with pytest.raises(gate.GateUnavailable, match=reason):
+        gate.walkthrough_commands(text)
+
+
 # --- the report and the command line ------------------------------------------
 
 
