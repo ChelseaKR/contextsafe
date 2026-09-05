@@ -44,6 +44,7 @@ from contextsafe.importers import (
 )
 from contextsafe.importers.canonical_json import (
     _FIELD_CODE_CONCEPTS,
+    CANONICAL_JSON_CARRIERS,
     CANONICAL_JSON_FORMAT,
     CANONICAL_JSON_MAPPING_VERSION,
     UNBOUND_CODE_SYSTEM,
@@ -324,6 +325,29 @@ def test_a_field_code_outside_the_envelope_enum_rejects_the_source(
     evidence_source_json["records"][0]["field_code"] = "legal_sex"
     error = _assert_rejected(evidence_source_json, case, "invalid_enum")
     assert "legal_sex" not in str(error)
+
+
+def test_the_carrier_table_is_exactly_the_field_codes_a_record_converts_under(
+    case: SyntheticCase, four_concept_source: dict[str, Any]
+) -> None:
+    """A table that says what this importer emits may name nothing else.
+
+    ``sex_parameter_for_clinical_use`` is a mapped field code and never a
+    carrier: the converter always refuses that record, so a profile row
+    naming it could never match. The table advertised it until 2026-09-04.
+    """
+
+    result = convert_scanned(
+        _scanned(four_concept_source), case=case, checkpoint=Checkpoint.EHR
+    )
+    emitted = {token.carrier for token in result.source_tokens}
+    assert emitted == set(CANONICAL_JSON_CARRIERS)
+    assert set(CANONICAL_JSON_CARRIERS) < set(_FIELD_CODE_CONCEPTS)
+    assert set(_FIELD_CODE_CONCEPTS) - set(CANONICAL_JSON_CARRIERS) == {
+        "sex_parameter_for_clinical_use"
+    }
+    for carrier, concepts in CANONICAL_JSON_CARRIERS.items():
+        assert concepts == frozenset({_FIELD_CODE_CONCEPTS[carrier]})
 
 
 def test_spcu_records_reject_rather_than_arrive_without_their_support_link(
