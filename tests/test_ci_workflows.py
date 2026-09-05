@@ -36,6 +36,16 @@ USES = re.compile(
     re.MULTILINE,
 )
 
+ANY_USES = re.compile(r"^\s*(?:-\s+)?uses:\s*(?P<target>\S+)", re.MULTILINE)
+"""Every `uses:` line, whatever shape it is in.
+
+`USES` only matches the `owner/repo@ref` form, and everything below reads
+`USES`. A step written some other way -- `uses: docker://image:tag`, a bare
+`uses: owner/repo` with no ref -- would therefore sit outside "every action is
+pinned to a full SHA" without a single assertion noticing. `ANY_USES` is what
+makes the pin checks exhaustive rather than merely true of what they matched.
+"""
+
 
 def _workflows() -> list[Path]:
     found = sorted(WORKFLOWS.glob("*.yml")) + sorted(WORKFLOWS.glob("*.yaml"))
@@ -109,6 +119,35 @@ def test_the_mutation_gate_stays_out_of_verify() -> None:
     assert "mutants" not in stages.group(1).split()
 
 
+ASSURANCE = REPO_ROOT / "docs" / "18-ASSURANCE-PROGRAM.md"
+
+RAN_SINCE = re.compile(
+    r"mutation\.yml[^.|\n]{0,80}\b(?:since|has been running|running since)\b"
+    r"|\b(?:running automatically|run by)\b[^.|\n]{0,80}mutation\.yml[^.|\n]{0,40}since",
+)
+
+
+def test_the_assurance_ledger_claims_configuration_not_execution() -> None:
+    """A workflow nobody has watched run is wired up, not running.
+
+    `docs/18-ASSURANCE-PROGRAM.md` is the one file whose whole purpose is
+    separating claimed assurance from demonstrated assurance, and it read
+    "running automatically since 2026-09-04" over a workflow that had never
+    executed -- two lines below a row of its own table that sets the opposite
+    standard, "proved locally rather than by a CI job nobody has watched run".
+    ADR 0009 says the same thing in its own words: its first real run is the
+    evidence, not its existence. Nothing in a checkout can see a workflow run,
+    so nothing in a checkout may date one.
+    """
+
+    body = ASSURANCE.read_text(encoding="utf-8")
+    assert "mutation.yml" in body, "the ledger stopped naming the workflow"
+    assert "first run has not been observed" in body
+    assert "first run not yet observed" in body
+    found = RAN_SINCE.search(body)
+    assert found is None, f"the ledger dates a run it cannot see: {found}"
+
+
 def test_no_workflow_softens_a_gate_it_runs() -> None:
     """A run that could not happen is not a pass, and neither is one ignored."""
 
@@ -131,6 +170,24 @@ def _pins() -> dict[str, set[str]]:
             pins.setdefault(action, set()).add(match.group("ref"))
     assert pins, "no `uses:` was found, so the checks below examined nothing"
     return pins
+
+
+def test_every_step_that_uses_something_is_one_the_pin_checks_can_read() -> None:
+    """No `uses:` line escapes the checks below by not looking like an action.
+
+    `_pins` reads `USES`, which matches `owner/repo@ref` and nothing else. A
+    `uses: docker://image:tag` step, or one naming an action with no ref at
+    all, would be skipped in silence, and "every action is pinned to a full
+    SHA" would be a true statement about a set that did not contain it.
+    """
+
+    for path in _workflows():
+        text = path.read_text(encoding="utf-8")
+        pinned = {match.start("action") for match in USES.finditer(text)}
+        for match in ANY_USES.finditer(text):
+            target = match.group("target")
+            readable = target.startswith("./") or match.start("target") in pinned
+            assert readable, f"{path.name}: {match.group(0).strip()}"
 
 
 def test_every_action_is_pinned_to_a_full_commit_sha() -> None:

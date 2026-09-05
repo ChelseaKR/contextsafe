@@ -1,8 +1,11 @@
 # SEC-14 (update automation) and SEC-26 (SHAs kept current, 72h cooldown).
 # Two ecosystems, because this repository pins in two places: `uv` for the Python
 # lock (uv.lock, which pip-audit and `make verify` both read) and `github-actions`
-# for the SHA-pinned actions in ci.yml, security.yml, release.yml, and package.yml.
-# A pinned SHA is only safe while something bumps it.
+# for the SHA-pinned actions in every workflow under .github/workflows. The
+# ecosystem entry covers that directory rather than a list of files, so this
+# comment names no workflow: a hand-maintained list here would go stale the next
+# time one is added, which is the drift shape `make claims` exists to catch, in
+# a file no gate reads. A pinned SHA is only safe while something bumps it.
 #
 # A third ecosystem, `npm`, covers the dev-only accessibility harness in
 # tools/a11y. Nothing there ships with the Python package, but axe-core is a

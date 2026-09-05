@@ -47,7 +47,11 @@ result:
   none carried an advisory;
 - **1** — at least one did;
 - **2** — the advisory service did not answer, the report was unreadable, or the
-  run audited nothing.
+  run audited nothing. "Unreadable" reaches inside the report as well as at it:
+  a dependency entry whose `vulns` field is not a list is a distribution whose
+  advisory status was never established, and it refuses the whole report rather
+  than counting as one more audited distribution with nothing against it. An
+  empty `vulns` list is an answer and stays one.
 
 **The report decides the state, not the exit code and not a string match on
 stderr.** pip-audit writes its JSON report when the audit completes and writes
@@ -62,10 +66,12 @@ that nothing was established.
 **A transient failure is retried before the gate answers 2** — three attempts,
 doubling backoff. Retries apply only to the "did not examine" state: an advisory
 is an answer, and asking the same service again is not a second opinion. The
-pre-existing `--cache-dir .cache/pip-audit` does more work than the retries do
-in practice: a warm HTTP cache answers offline for the distributions already
-audited, which is why a repeated local `make verify` survives a network that a
-cold cache would not.
+pre-existing `--cache-dir .cache/pip-audit` is carried through unchanged, and
+this ADR makes no claim about what a warm cache buys: the claim that would be
+worth making — that a warm cache answers offline for the distributions already
+audited — is unmeasured, and if it held it would be a path to exit 0 over
+advisory data the gate did not re-fetch, which is the defect the pinned-snapshot
+alternative is rejected for below.
 
 **`security.yml` runs `make audit`** instead of its own copy of the pip-audit
 command line. The two were identical strings in two files, which is the drift

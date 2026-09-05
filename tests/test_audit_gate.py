@@ -306,17 +306,77 @@ def test_an_unreadable_report_is_refused(tmp_path: Path, case: str, text: str) -
     assert _run(auditor, "--attempts", "1") == UNAVAILABLE, case
 
 
-def test_a_dependency_whose_vulns_field_is_not_a_list_is_not_an_advisory(
+@pytest.mark.parametrize(
+    ("case", "vulns"),
+    [
+        ("null", None),
+        ("a string", "none"),
+        ("an object", {}),
+        ("a number", 0),
+    ],
+)
+def test_a_dependency_whose_vulns_field_is_not_a_list_is_refused(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str], case: str, vulns: object
+) -> None:
+    """An unreadable advisory list is a distribution nobody audited.
+
+    It names no advisory, so it is not exit 1. It is also not exit 0: a
+    `vulns` that cannot be read establishes nothing about that distribution,
+    and counting it as audited would put it behind the gate's own "clean" line
+    (ADR 0011). The distinction is the whole reason this file exists.
+    """
+
+    auditor = _stand_in(
+        tmp_path / case.replace(" ", "-"),
+        report=_report({"name": "example", "version": "1.0.0", "vulns": vulns}),
+        exit_code=CLEAN,
+    )
+    assert _run(auditor, "--attempts", "1") == UNAVAILABLE, case
+    assert "advisory list cannot be read" in capsys.readouterr().err
+
+
+def test_a_dependency_with_no_vulns_field_at_all_is_refused(
     tmp_path: Path,
 ) -> None:
-    """Malformed, but it names no advisory, so it may not be reported as one."""
+    """An absent field is not an empty one; nothing was answered about it."""
 
     auditor = _stand_in(
         tmp_path,
-        report=_report({"name": "example", "version": "1.0.0", "vulns": None}),
+        report=_report({"name": "example", "version": "1.0.0"}),
         exit_code=CLEAN,
     )
-    assert _run(auditor) == CLEAN
+    assert _run(auditor, "--attempts", "1") == UNAVAILABLE
+
+
+def test_one_unreadable_entry_refuses_the_whole_report(
+    tmp_path: Path,
+) -> None:
+    """Fail closed over the report, not over the entry.
+
+    A run that audited nine distributions and could not read the tenth has not
+    audited the environment, and answering 0 would report the tenth as clean.
+    """
+
+    auditor = _stand_in(
+        tmp_path,
+        report=_report(
+            _clean_dependency("a"),
+            {"name": "b", "version": "1.0.0", "vulns": None},
+        ),
+        exit_code=CLEAN,
+    )
+    assert _run(auditor, "--attempts", "1") == UNAVAILABLE
+
+
+def test_an_empty_vulns_list_is_still_a_clean_answer(tmp_path: Path) -> None:
+    """The boundary the refusal above must not swallow: nothing was reported."""
+
+    auditor = _stand_in(
+        tmp_path,
+        report=_report({"name": "example", "version": "1.0.0", "vulns": []}),
+        exit_code=CLEAN,
+    )
+    assert _run(auditor, "--attempts", "1") == CLEAN
 
 
 # --- retries ----------------------------------------------------------------

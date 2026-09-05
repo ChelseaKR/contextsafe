@@ -425,6 +425,11 @@ rather than after it.
   `tests/test_ci_workflows.py` pins what a checkout can check: every action is
   pinned to a full commit SHA, every pin carries the version it is, and one
   action is pinned to one SHA in every workflow, so a bump cannot half-happen.
+  Those checks read only `uses:` lines of the form `owner/repo@ref`, so a
+  further assertion requires every `uses:` line to be one of that form or a
+  local `./` action: a `uses: docker://image:tag` step would otherwise sit
+  outside "every action is pinned to a full SHA" while the statement stayed
+  true of the set it had matched.
   Whether a pin is current against upstream is the one supply-chain fact no gate
   here re-derives, because it needs a network call; the README's Security and
   Supply-Chain row carries that disclosure.
@@ -586,17 +591,29 @@ rather than after it.
   writes none when it does not, which was measured rather than assumed, so a
   parsed report naming an advisory is a finding whatever the process exited
   with, and a non-zero exit over a report naming none is an unexplained
-  disagreement and therefore not a clean audit. A transient failure is retried
-  three times with doubling backoff before the gate answers 2; an advisory is
-  never retried, because asking the same service again is not a second opinion.
+  disagreement and therefore not a clean audit. "Could not be read" reaches
+  inside the report as well as at it: a dependency entry whose `vulns` field is
+  not a list -- absent, `null`, a string, an object -- refuses the whole report
+  rather than counting as one more audited distribution with nothing against it,
+  because its advisory status was never established and a gate that filed it
+  under "clean" would be the fail-open reading of the one field it exists to
+  read. An empty `vulns` list is an answer and stays one. A transient failure is
+  retried three times with doubling backoff before the gate answers 2; an
+  advisory is never retried, because asking the same service again is not a
+  second opinion.
 
   **This does not make `make verify` runnable offline, and #74's second half is
   refused rather than quietly dropped.** An audit needs the advisory service.
   Offline, `verify` now fails at `audit` with exit 2 and a sentence saying the
   service was not reached, instead of exit 1 and a traceback. The alternative --
   a stage that answers 0 without reaching the service -- is the defect the gate
-  exists to remove. `security.yml` runs `make audit` rather than its own copy of
-  the command line, so CI and a contributor run the identical gate. The three
+  exists to remove. #74's own "Done when" is *a PyPI outage cannot fail an
+  unrelated pull request*, and that is met for the dropped connection #61
+  observed and not met for a sustained outage, which now fails as "did not
+  examine" rather than as a vulnerability. The issue is closed against that
+  sentence rather than closed as though it read something else. `security.yml`
+  runs `make audit` rather than its own copy of the command line, so CI and a
+  contributor run the identical gate. The three
   states are driven by a stand-in auditor in `tests/test_audit_gate.py`, with no
   network call anywhere: a test that reached PyPI would be the flake it tests
   for. The "did not examine" case joins the one contract in
@@ -1421,6 +1438,11 @@ rather than after it.
   inferred from a number. ADR 0009's caution against a workflow nobody has
   watched execute is recorded there as still standing rather than waived:
   its first real run is the evidence, not its existence.
+  `docs/18-ASSURANCE-PROGRAM.md` now says the same in the one file whose whole
+  purpose is separating claimed assurance from demonstrated assurance -- Phase 5
+  is wired into CI on a date, not running since one, and its first run has not
+  been observed -- and `tests/test_ci_workflows.py` fails if that ledger goes
+  back to dating a run no checkout can see.
 
   What this does **not** do is widen the declared subset. `DECLARED_TARGETS` is
   still three modules of the twenty-eight in `SAFETY_MODULES`, so the six that
@@ -1434,9 +1456,14 @@ rather than after it.
   all 2915 tests stayed green, because every one of them reads what the log says
   and none reads what the filesystem says about who may read it. A review log
   carries decision hashes, signer roles and the chain that makes tampering
-  visible. `tests/test_review.py` now pins that no group or other bit is set,
-  which is the property a umask can only strengthen. 123 mutants over 590
-  covered lines, all killed.
+  visible. `tests/test_review.py` now clears the umask and pins the literal
+  `0o600`, rather than asserting only that the group and other bits are clear:
+  that weaker assertion killed the mutant on this machine and on the ubuntu
+  runners because both default to umask 022, and would have passed under the
+  umask 077 a hardened account uses, where a missing mode argument yields
+  `0o700`. A test that holds only on the umask it happened to run under pins
+  the environment, not the module. 123 mutants over 590 covered lines, all
+  killed.
 
 ## [0.1.0] - 2026-09-02
 
