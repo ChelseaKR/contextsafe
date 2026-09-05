@@ -1,0 +1,126 @@
+{
+  "fault": "F-032",
+  "mutation": "attach name/pronoun observation to the wrong synthetic case: the pronoun observation at the EHR names CTP-I02 while the manifest, the name-to-use observation, and the rules name CTP-I01. The bundle validator refuses the whole observation set (case_mismatch) before any rule runs, so the misattached observation can neither pass a CTP-I01 rule nor be counted as CTP-I02 evidence; a receipt-level A-001 outcome that says which checkpoint lost the association needs an authored assertion",
+  "assertion": "A-001",
+  "case": {
+    "schema_version": "contextsafe.case/0.1.0",
+    "case_id": "CTP-I01",
+    "synthetic_identifier": {
+      "system": "urn:contextsafe:synthetic",
+      "value": "CSYN-CTP-I01"
+    },
+    "concepts": {
+      "gender_identity": {
+        "status": "specified",
+        "value": "fixture-gender-1",
+        "code_system": "urn:contextsafe:fixture"
+      },
+      "recorded_sex_or_gender": [
+        {
+          "value": "X",
+          "context": "government-id",
+          "source": "synthetic-fixture"
+        }
+      ],
+      "sex_parameter_for_clinical_use": [
+        {
+          "value": "fixture-context-1",
+          "context_id": "ORDER-CSYN-I01-A",
+          "supporting_observation_ids": [
+            "SUP-CSYN-I01-A"
+          ]
+        }
+      ],
+      "name_to_use": {
+        "status": "specified",
+        "value": "CSYN-ASTER",
+        "use": "usual"
+      },
+      "pronouns": {
+        "status": "specified",
+        "value": "they/them"
+      }
+    },
+    "prohibited_inferences": [
+      "gender_identity_to_spcu",
+      "recorded_sex_or_gender_to_spcu"
+    ]
+  },
+  "rules": {
+    "schema_version": "contextsafe.rule-set/0.2.0",
+    "rules": [
+      {
+        "rule_id": "A-I01",
+        "version": "0.1.0",
+        "case_id": "CTP-I01",
+        "checkpoint": "ehr",
+        "concept": "name_to_use",
+        "expected": {
+          "status": "specified",
+          "value": "CSYN-ASTER",
+          "use": "usual"
+        },
+        "required": true
+      },
+      {
+        "rule_id": "A-I02",
+        "version": "0.1.0",
+        "case_id": "CTP-I01",
+        "checkpoint": "ehr",
+        "concept": "pronouns",
+        "expected": {
+          "status": "specified",
+          "value": "they/them"
+        },
+        "required": true,
+        "predicate": "present"
+      }
+    ]
+  },
+  "observations": {
+    "schema_version": "contextsafe.observation-set/0.1.0",
+    "observations": [
+      {
+        "schema_version": "contextsafe.observation/0.1.0",
+        "observation_id": "OBS-I01-NTU",
+        "case_id": "CTP-I01",
+        "checkpoint": "ehr",
+        "concept": "name_to_use",
+        "value": {
+          "status": "specified",
+          "value": "CSYN-ASTER",
+          "use": "usual"
+        },
+        "evidence": {
+          "source_sha256": "5b30f9054d1dbcebc84ffa786019e6089f0bcbf3cc370de55fca8a112a704a55",
+          "source_pointer": "$.concepts.name_to_use"
+        },
+        "mapping": {
+          "source_concept": "name_to_use",
+          "target_concept": "name_to_use",
+          "mapping_version": "0.1.0"
+        }
+      },
+      {
+        "schema_version": "contextsafe.observation/0.1.0",
+        "observation_id": "OBS-I02-PRONOUNS",
+        "case_id": "CTP-I02",
+        "checkpoint": "ehr",
+        "concept": "pronouns",
+        "value": {
+          "status": "specified",
+          "value": "they/them"
+        },
+        "evidence": {
+          "source_sha256": "10c24f321e46b4a6ffb09a54c2bd43efdb0794d34b9afc43efa208dab30f90c6",
+          "source_pointer": "$.concepts.pronouns"
+        },
+        "mapping": {
+          "source_concept": "pronouns",
+          "target_concept": "pronouns",
+          "mapping_version": "0.1.0"
+        }
+      }
+    ]
+  }
+}

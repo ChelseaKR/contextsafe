@@ -1,0 +1,154 @@
+{
+  "fault": "F-031",
+  "mutation": "convert explicitly declined identity data to absent",
+  "assertion": "A-009",
+  "case": {
+    "schema_version": "contextsafe.case/0.1.0",
+    "case_id": "CTP-I07",
+    "synthetic_identifier": {
+      "system": "urn:contextsafe:synthetic",
+      "value": "CSYN-CTP-I07"
+    },
+    "concepts": {
+      "gender_identity": {
+        "status": "declined",
+        "value": null,
+        "code_system": "urn:contextsafe:fixture"
+      },
+      "recorded_sex_or_gender": [
+        {
+          "value": "X",
+          "context": "government-id",
+          "source": "synthetic-fixture"
+        }
+      ],
+      "sex_parameter_for_clinical_use": [],
+      "name_to_use": {
+        "status": "specified",
+        "value": "CSYN-ROWAN",
+        "use": "usual"
+      },
+      "pronouns": {
+        "status": "declined",
+        "value": null
+      }
+    },
+    "prohibited_inferences": [
+      "gender_identity_to_spcu",
+      "recorded_sex_or_gender_to_spcu"
+    ]
+  },
+  "rules": {
+    "schema_version": "contextsafe.rule-set/0.2.0",
+    "rules": [
+      {
+        "rule_id": "A-I01",
+        "version": "0.1.0",
+        "case_id": "CTP-I07",
+        "checkpoint": "ehr",
+        "concept": "gender_identity",
+        "expected": {
+          "status": "declined",
+          "value": null,
+          "code_system": "urn:contextsafe:fixture"
+        },
+        "required": true,
+        "predicate": "status_preserved"
+      },
+      {
+        "rule_id": "A-I02",
+        "version": "0.1.0",
+        "case_id": "CTP-I07",
+        "checkpoint": "ehr",
+        "concept": "pronouns",
+        "expected": {
+          "status": "declined",
+          "value": null
+        },
+        "required": true,
+        "predicate": "status_preserved"
+      },
+      {
+        "rule_id": "A-I03",
+        "version": "0.1.0",
+        "case_id": "CTP-I07",
+        "checkpoint": "ehr",
+        "concept": "name_to_use",
+        "expected": {
+          "status": "specified",
+          "value": "CSYN-ROWAN",
+          "use": "usual"
+        },
+        "required": true,
+        "predicate": "present"
+      }
+    ]
+  },
+  "observations": {
+    "schema_version": "contextsafe.observation-set/0.1.0",
+    "observations": [
+      {
+        "schema_version": "contextsafe.observation/0.1.0",
+        "observation_id": "OBS-I07-GI",
+        "case_id": "CTP-I07",
+        "checkpoint": "ehr",
+        "concept": "gender_identity",
+        "value": {
+          "status": "absent",
+          "value": null,
+          "code_system": "urn:contextsafe:fixture"
+        },
+        "evidence": {
+          "source_sha256": "699970e2a1d1d01729fdb1810fe876994a9887b04397f96e77448f99bb447b36",
+          "source_pointer": "$.concepts.gender_identity"
+        },
+        "mapping": {
+          "source_concept": "gender_identity",
+          "target_concept": "gender_identity",
+          "mapping_version": "0.1.0"
+        }
+      },
+      {
+        "schema_version": "contextsafe.observation/0.1.0",
+        "observation_id": "OBS-I07-PRONOUNS",
+        "case_id": "CTP-I07",
+        "checkpoint": "ehr",
+        "concept": "pronouns",
+        "value": {
+          "status": "absent",
+          "value": null
+        },
+        "evidence": {
+          "source_sha256": "6d8bf840d164462b65044509d3fe66f6085f482bf653409e09c93171976253aa",
+          "source_pointer": "$.concepts.pronouns"
+        },
+        "mapping": {
+          "source_concept": "pronouns",
+          "target_concept": "pronouns",
+          "mapping_version": "0.1.0"
+        }
+      },
+      {
+        "schema_version": "contextsafe.observation/0.1.0",
+        "observation_id": "OBS-I07-NTU",
+        "case_id": "CTP-I07",
+        "checkpoint": "ehr",
+        "concept": "name_to_use",
+        "value": {
+          "status": "specified",
+          "value": "CSYN-ROWAN",
+          "use": "usual"
+        },
+        "evidence": {
+          "source_sha256": "2c8a8f0203762a5ed746631921d4ceea92f67c451b2bafec0d8c3eb1e9b9a947",
+          "source_pointer": "$.concepts.name_to_use"
+        },
+        "mapping": {
+          "source_concept": "name_to_use",
+          "target_concept": "name_to_use",
+          "mapping_version": "0.1.0"
+        }
+      }
+    ]
+  }
+}

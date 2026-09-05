@@ -1,0 +1,130 @@
+{
+  "case": {
+    "schema_version": "contextsafe.case/0.1.0",
+    "case_id": "CTP-I08",
+    "synthetic_identifier": {
+      "system": "urn:contextsafe:synthetic",
+      "value": "CSYN-CTP-I08"
+    },
+    "concepts": {
+      "gender_identity": {
+        "status": "absent",
+        "value": null,
+        "code_system": "urn:contextsafe:fixture"
+      },
+      "recorded_sex_or_gender": [
+        {
+          "value": "unknown",
+          "context": "government-id",
+          "source": "synthetic-fixture"
+        }
+      ],
+      "sex_parameter_for_clinical_use": [],
+      "name_to_use": {
+        "status": "specified",
+        "value": "CSYN-SAGE",
+        "use": "usual"
+      },
+      "pronouns": {
+        "status": "absent",
+        "value": null
+      }
+    },
+    "prohibited_inferences": [
+      "gender_identity_to_spcu",
+      "recorded_sex_or_gender_to_spcu"
+    ]
+  },
+  "rules": {
+    "schema_version": "contextsafe.rule-set/0.2.0",
+    "rules": [
+      {
+        "rule_id": "A-I01",
+        "version": "0.1.0",
+        "case_id": "CTP-I08",
+        "checkpoint": "registration",
+        "concept": "recorded_sex_or_gender",
+        "expected": {
+          "value": "unknown",
+          "context": "government-id",
+          "source": "synthetic-fixture"
+        },
+        "required": true,
+        "predicate": "not_coerced",
+        "forbidden": [
+          {
+            "value": "M",
+            "context": "government-id",
+            "source": "synthetic-fixture"
+          },
+          {
+            "value": "F",
+            "context": "government-id",
+            "source": "synthetic-fixture"
+          }
+        ]
+      },
+      {
+        "rule_id": "A-I02",
+        "version": "0.1.0",
+        "case_id": "CTP-I08",
+        "checkpoint": "ehr",
+        "concept": "gender_identity",
+        "expected": {
+          "status": "absent",
+          "value": null,
+          "code_system": "urn:contextsafe:fixture"
+        },
+        "required": true,
+        "predicate": "status_preserved"
+      }
+    ]
+  },
+  "observations": {
+    "schema_version": "contextsafe.observation-set/0.1.0",
+    "observations": [
+      {
+        "schema_version": "contextsafe.observation/0.1.0",
+        "observation_id": "OBS-I08-RSG",
+        "case_id": "CTP-I08",
+        "checkpoint": "registration",
+        "concept": "recorded_sex_or_gender",
+        "value": {
+          "value": "unknown",
+          "context": "government-id",
+          "source": "synthetic-fixture"
+        },
+        "evidence": {
+          "source_sha256": "43204e6fd5c634b0e9449333e801a42d6e898c04a8976f5088cb3c4d6bbc4048",
+          "source_pointer": "$.concepts.recorded_sex_or_gender[0]"
+        },
+        "mapping": {
+          "source_concept": "recorded_sex_or_gender",
+          "target_concept": "recorded_sex_or_gender",
+          "mapping_version": "0.1.0"
+        }
+      },
+      {
+        "schema_version": "contextsafe.observation/0.1.0",
+        "observation_id": "OBS-I08-GI",
+        "case_id": "CTP-I08",
+        "checkpoint": "ehr",
+        "concept": "gender_identity",
+        "value": {
+          "status": "absent",
+          "value": null,
+          "code_system": "urn:contextsafe:fixture"
+        },
+        "evidence": {
+          "source_sha256": "fd1d7630db399791b0d67fe67f500691714d0fb95626ff63b85982f5c6196249",
+          "source_pointer": "$.concepts.gender_identity"
+        },
+        "mapping": {
+          "source_concept": "gender_identity",
+          "target_concept": "gender_identity",
+          "mapping_version": "0.1.0"
+        }
+      }
+    ]
+  }
+}

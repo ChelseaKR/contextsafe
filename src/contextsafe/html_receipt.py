@@ -16,7 +16,10 @@ Constraints this renderer holds, each of which has a gate behind it:
   limitation in the payload appears on the page. The renderer never computes a
   judgement of its own; ``data-cs-payload-sha256`` on ``<main>`` ties the page
   to the exact payload it was rendered from, so a gate can prove it audited
-  this receipt rather than some other page.
+  this receipt rather than some other page. The divergence section (B-031)
+  is rendered from the payload's own statuses and checkpoint names: the page
+  never infers a boundary the payload did not name, and an unobserved
+  boundary is shown as unobserved, not blamed and not agreed.
 * **Never colour alone.** Every status carries its word and a distinct symbol.
   Removing every colour from this page loses no information, which is what
   makes it survive black-and-white print, forced-colours mode, and the several
@@ -43,6 +46,13 @@ from contextsafe.i18n import (
     Surface,
     load_catalog,
     source_catalog,
+)
+from contextsafe.models import (
+    Checkpoint,
+    ConceptKind,
+    DivergenceStatus,
+    EvidenceState,
+    OutcomeReason,
 )
 
 PAGE_KIND = "receipt"
@@ -146,6 +156,22 @@ footer p { background-color: #ffffff; color: #3d3d3d; }
 """
 
 
+_CHECKPOINTS = tuple(item.value for item in Checkpoint)
+"""The closed checkpoints a receipt may name, from the runtime type."""
+
+_CONCEPTS = tuple(item.value for item in ConceptKind)
+"""The closed concepts a receipt may name, from the runtime type."""
+
+_REASONS = tuple(item.value for item in OutcomeReason)
+"""The closed reason codes a receipt may carry, from the runtime type."""
+
+_EVIDENCE_STATES = tuple(item.value for item in EvidenceState)
+"""The closed evidence states the divergence section may show."""
+
+_DIVERGENCE_STATUSES = tuple(item.value for item in DivergenceStatus)
+"""The closed divergence statuses the divergence section may show."""
+
+
 @dataclass(frozen=True, slots=True)
 class _Row:
     """One rendered rule outcome, already resolved to display text."""
@@ -180,6 +206,26 @@ def _sequence(value: JsonValue | None, pointer: str) -> Sequence[JsonValue]:
             "invalid_receipt_document", pointer, "expected a JSON array"
         )
     return value
+
+
+def _published(
+    value: JsonValue | None, pointer: str, vocabulary: Sequence[str], noun: str
+) -> str:
+    """Return ``value`` as a catalog key only if ``vocabulary`` publishes it.
+
+    Membership is checked before any catalog key is composed from the value:
+    the catalog's own unknown-key rejection names the key it was asked for,
+    so a value that came from the receipt file must never become one. The
+    rejection here carries the structural pointer and the noun, never the
+    value.
+    """
+
+    key = _text(value, pointer)
+    if key not in vocabulary:
+        raise ContextSafeError(
+            "invalid_receipt_document", pointer, f"{noun} is not a published {noun}"
+        )
+    return key
 
 
 def _attr(name: str, value: str) -> str:
@@ -322,12 +368,12 @@ def _scope(surface: Surface, scope: Mapping[str, JsonValue]) -> str:
     return "".join(rows)
 
 
-def _status_cell(surface: Surface, status: str) -> tuple[str, str]:
+def _status_cell(surface: Surface, status: str, pointer: str) -> tuple[str, str]:
     symbol = _STATUS_SYMBOLS.get(status)
     if symbol is None:
         raise ContextSafeError(
             "invalid_receipt_document",
-            "$.payload.results[].status",
+            pointer,
             "status is not a published outcome status",
         )
     message = surface.message(f"status.{status}")
@@ -339,30 +385,30 @@ def _rows(surface: Surface, results: Sequence[JsonValue]) -> tuple[_Row, ...]:
     for index, raw in enumerate(results):
         result = _mapping(raw, f"$.payload.results[{index}]")
         status = _text(result.get("status"), f"$.payload.results[{index}].status")
-        _, status_text = _status_cell(surface, status)
+        _, status_text = _status_cell(
+            surface, status, f"$.payload.results[{index}].status"
+        )
         rows.append(
             _Row(
                 rule_id=_text(
                     result.get("rule_id"), f"$.payload.results[{index}].rule_id"
                 ),
-                checkpoint=surface.text(
-                    "checkpoint."
-                    + _text(
-                        result.get("checkpoint"),
-                        f"$.payload.results[{index}].checkpoint",
-                    )
+                checkpoint=_checkpoint_label(
+                    surface,
+                    result.get("checkpoint"),
+                    f"$.payload.results[{index}].checkpoint",
                 ),
-                concept=surface.text(
-                    "concept."
-                    + _text(
-                        result.get("concept"), f"$.payload.results[{index}].concept"
-                    )
-                ),
+                concept=_concept_label(surface, result, f"$.payload.results[{index}]"),
                 status_key=status,
                 status_text=status_text,
                 reason=surface.text(
                     "reason."
-                    + _text(result.get("reason"), f"$.payload.results[{index}].reason")
+                    + _published(
+                        result.get("reason"),
+                        f"$.payload.results[{index}].reason",
+                        _REASONS,
+                        "reason",
+                    )
                 ),
             )
         )
@@ -406,6 +452,9 @@ def _summary_table(surface: Surface, summary: Mapping[str, JsonValue]) -> str:
     count_header = surface.message("column.count")
     rows: list[str] = []
     for status in sorted(summary):
+        # The key is receipt content: it is held to the published set before
+        # it can appear in a pointer, so an unpublished key is never named.
+        symbol, label = _status_cell(surface, status, "$.payload.summary")
         count = summary[status]
         if not isinstance(count, int) or isinstance(count, bool):
             raise ContextSafeError(
@@ -413,7 +462,6 @@ def _summary_table(surface: Surface, summary: Mapping[str, JsonValue]) -> str:
                 f"$.payload.summary.{status}",
                 "summary counts must be integers",
             )
-        symbol, label = _status_cell(surface, status)
         rows.append(
             f'<tr><th scope="row" class="status" {_attr("data-cs-status", status)}>'
             f'<span class="status-symbol" aria-hidden="true">{escape(symbol)}</span>'
@@ -479,6 +527,181 @@ def _envelope(surface: Surface, envelope: Mapping[str, JsonValue]) -> str:
         f"<dd {_marked(time_value)}>{escape(time_value.text)}</dd>"
         f"<dt {_marked(claimed_label)}>{escape(claimed_label.text)}</dt>"
         f"<dd>{claimed_html}</dd>"
+    )
+
+
+def _checkpoint_label(surface: Surface, value: JsonValue | None, pointer: str) -> str:
+    """Return the display name of a checkpoint the payload names.
+
+    The value is held to the published checkpoint set before it can become a
+    catalog key, so an unpublished value is rejected by its pointer alone.
+    """
+
+    return surface.text(
+        "checkpoint." + _published(value, pointer, _CHECKPOINTS, "checkpoint")
+    )
+
+
+def _optional_checkpoint(
+    surface: Surface, value: JsonValue | None, pointer: str
+) -> str | None:
+    if value is None:
+        return None
+    return _checkpoint_label(surface, value, pointer)
+
+
+def _evidence_cell(surface: Surface, state: JsonValue | None, pointer: str) -> str:
+    """One boundary's evidence state, as its word and nothing else.
+
+    No colour is used for these cells at all, so there is nothing for a
+    colour-blind or black-and-white reader to lose; the word is the state.
+    """
+
+    key = _published(state, pointer, _EVIDENCE_STATES, "state")
+    message = surface.message(f"evidence.{key}")
+    return (
+        f"<td {_attr('data-cs-evidence', key)}>"
+        f"<span {_marked(message)}>{escape(message.text)}</span></td>"
+    )
+
+
+def _divergence_text(
+    surface: Surface, entry: Mapping[str, JsonValue], pointer: str, *, previous: bool
+) -> tuple[str, Message]:
+    """Resolve one divergence entry to its status key and display message.
+
+    The message names only the checkpoints the payload named. A ``diverged``
+    or ``indeterminate`` entry with an ``after`` side reads as *between* two
+    observed boundaries; one without reads as *at* one.
+    """
+
+    status = _published(
+        entry.get("status"), f"{pointer}.status", _DIVERGENCE_STATUSES, "status"
+    )
+    at = _optional_checkpoint(surface, entry.get("at"), f"{pointer}.at")
+    after = (
+        _optional_checkpoint(surface, entry.get("after"), f"{pointer}.after")
+        if previous
+        else None
+    )
+    scope = "from_previous" if previous else "from_expected"
+    if at is None:
+        return status, surface.message(f"divergence.{scope}.{status}")
+    if after is None:
+        return status, surface.message(f"divergence.{status}.at", checkpoint=at)
+    return status, surface.message(f"divergence.{status}.between", after=after, at=at)
+
+
+def _divergence_cell(
+    surface: Surface, entry: JsonValue | None, pointer: str, *, previous: bool
+) -> str:
+    status, message = _divergence_text(
+        surface, _mapping(entry, pointer), pointer, previous=previous
+    )
+    return (
+        f"<td {_attr('data-cs-divergence', status)}>"
+        f"<span {_marked(message)}>{escape(message.text)}</span></td>"
+    )
+
+
+def _concept_label(
+    surface: Surface, entry: Mapping[str, JsonValue], pointer: str
+) -> str:
+    """Return the display name of the concept ``entry`` names, held to the set."""
+
+    return surface.text(
+        "concept."
+        + _published(entry.get("concept"), f"{pointer}.concept", _CONCEPTS, "concept")
+    )
+
+
+def _observed_table(
+    surface: Surface, concepts: Sequence[JsonValue], pathway: Sequence[JsonValue]
+) -> str:
+    caption = surface.message("table.divergence.observed.caption")
+    columns = [surface.message("column.concept")]
+    for index, item in enumerate(pathway):
+        name = _published(
+            item, f"$.payload.divergence.pathway[{index}]", _CHECKPOINTS, "checkpoint"
+        )
+        columns.append(surface.message(f"checkpoint.{name}"))
+    headers = "".join(
+        f'<th scope="col" {_marked(column)}>{escape(column.text)}</th>'
+        for column in columns
+    )
+    rows: list[str] = []
+    for index, raw in enumerate(concepts):
+        pointer = f"$.payload.divergence.concepts[{index}]"
+        entry = _mapping(raw, pointer)
+        states = _sequence(entry.get("checkpoints"), f"{pointer}.checkpoints")
+        named = [
+            _mapping(state, f"{pointer}.checkpoints").get("checkpoint")
+            for state in states
+        ]
+        if named != list(pathway):
+            raise ContextSafeError(
+                "invalid_receipt_document",
+                f"{pointer}.checkpoints",
+                "checkpoint states must follow the pathway in order",
+            )
+        cells = "".join(
+            _evidence_cell(
+                surface,
+                _mapping(state, f"{pointer}.checkpoints[{position}]").get("state"),
+                f"{pointer}.checkpoints[{position}].state",
+            )
+            for position, state in enumerate(states)
+        )
+        rows.append(
+            f'<tr><th scope="row">{escape(_concept_label(surface, entry, pointer))}</th>'
+            f"{cells}</tr>"
+        )
+    return (
+        f"<table><caption {_marked(caption)}>{escape(caption.text)}</caption>"
+        f"<thead><tr>{headers}</tr></thead><tbody>{''.join(rows)}</tbody></table>"
+    )
+
+
+def _first_divergence_table(surface: Surface, concepts: Sequence[JsonValue]) -> str:
+    caption = surface.message("table.divergence.first.caption")
+    headers = "".join(
+        f'<th scope="col" {_marked(surface.message(key))}>'
+        f"{escape(surface.text(key))}</th>"
+        for key in ("column.concept", "column.from_expected", "column.from_previous")
+    )
+    rows: list[str] = []
+    for index, raw in enumerate(concepts):
+        pointer = f"$.payload.divergence.concepts[{index}]"
+        entry = _mapping(raw, pointer)
+        rows.append(
+            f'<tr><th scope="row">{escape(_concept_label(surface, entry, pointer))}</th>'
+            + _divergence_cell(
+                surface,
+                entry.get("from_expected"),
+                f"{pointer}.from_expected",
+                previous=False,
+            )
+            + _divergence_cell(
+                surface,
+                entry.get("from_previous"),
+                f"{pointer}.from_previous",
+                previous=True,
+            )
+            + "</tr>"
+        )
+    return (
+        f"<table><caption {_marked(caption)}>{escape(caption.text)}</caption>"
+        f"<thead><tr>{headers}</tr></thead><tbody>{''.join(rows)}</tbody></table>"
+    )
+
+
+def _divergence(surface: Surface, divergence: Mapping[str, JsonValue]) -> str:
+    concepts = _sequence(divergence.get("concepts"), "$.payload.divergence.concepts")
+    pathway = _sequence(divergence.get("pathway"), "$.payload.divergence.pathway")
+    return (
+        _safety_text(surface, "divergence.explainer")
+        + _observed_table(surface, concepts, pathway)
+        + _first_divergence_table(surface, concepts)
     )
 
 
@@ -584,6 +807,15 @@ def _body(
                 "section.results.heading",
                 "results",
                 _results_table(surface, rows),
+            ),
+            _section(
+                surface,
+                "section.divergence.heading",
+                "divergence",
+                _divergence(
+                    surface,
+                    _mapping(payload.get("divergence"), "$.payload.divergence"),
+                ),
             ),
             _section(
                 surface,

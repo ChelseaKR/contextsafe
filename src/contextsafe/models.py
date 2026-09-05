@@ -10,7 +10,28 @@ CASE_SCHEMA_VERSION = "contextsafe.case/0.1.0"
 OBSERVATION_SCHEMA_VERSION = "contextsafe.observation/0.1.0"
 OBSERVATION_SET_SCHEMA_VERSION = "contextsafe.observation-set/0.1.0"
 RULE_SET_SCHEMA_VERSION = "contextsafe.rule-set/0.1.0"
-RECEIPT_SCHEMA_VERSION = "contextsafe.receipt/0.1.0"
+"""The exact-only rule-set shape: every rule compares one expected hash.
+
+Still accepted unchanged, so an existing ``rules.json`` and the pack contract
+that pins this version are untouched by the predicate extension below.
+"""
+PREDICATE_RULE_SET_SCHEMA_VERSION = "contextsafe.rule-set/0.2.0"
+"""The rule-set shape that admits a closed ``predicate`` field (B-028).
+
+``exact`` is the default, so a 0.2.0 document with no predicate field means
+what a 0.1.0 document means. The predicates are a reference-only, ungoverned
+mechanism: no clinical, laboratory, or community review stands behind any
+rule that uses them.
+"""
+SUPPORTED_RULE_SET_SCHEMA_VERSIONS = frozenset(
+    {RULE_SET_SCHEMA_VERSION, PREDICATE_RULE_SET_SCHEMA_VERSION}
+)
+RECEIPT_SCHEMA_VERSION = "contextsafe.receipt/0.3.0"
+"""The receipt payload shape.
+
+0.3 adds the first-observed-divergence section and the per-outcome evidence
+trace (B-031, A-034 and A-035) and changes nothing that 0.2 carried.
+"""
 RECEIPT_DOCUMENT_SCHEMA_VERSION = "contextsafe.receipt-document/0.1.0"
 
 
@@ -34,12 +55,71 @@ class ValueStatus(StrEnum):
 
 
 class Checkpoint(StrEnum):
-    """Observed boundaries in the bounded reference workflow."""
+    """Observed boundaries in the bounded reference workflow.
+
+    Declared in pathway order: a value enters at registration, is stored in
+    the EHR, crosses the interface, and returns from the laboratory. The
+    first-observed-divergence computation walks members in this order.
+    """
 
     REGISTRATION = "registration"
     EHR = "ehr"
     INTERFACE = "interface"
     LIS_RETURN = "lis_return"
+
+
+PATHWAY: tuple[Checkpoint, ...] = tuple(Checkpoint)
+"""The checkpoints in pathway order, which is their declaration order."""
+
+
+class EvidenceState(StrEnum):
+    """What the observation set holds for one concept at one checkpoint.
+
+    ``unobserved`` is the absence of evidence and nothing more: it is never
+    agreement, never divergence, and never blamed (A-032, A-034).
+    """
+
+    OBSERVED = "observed"
+    """Evidence that reads as one state of the concept at this boundary."""
+
+    UNOBSERVED = "unobserved"
+    """No observation at this boundary; nothing is known about it."""
+
+    AMBIGUOUS = "ambiguous"
+    """Evidence that cannot be read as one state: more than one observation
+    of a single-valued concept, or the same record captured twice."""
+
+
+class DivergenceStatus(StrEnum):
+    """The closed set of things a divergence entry may say (A-034).
+
+    A divergence is located only at an observed boundary. An unobserved
+    boundary between two observed ones leaves the divergence located between
+    those two, and no status here can name the unobserved one.
+    """
+
+    DIVERGED = "diverged"
+    """The first observed boundary whose value hashes differ."""
+
+    AGREED_WHERE_OBSERVED = "agreed_where_observed"
+    """Every observed boundary agreed; unobserved boundaries said nothing."""
+
+    INDETERMINATE = "indeterminate"
+    """An ambiguous boundary was reached before any divergence was found."""
+
+    UNOBSERVED = "unobserved"
+    """Too few observed boundaries to compare anything at all."""
+
+
+SINGLE_VALUED_CONCEPTS: frozenset[ConceptKind] = frozenset(
+    {ConceptKind.GENDER_IDENTITY, ConceptKind.NAME_TO_USE, ConceptKind.PRONOUNS}
+)
+"""Concepts the case manifest declares exactly once.
+
+More than one observation of one of these at one boundary is ambiguous
+evidence. Recorded sex or gender and SPCU are record lists, so several
+distinct records at one boundary are one observed state.
+"""
 
 
 class OutcomeStatus(StrEnum):
@@ -56,7 +136,9 @@ class OutcomeReason(StrEnum):
     """The closed set of reason codes a receipt outcome may publish.
 
     The published receipt contract repeats this set, so an unreviewed reason
-    string cannot reach a receipt without a schema change.
+    string cannot reach a receipt without a schema change. Every predicate in
+    ``RulePredicate`` has one affirmative and one failure reason, so a receipt
+    says which claim was decided, not only that something passed or failed.
     """
 
     AFFIRMATIVE_EVIDENCE_MATCH = "affirmative_evidence_match"
@@ -64,6 +146,81 @@ class OutcomeReason(StrEnum):
     MISSING_EVIDENCE = "missing_evidence"
     PREDECLARED_NOT_APPLICABLE = "predeclared_not_applicable"
     SEMANTIC_MISMATCH = "semantic_mismatch"
+    VALUE_PRESENT = "value_present"
+    VALUE_NOT_PRESENT = "value_not_present"
+    STATUS_PRESERVED = "status_preserved"
+    STATUS_NOT_PRESERVED = "status_not_preserved"
+    VALUE_NOT_COERCED = "value_not_coerced"
+    VALUE_COERCED = "value_coerced"
+    RECORD_COUNT_PRESERVED = "record_count_preserved"
+    RECORD_COUNT_CHANGED = "record_count_changed"
+    VALUE_PRESERVED_ACROSS_CHECKPOINTS = "value_preserved_across_checkpoints"
+    VALUE_CHANGED_ACROSS_CHECKPOINTS = "value_changed_across_checkpoints"
+    VALUE_NOT_OVERWRITTEN = "value_not_overwritten"
+    OVERWRITTEN_BY_OTHER_CONCEPT = "overwritten_by_other_concept"
+
+
+AFFIRMATIVE_REASONS: frozenset[OutcomeReason] = frozenset(
+    {
+        OutcomeReason.AFFIRMATIVE_EVIDENCE_MATCH,
+        OutcomeReason.VALUE_PRESENT,
+        OutcomeReason.STATUS_PRESERVED,
+        OutcomeReason.VALUE_NOT_COERCED,
+        OutcomeReason.RECORD_COUNT_PRESERVED,
+        OutcomeReason.VALUE_PRESERVED_ACROSS_CHECKPOINTS,
+        OutcomeReason.VALUE_NOT_OVERWRITTEN,
+    }
+)
+"""The only reasons a ``pass`` outcome may carry."""
+
+FAILURE_REASONS: frozenset[OutcomeReason] = frozenset(
+    {
+        OutcomeReason.SEMANTIC_MISMATCH,
+        OutcomeReason.VALUE_NOT_PRESENT,
+        OutcomeReason.STATUS_NOT_PRESERVED,
+        OutcomeReason.VALUE_COERCED,
+        OutcomeReason.RECORD_COUNT_CHANGED,
+        OutcomeReason.VALUE_CHANGED_ACROSS_CHECKPOINTS,
+        OutcomeReason.OVERWRITTEN_BY_OTHER_CONCEPT,
+    }
+)
+"""The only reasons a ``fail`` outcome may carry."""
+
+INDETERMINATE_REASONS: frozenset[OutcomeReason] = frozenset(
+    {OutcomeReason.MISSING_EVIDENCE, OutcomeReason.AMBIGUOUS_EVIDENCE}
+)
+"""The only reasons an ``indeterminate`` outcome may carry."""
+
+
+class RulePredicate(StrEnum):
+    """The closed set of pure predicates a 0.2.0 rule may name (B-028).
+
+    Reference-only and ungoverned: these are mechanisms for the assertions in
+    ``docs/05-DATA-AND-EVIDENCE.md`` section 5 (A-005, A-008 to A-015), not
+    approved assertions. ``exact`` is the default and the only predicate a
+    0.1.0 rule set can express.
+    """
+
+    EXACT = "exact"
+    """The single observed value hash equals the expected hash."""
+
+    PRESENT = "present"
+    """The single observed value has status ``specified`` (A-008)."""
+
+    STATUS_PRESERVED = "status_preserved"
+    """The observed status equals the expected status; value ignored (A-009)."""
+
+    NOT_COERCED = "not_coerced"
+    """The observed status and scalar are none of the rule's forbidden (A-014)."""
+
+    RECORD_COUNT = "record_count"
+    """Exactly ``expected_count`` distinct records were observed (A-013)."""
+
+    PRESERVED_ACROSS = "preserved_across"
+    """The same hash at ``preserved_from`` and at ``checkpoint`` (A-005, A-010)."""
+
+    NOT_OVERWRITTEN_BY = "not_overwritten_by"
+    """The observed value is not another concept's case value (A-011)."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -150,6 +307,28 @@ type SemanticValue = (
     | NameToUse
     | Pronouns
 )
+
+
+def coercion_key(value: SemanticValue) -> tuple[str, str | None]:
+    """Return the projection of a value that A-014 is a claim about.
+
+    A coercion rewrites what a value says (X becomes F, declined becomes a
+    value), not the descriptors around it. The key is therefore the presence
+    status and the scalar, and nothing else: a recorded sex or gender's
+    context and source, a gender identity's code system, and an SPCU's order
+    context are outside it, so a boundary that stamps its own context or
+    source on a coerced record is still reported as a coercion. Recorded sex
+    or gender and SPCU carry no status field and are specified by
+    construction. The key is a comparison key only; receipts still carry the
+    whole-value hash.
+    """
+
+    status = (
+        value.status
+        if isinstance(value, GenderIdentity | NameToUse | Pronouns)
+        else ValueStatus.SPECIFIED
+    )
+    return (status.value, value.value)
 
 
 @dataclass(frozen=True, slots=True)
@@ -286,7 +465,13 @@ class Observation:
 
 @dataclass(frozen=True, slots=True)
 class Rule:
-    """A pure fixture rule comparing one expected typed semantic value."""
+    """A pure fixture rule over one expected typed semantic value.
+
+    ``predicate`` defaults to ``exact``; the three predicate-specific fields
+    are present only for the predicate that reads them, which the validator
+    enforces. The canonical form omits every default, so a rule that says
+    ``exact`` hashes exactly as it did before predicates existed.
+    """
 
     rule_id: str
     version: str
@@ -295,11 +480,15 @@ class Rule:
     concept: ConceptKind
     expected: SemanticValue
     required: bool
+    predicate: RulePredicate = RulePredicate.EXACT
+    forbidden: tuple[SemanticValue, ...] = ()
+    expected_count: int | None = None
+    preserved_from: Checkpoint | None = None
 
     def to_dict(self) -> dict[str, JsonValue]:
         """Return the canonical exchange representation."""
 
-        return {
+        value: dict[str, JsonValue] = {
             "case_id": self.case_id,
             "checkpoint": self.checkpoint.value,
             "concept": self.concept.value,
@@ -308,6 +497,15 @@ class Rule:
             "rule_id": self.rule_id,
             "version": self.version,
         }
+        if self.predicate is not RulePredicate.EXACT:
+            value["predicate"] = self.predicate.value
+        if self.forbidden:
+            value["forbidden"] = [item.to_dict() for item in self.forbidden]
+        if self.expected_count is not None:
+            value["expected_count"] = self.expected_count
+        if self.preserved_from is not None:
+            value["preserved_from"] = self.preserved_from.value
+        return value
 
 
 @dataclass(frozen=True, slots=True)

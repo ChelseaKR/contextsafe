@@ -1,0 +1,93 @@
+{
+  "fault": "F-029",
+  "mutation": "ingest PHI canary/non-synthetic MRN, case-manifest form: the case's identifier value is outside the CSYN- synthetic namespace. The case parser refuses the whole manifest (invalid_synthetic_identifier) before any observation or rule is read; the evidence-source form of the same fault, a PHI canary or identifier-shaped value in a raw source, is exercised by the preflight and canary suites named in the matrix",
+  "assertion": "A-002",
+  "case": {
+    "schema_version": "contextsafe.case/0.1.0",
+    "case_id": "CTP-I01",
+    "synthetic_identifier": {
+      "system": "urn:contextsafe:synthetic",
+      "value": "fixture-record-not-synthetic"
+    },
+    "concepts": {
+      "gender_identity": {
+        "status": "specified",
+        "value": "fixture-gender-1",
+        "code_system": "urn:contextsafe:fixture"
+      },
+      "recorded_sex_or_gender": [
+        {
+          "value": "X",
+          "context": "government-id",
+          "source": "synthetic-fixture"
+        }
+      ],
+      "sex_parameter_for_clinical_use": [
+        {
+          "value": "fixture-context-1",
+          "context_id": "ORDER-CSYN-I01-A",
+          "supporting_observation_ids": [
+            "SUP-CSYN-I01-A"
+          ]
+        }
+      ],
+      "name_to_use": {
+        "status": "specified",
+        "value": "CSYN-ASTER",
+        "use": "usual"
+      },
+      "pronouns": {
+        "status": "specified",
+        "value": "they/them"
+      }
+    },
+    "prohibited_inferences": [
+      "gender_identity_to_spcu",
+      "recorded_sex_or_gender_to_spcu"
+    ]
+  },
+  "rules": {
+    "schema_version": "contextsafe.rule-set/0.2.0",
+    "rules": [
+      {
+        "rule_id": "A-I01",
+        "version": "0.1.0",
+        "case_id": "CTP-I01",
+        "checkpoint": "ehr",
+        "concept": "gender_identity",
+        "expected": {
+          "status": "specified",
+          "value": "fixture-gender-1",
+          "code_system": "urn:contextsafe:fixture"
+        },
+        "required": true
+      }
+    ]
+  },
+  "observations": {
+    "schema_version": "contextsafe.observation-set/0.1.0",
+    "observations": [
+      {
+        "schema_version": "contextsafe.observation/0.1.0",
+        "observation_id": "OBS-I01-GI",
+        "case_id": "CTP-I01",
+        "checkpoint": "ehr",
+        "concept": "gender_identity",
+        "value": {
+          "status": "specified",
+          "value": "fixture-gender-1",
+          "code_system": "urn:contextsafe:fixture"
+        },
+        "evidence": {
+          "source_sha256": "e154f238653eb40dca76d91edb9108bd6c2edc78e6df936e927771558989788d",
+          "source_pointer": "$.concepts.gender_identity"
+        },
+        "mapping": {
+          "source_concept": "gender_identity",
+          "target_concept": "gender_identity",
+          "mapping_version": "0.1.0"
+        }
+      }
+    ]
+  }
+}

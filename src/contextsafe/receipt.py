@@ -11,6 +11,7 @@ from datetime import datetime, timedelta
 
 from contextsafe import __version__
 from contextsafe.canonical import JsonValue, canonical_json, sha256_json
+from contextsafe.divergence import compute_divergence
 from contextsafe.errors import ContextSafeError
 from contextsafe.evaluator import Outcome
 from contextsafe.models import (
@@ -59,7 +60,9 @@ def build_receipt(
 
     The payload never contains a timestamp, signature, or other
     run-environment metadata; identical inputs, rules, and runner version
-    always produce identical payload bytes.
+    always produce identical payload bytes. The ``divergence`` section is a
+    function of the case and observations alone (B-031); the rules do not
+    reach it, and it does not reach ``result_sha256``.
     """
 
     results = result_payload(outcomes)
@@ -69,6 +72,7 @@ def build_receipt(
     }
     return {
         "case_id": bundle.case.case_id,
+        "divergence": compute_divergence(bundle).to_dict(),
         "hashes": {
             "input_sha256": sha256_json(input_payload(bundle)),
             "result_sha256": sha256_json(results),

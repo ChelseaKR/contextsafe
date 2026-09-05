@@ -1,6 +1,6 @@
 """Published receipt-contract tests (B-033, P0-09, RG-10).
 
-`schemas/contextsafe-receipt-v0.1.schema.json` is the pre-1.0 shape of the
+`schemas/contextsafe-receipt-v0.3.schema.json` is the pre-1.0 shape of the
 receipt schema that `docs/04-ARCHITECTURE.md` section 8 requires ContextSafe to
 publish. These tests are the schema/runtime agreement gate named in
 `docs/09-TEST-AND-EVALUATION.md` section 8 (T-RECEIPT schema) and section 9
@@ -15,6 +15,7 @@ case, observation, pack, plan, and evidence contracts are.
 """
 
 import json
+import re
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -26,21 +27,24 @@ from contextsafe.canonical import sha256_json
 from contextsafe.cli import EXIT_SUCCESS, main
 from contextsafe.evaluator import Outcome, evaluate
 from contextsafe.models import (
+    PATHWAY,
     RECEIPT_DOCUMENT_SCHEMA_VERSION,
     RECEIPT_SCHEMA_VERSION,
     Checkpoint,
     ConceptKind,
+    DivergenceStatus,
     EvaluationBundle,
+    EvidenceState,
     OutcomeReason,
     OutcomeStatus,
 )
 from contextsafe.receipt import build_receipt_document
 from contextsafe.reference_fixtures import REFERENCE_ROOT
-from contextsafe.validation import parse_bundle
+from contextsafe.validation import STRUCTURAL_POINTER_SEGMENTS, parse_bundle
 
 ROOT = Path(__file__).resolve().parents[1]
 REFERENCE = REFERENCE_ROOT
-SCHEMA_PATH = ROOT / "schemas" / "contextsafe-receipt-v0.1.schema.json"
+SCHEMA_PATH = ROOT / "schemas" / "contextsafe-receipt-v0.3.schema.json"
 
 CLAIMED = datetime(2026, 8, 4, 9, 30, 0, tzinfo=UTC)
 
@@ -166,7 +170,7 @@ def test_published_contract_accepts_the_reference_receipt_document(
 ) -> None:
     schema = _schema()
     Draft202012Validator.check_schema(schema)
-    assert schema["$id"].endswith("/schemas/contextsafe-receipt-v0.1.schema.json")
+    assert schema["$id"].endswith("/schemas/contextsafe-receipt-v0.3.schema.json")
     _validator().validate(document)
 
 
@@ -230,12 +234,63 @@ def test_contract_enums_equal_the_runtime_status_algebra_and_types() -> None:
     assert set(outcome["properties"]["reason"]["enum"]) == {
         member.value for member in OutcomeReason
     }
-    assert set(outcome["properties"]["checkpoint"]["enum"]) == {
+    assert set(schema["$defs"]["checkpoint"]["enum"]) == {
         member.value for member in Checkpoint
     }
-    assert set(outcome["properties"]["concept"]["enum"]) == {
-        member.value for member in ConceptKind
+    concepts = {member.value for member in ConceptKind}
+    assert set(outcome["properties"]["concept"]["enum"]) == concepts
+    divergence = schema["$defs"]["concept_divergence"]
+    assert set(divergence["properties"]["concept"]["enum"]) == concepts
+    assert set(schema["$defs"]["evidence_state"]["enum"]) == {
+        member.value for member in EvidenceState
     }
+    assert set(schema["$defs"]["divergence_status"]["enum"]) == {
+        member.value for member in DivergenceStatus
+    }
+    pathway = schema["$defs"]["divergence"]["properties"]["pathway"]
+    assert [item["const"] for item in pathway["prefixItems"]] == [
+        item.value for item in PATHWAY
+    ]
+
+
+def test_contract_pointer_grammar_is_the_runtime_segment_vocabulary() -> None:
+    """A-035: the receipt's pointer grammar is the validator's, word for word.
+
+    The published pattern is an alternation over the closed segment set. If
+    the runtime vocabulary grows without the contract, or the reverse, a
+    pointer could be accepted by one and refused by the other.
+    """
+
+    pattern = _schema()["$defs"]["structural_pointer"]["pattern"]
+    start = pattern.index("(?:", pattern.index("\\.")) + 3
+    end = pattern.index(")", start)
+    assert set(pattern[start:end].split("|")) == set(STRUCTURAL_POINTER_SEGMENTS)
+    compiled = re.compile(pattern)
+    for accepted in (
+        "$.concepts.gender_identity",
+        "$.concepts.recorded_sex_or_gender[1]",
+        "$.records[12].value_code",
+        "$.rows[0].sex",
+        "/name/0",
+        "/entry/0/resource/extension/1",
+        "$.PID[1]-5.1.1",
+    ):
+        assert compiled.fullmatch(accepted)
+    for refused in (
+        "$",
+        "$.CSYN-ASTER",
+        "$.concepts.Aster",
+        "$.name_to_use.they-them",
+        "$.records[01]",
+        "$..concepts",
+        "$.concepts.",
+        "/text/0",
+        "/name/x",
+        "$.ZZZ[1]-5.1.1",
+        "$.PID[1]-5.1",
+        "$.rows[0].patient",
+    ):
+        assert compiled.fullmatch(refused) is None
 
 
 @pytest.mark.parametrize("status", list(OutcomeStatus))
@@ -270,6 +325,14 @@ def test_contract_accepts_every_published_status_and_reason(
         ("payload", "scope"),
         ("payload", "summary"),
         ("payload", "results", 0),
+        ("payload", "results", 0, "trace"),
+        ("payload", "results", 0, "trace", "sources", 0),
+        ("payload", "results", 0, "trace", "mappings", 0),
+        ("payload", "divergence"),
+        ("payload", "divergence", "concepts", 0),
+        ("payload", "divergence", "concepts", 0, "checkpoints", 0),
+        ("payload", "divergence", "concepts", 0, "from_expected"),
+        ("payload", "divergence", "concepts", 0, "from_previous"),
     ],
 )
 def test_unknown_fields_fail_closed_at_every_level(
@@ -326,6 +389,216 @@ def test_outcomes_reject_semantic_and_source_values(
     document: dict[str, Any], field: str
 ) -> None:
     document["payload"]["results"][0][field] = "CSYN-ASTER"
+    assert not _validator().is_valid(document)
+
+
+@pytest.mark.parametrize(
+    "pointer",
+    [
+        "$.CSYN-ASTER",
+        "$.concepts.Aster",
+        "$.patient.name",
+        "$.concepts.name_to_use.they-them",
+        "$",
+        "concepts.name_to_use",
+        "",
+    ],
+)
+def test_trace_refuses_a_pointer_with_a_non_structural_segment(
+    document: dict[str, Any], pointer: str
+) -> None:
+    """A-035: a pointer is a path of closed segments, never a carrier of text."""
+
+    document["payload"]["results"][0]["trace"]["sources"][0]["source_pointer"] = pointer
+    assert not _validator().is_valid(document)
+
+
+@pytest.mark.parametrize(
+    "field", ["value", "observed_value", "collector", "pointer_text", "name_to_use"]
+)
+@pytest.mark.parametrize("location", [(), ("sources", 0), ("mappings", 0)])
+def test_trace_carries_only_the_published_fields(
+    document: dict[str, Any], location: tuple[str | int, ...], field: str
+) -> None:
+    """The trace has no field a value could be smuggled through."""
+
+    trace = document["payload"]["results"][0]["trace"]
+    _at(trace, location)[field] = "CSYN-ASTER"
+    assert not _validator().is_valid(document)
+
+
+@pytest.mark.parametrize(
+    ("pointer", "value"),
+    [
+        (("from_expected", "at"), "between"),
+        (("from_expected", "at"), "unobserved"),
+        (("from_expected", "status"), "passed"),
+        (("from_expected", "status"), "agreed"),
+        (("from_previous", "after"), "gap"),
+        (("from_previous", "at"), 0),
+        (("from_previous", "status"), "diverged_across_unobserved"),
+        (("checkpoints", 0, "state"), "assumed"),
+        (("checkpoints", 0, "state"), "agreed"),
+        (("checkpoints", 0, "checkpoint"), "display"),
+        (("concept",), "legal_name"),
+    ],
+)
+def test_divergence_vocabulary_is_closed(
+    document: dict[str, Any], pointer: tuple[str | int, ...], value: object
+) -> None:
+    """A-034: a divergence entry can only say the published things.
+
+    In particular no status, checkpoint, or state value exists that could
+    name an unobserved gap as the location of a divergence.
+    """
+
+    entry = document["payload"]["divergence"]["concepts"][0]
+    _at(entry, pointer[:-1])[pointer[-1]] = value
+    assert not _validator().is_valid(document)
+
+
+_SEEDED = sorted(
+    path
+    for path in (ROOT / "tests" / "fixtures" / "seeded-faults").rglob("*.json")
+    if path.parent.name != "refused"
+)
+"""Every seeded-fault fixture the runner can evaluate.
+
+``refused/`` holds faults a fail-closed gate stops before evaluation, so no
+receipt exists for them to validate; ``tests/test_seeded_faults.py`` pins
+each refusal and holds that directory to exactly the faults it names.
+"""
+
+
+@pytest.mark.parametrize("path", _SEEDED, ids=[path.stem for path in _SEEDED])
+def test_every_seeded_fixture_document_validates(path: Path) -> None:
+    """The pairings the contract enforces admit every document the runner emits.
+
+    F-023 carries an unobserved state and an unlocated entry, F-025 a located
+    divergence with both sides named, and the clean set only agreement; a
+    pairing constraint that refused any of them would be wrong, not strict.
+    """
+
+    raw = json.loads(path.read_text(encoding="utf-8"))
+    bundle = parse_bundle(raw["case"], raw["observations"], raw["rules"])
+    _validator().validate(build_receipt_document(bundle, evaluate(bundle)))
+
+
+@pytest.mark.parametrize(
+    ("field", "entry"),
+    [
+        ("from_expected", {"status": "diverged", "at": "ehr"}),
+        ("from_expected", {"status": "indeterminate", "at": "registration"}),
+        ("from_expected", {"status": "agreed_where_observed", "at": None}),
+        ("from_expected", {"status": "unobserved", "at": None}),
+        (
+            "from_previous",
+            {"status": "diverged", "after": "registration", "at": "interface"},
+        ),
+        (
+            "from_previous",
+            {"status": "indeterminate", "after": "registration", "at": "ehr"},
+        ),
+        ("from_previous", {"status": "indeterminate", "after": None, "at": "ehr"}),
+        (
+            "from_previous",
+            {"status": "agreed_where_observed", "after": None, "at": None},
+        ),
+        ("from_previous", {"status": "unobserved", "after": None, "at": None}),
+    ],
+)
+def test_every_published_pairing_of_status_and_location_validates(
+    document: dict[str, Any], field: str, entry: dict[str, Any]
+) -> None:
+    """Each pairing the runtime can emit is admitted.
+
+    That includes an indeterminate entry with no earlier observed side to name.
+    """
+
+    document["payload"]["divergence"]["concepts"][0][field] = entry
+    _payload_validator().validate(document["payload"])
+
+
+@pytest.mark.parametrize(
+    ("field", "entry"),
+    [
+        ("from_expected", {"status": "diverged", "at": None}),
+        ("from_expected", {"status": "indeterminate", "at": None}),
+        ("from_expected", {"status": "agreed_where_observed", "at": "ehr"}),
+        ("from_expected", {"status": "unobserved", "at": "registration"}),
+        ("from_previous", {"status": "diverged", "after": None, "at": "interface"}),
+        (
+            "from_previous",
+            {"status": "diverged", "after": "registration", "at": None},
+        ),
+        ("from_previous", {"status": "diverged", "after": None, "at": None}),
+        ("from_previous", {"status": "indeterminate", "after": None, "at": None}),
+        (
+            "from_previous",
+            {"status": "indeterminate", "after": "registration", "at": None},
+        ),
+        (
+            "from_previous",
+            {"status": "agreed_where_observed", "after": "registration", "at": "ehr"},
+        ),
+        (
+            "from_previous",
+            {"status": "agreed_where_observed", "after": None, "at": "ehr"},
+        ),
+        (
+            "from_previous",
+            {"status": "agreed_where_observed", "after": "registration", "at": None},
+        ),
+        ("from_previous", {"status": "unobserved", "after": None, "at": "ehr"}),
+    ],
+)
+def test_a_status_without_its_location_fails_the_contract(
+    document: dict[str, Any], field: str, entry: dict[str, Any]
+) -> None:
+    """A located status with no location, or a location on an unlocated status,
+    is a hand-edited document and fails here, before any renderer sees it."""
+
+    document["payload"]["divergence"]["concepts"][0][field] = entry
+    assert not _payload_validator().is_valid(document["payload"])
+    assert not _validator().is_valid(document)
+
+
+@pytest.mark.parametrize(
+    ("state", "hashes"),
+    [
+        ("unobserved", ["a" * 64]),
+        ("observed", []),
+        ("ambiguous", []),
+    ],
+)
+def test_an_evidence_state_and_its_hashes_must_agree(
+    document: dict[str, Any], state: str, hashes: list[str]
+) -> None:
+    """unobserved carries no hashes and every other state carries at least one."""
+
+    entry = document["payload"]["divergence"]["concepts"][0]
+    entry["checkpoints"][0].update({"state": state, "value_sha256s": hashes})
+    assert not _validator().is_valid(document)
+
+
+def test_divergence_lists_every_concept_and_every_checkpoint_exactly_once(
+    document: dict[str, Any],
+) -> None:
+    """The denominator is fixed: five concepts, four checkpoints, in order."""
+
+    divergence = document["payload"]["divergence"]
+    assert [item["concept"] for item in divergence["concepts"]] == [
+        member.value for member in ConceptKind
+    ]
+    for entry in divergence["concepts"]:
+        assert [state["checkpoint"] for state in entry["checkpoints"]] == [
+            item.value for item in PATHWAY
+        ]
+    del divergence["concepts"][0]
+    assert not _validator().is_valid(document)
+    divergence["concepts"] = json.loads(json.dumps(divergence["concepts"])) * 2
+    assert not _validator().is_valid(document)
+    document["payload"]["divergence"]["pathway"] = ["ehr", "registration"]
     assert not _validator().is_valid(document)
 
 
