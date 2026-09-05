@@ -93,6 +93,15 @@ Checks
     The README's status line against the iterations the README documents. It
     stopped at four while the file described five.
 
+``backlog-status``
+    The `Status` cell of every phase-table row in `docs/13-BACKLOG.md` against
+    the implementation notes in the same file. The notes are chronological and
+    had outgrown their shape: an item's row was separated from its status by
+    the notes for four other items, and a reader could not find one item's
+    state without reading nine notes about others. The column is the index, and
+    it is derived rather than typed, so it cannot drift from the notes it
+    indexes. A row with no cell is a finding too, for the usual reason.
+
 Usage
 -----
 
@@ -225,6 +234,13 @@ UNCOVERED: tuple[Uncovered, ...] = (
         "for that run; re-running the command is the only thing that answers them",
     ),
     Uncovered(
+        "whether a backlog item's derived status reflects its actual progress",
+        "backlog-status derives that an implementation note names the item and when "
+        "it was last written, which is a fact about the file. Whether the work that "
+        "note describes moved the item toward its acceptance statement is a "
+        "judgment, and the notes themselves are where it is made",
+    ),
+    Uncovered(
         "whether a document's prose describes the behavior it names accurately",
         "this gate compares values and lists. A sentence that names the right stage "
         "and describes it wrongly passes every check here",
@@ -328,6 +344,48 @@ def a11y_default_locales(root: Path) -> tuple[str, ...]:
     if match is None:
         raise GateUnavailable("tools/a11y_gate.py declares no DEFAULT_LOCALES")
     return tuple(re.findall(r'"([^"]+)"', match.group(1)))
+
+
+BACKLOG = "docs/13-BACKLOG.md"
+
+_NOTE_HEADER = re.compile(
+    r"^Implementation note \((?P<date>[0-9]{4}-[0-9]{2}-[0-9]{2}), (?P<items>[^)]*)\):",
+    re.MULTILINE,
+)
+"""A dated implementation note that names the items it is about.
+
+A note whose header names no item is invisible to this derivation, so the
+header is where the binding lives: a note about B-021 written under a bare
+date would leave B-021 reading as unwritten-about, and the row would say so.
+"""
+
+_BACKLOG_ROW = re.compile(
+    r"^\| (?P<item>B-0[0-9]{2}) \|(?P<rest>.*)\|\s*$", re.MULTILINE
+)
+"""One phase-table row. ``B-1xx`` parking-lot rows and the allocation rows
+(``B-001`` to ``B-007`` as one row) do not match, because neither carries a per-item status."""
+
+
+def backlog_note_dates(backlog: str) -> dict[str, str]:
+    """Every item an implementation note names, with its most recent note date."""
+
+    dates: dict[str, str] = {}
+    for match in _NOTE_HEADER.finditer(backlog):
+        for item in re.findall(r"B-[0-9]{3}", match.group("items")):
+            if dates.get(item, "") < match.group("date"):
+                dates[item] = match.group("date")
+    return dates
+
+
+def backlog_status(item: str, dates: dict[str, str]) -> str:
+    """The one cell that item's row may carry.
+
+    Both values begin with ``Open``: no item in the backlog is closed, and a
+    derived column may not be the place that first says one is.
+    """
+
+    date = dates.get(item)
+    return "Open — no note" if date is None else f"Open — note {date}"
 
 
 def documented_iterations(readme: str) -> tuple[int, ...]:
@@ -669,6 +727,40 @@ def check_iteration_status(root: Path) -> list[Finding]:
     return []
 
 
+def check_backlog_status(root: Path) -> list[Finding]:
+    """Every phase-table row's status cell against the notes in the same file."""
+
+    backlog = read(root, BACKLOG)
+    rows = list(_BACKLOG_ROW.finditer(backlog))
+    if not rows:
+        raise GateUnavailable(
+            f"{BACKLOG} has no phase-table row to derive a status for; the tables "
+            "this check exists to hold to the notes are gone"
+        )
+    dates = backlog_note_dates(backlog)
+    findings: list[Finding] = []
+    for row in rows:
+        item = row.group("item")
+        expected = backlog_status(item, dates)
+        cells = [cell.strip() for cell in row.group("rest").split("|")]
+        stated = cells[-1] if cells else ""
+        if stated == expected:
+            continue
+        detail = (
+            f"{item} states {stated!r} as its status"
+            if stated
+            else f"{item} carries no status cell"
+        )
+        findings.append(
+            Finding(
+                "backlog-status",
+                BACKLOG,
+                f"{detail}; the implementation notes in this file derive {expected!r}",
+            )
+        )
+    return findings
+
+
 CHECKS: tuple[Callable[[Path], list[Finding]], ...] = (
     check_verify_stages,
     check_adr_index,
@@ -679,6 +771,7 @@ CHECKS: tuple[Callable[[Path], list[Finding]], ...] = (
     check_a11y_locale_coverage,
     check_required_note,
     check_iteration_status,
+    check_backlog_status,
 )
 
 

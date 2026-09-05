@@ -7,10 +7,8 @@ receipt that states its own limits. The clinically and community-governed
 service that would run it against a real health system is a plan, not a
 product.**
 
-The tool is here now. Twelve subcommands, no network access, committed synthetic
-
-The tool is here now. Eleven subcommands, no network access, committed synthetic
-fixtures that ship inside the package. With
+The tool is here now. Fourteen subcommands, no network access, committed
+synthetic fixtures that ship inside the package. With
 [`uv`](https://docs.astral.sh/uv/) installed, this returns a full receipt:
 
 ```sh
@@ -147,9 +145,13 @@ so the boundaries are machine-checked rather than promised.
 Status: product and delivery plan for v1.0 plus internal iteration-1 synthetic
 evaluation, iteration-2 unsigned governance-contract tooling, iteration-3
 privacy/evidence-core risk reduction, iteration-4 receipt payload/envelope
-separation, and iteration-5 localized receipt rendering and operator surfaces.
+separation, iteration-5 localized receipt rendering and operator surfaces, and
+iteration-6 file readers, mapping profiles, assertion predicates, the
+divergence section, the unsigned review log, and packaging evidence.
 No clinically governed, cryptographically authorized, or externally validated
-product exists yet.
+product exists yet. [The 2026-09 wave record](docs/ROADMAP-WAVE-2026-09.md)
+states where each of the fifty-seven backlog items stands, and what the wave
+did not establish.
 
 The planned ContextSafe service would run a fixed, versioned pack of synthetic patients through a health system's non-production workflow, evaluate whether identity and clinical-context data survive each boundary, and produce a signed evidence receipt. Its intended capability is to detect data loss, coercion, unsafe defaults, missing reference ranges, and patient-facing misidentification before a release reaches care. The current code proves only bounded offline fixture evaluation, unsigned contract compilation, a read-only code-envelope boundary check, and an internal-test evidence-store primitive; it is not clinically approved and does not establish those product capabilities.
 
@@ -196,6 +198,63 @@ unchanged from a clone and from an installed wheel, and
 repository on every `make verify`. The full command walkthrough, including pack,
 plan, and evidence-preflight validation, is under
 [Internal implementation slice](#internal-implementation-slice).
+
+### From a source file to a receipt
+
+The block above evaluates observations somebody already authored, which is the
+one path that does not exercise a reader. This one starts where a real case
+would start — a synthetic patient in a FHIR R4 JSON `Patient` — and runs it
+through import, evaluate, and render. Every intermediate artifact is a file you
+can open, which is the design: three commands, not one, so nothing is decided
+where you cannot see it.
+
+```sh
+uv run contextsafe fixtures export   # the packaged synthetic inputs, into ./fixtures/reference
+uv run contextsafe import \
+  --format fhir-r4-json \
+  --source fixtures/reference/fhir-patient.json \
+  --case fixtures/reference/case.json \
+  --checkpoint ehr \
+  --mapping fixtures/reference/mapping-fhir-r4-json.json \
+  --output observations-fhir.json   # read-only: never persisted, copied, indexed, or logged
+uv run contextsafe evaluate \
+  --case fixtures/reference/case.json \
+  --observations observations-fhir.json \
+  --rules fixtures/reference/rules.json \
+  --output receipt-fhir.json        # offline synthetic source; unsigned receipt
+uv run contextsafe render \
+  --receipt receipt-fhir.json \
+  --output receipt-fhir.html
+```
+
+`import` reads the Patient once through the evidence boundary — one descriptor,
+no-follow, one MiB, an exact element allowlist — and writes four observations at
+the EHR: gender identity, pronouns, recorded sex or gender, and name to use,
+each carrying the digest of the source bytes, an RFC 6901 pointer to the
+element it came from, and the version and digest of the reference mapping
+profile that bound the source's tokens to the case's values. The receipt then
+reports three passes at the EHR (gender identity, name to use, pronouns) and
+two `indeterminate` outcomes with reason `missing_evidence`: the recorded sex
+or gender the reference rules expect at registration, and the sex parameter for
+clinical use they expect at the interface. This source is one boundary, the
+recorded sex or gender it carried was observed at the EHR rather than at
+registration, and a boundary nobody observed is never a pass. Drop `--mapping`
+and the same import evaluates to `semantic_mismatch` where the source's token
+is not the case's value, because nothing has told the tool that the two mean
+the same thing.
+
+`--format hl7v2-er7 --source fixtures/reference/hl7v2-er7-message.hl7 --mapping
+fixtures/reference/mapping-hl7v2-er7.json` runs the same three steps from the
+HL7 v2 message; `lis-csv` and `lis-json` read the identity columns of the
+packaged laboratory export at `lis_return`. `tests/test_wheel_quickstart.py`
+runs this walkthrough from the built wheel beside the block above.
+
+The reference mapping profiles are synthetic bindings for the packaged
+fixtures, not the mapping of any real system; every one says `not_reviewed`,
+no interoperability, clinical, laboratory, or community reviewer has seen one,
+and the receipt this produces is unsigned. `import` needs descriptor-relative
+no-follow reads, so it fails closed with `input_path_unsupported` on Windows
+([Operations §3.1](docs/10-OPERATIONS-SRE.md)).
 
 ## Internal implementation slice
 
@@ -329,438 +388,396 @@ The same iteration adds the operator surface (the B-046 slice):
   carried) to a local append-only log. Off unless asked, never enabled from the
   environment, no message field, and no clock reading.
 
-### B-022: canonical JSON import and the importer registry
+Iteration 6 adds the source readers, the assertion predicates, the divergence
+section, the unsigned review log, and the packaging evidence (the B-022 to
+B-026, B-028, B-031, B-032, B-035 to B-038, B-041, B-045, and B-048 slices).
+Every bullet here has an implementation note behind it in
+[the backlog](docs/13-BACKLOG.md), and
+[the wave record](docs/ROADMAP-WAVE-2026-09.md) states where all fifty-seven
+backlog items stand after it:
 
-`contextsafe import --format canonical-json --source FILE --case CASE.json
---checkpoint ehr --output observations.json` is the read-only conversion step
-between a boundary envelope and the evaluator. It opens the source once
-through the same evidence boundary scan as `evidence preflight` and emits the
-observation-set document `evaluate --observations` accepts, one observation
-per record: `evidence.source_sha256` is the digest of the source bytes,
-`evidence.source_pointer` is the record's own pointer, `mapping.mapping_version`
-is the importer's version, and the case token and synthetic identifier are
-cross-checked against the case document. It never persists, copies, indexes,
-or logs the source. `src/contextsafe/importers/` is the boundary the adapters
-that follow register into: a shared result with a closed warning vocabulary
-and an `import_*` rejection family, and a registry `--format` reads, so a new
-format is one module and one entry.
-
-What it does not claim. The conversion is whole or nothing: a field code
-outside the closed five-concept mapping, an untyped value, an identifier
-outside the synthetic namespace, a gender-identity, name, or pronouns record
-whose value is a recorded-sex code or a laboratory status rather than a
-presence state or a `CSYN-` token, or any value the observation contract
-rejects fails the source with a code and a location and produces nothing, and
-nothing is normalized to the closest supported value (A-033). Values are the
-source's own tokens, carried verbatim — `CSYN-PRONOUN-THEY-THEM` stays that
-string, not `they/them`; a name's `use` is `usual` because the contract admits
-nothing else, not because the source said so — so evaluating the imported
-reference source against the
-reference `rules.json` reports `semantic_mismatch` for the pronouns rule and
-`missing_evidence` for the rest. That is correct: the tool has not been told
-the two are the same; a mapping profile passed with `--mapping` (B-026) is
-what says so, and every result records `profile_reviewed: false` either
-way. The mapping is reference-only and ungoverned. The source's `plan_id` is checked
-for shape and not against a plan, sex-parameter records reject rather than
-arrive without the supporting-observation link the concept needs, and the
-result's counts and warnings stay in process because the observation-set
-contract has no field for them.
-
-### B-023: FHIR R4 JSON reader
-
-`contextsafe import --format fhir-r4-json --source PATIENT.json --case CASE.json
---checkpoint ehr --output observations.json` reads one FHIR R4 JSON
-`Patient` -- alone, or as the only entry of a `collection` or `searchset`
-`Bundle` -- through the same boundary scan as every other format and an exact
-element allowlist, and emits the observation-set document `evaluate` accepts.
-The HL7 Gender Harmony extensions map to the canonical concepts by name:
-`individual-genderIdentity` to gender identity, `individual-pronouns` to
-pronouns, `individual-recordedSexOrGender` to recorded sex or gender with its
-`type` sub-extension as the context, and the `HumanName` whose `use` is
-`usual` to name to use. Every observation carries the source digest, the
-profile version, and an RFC 6901 JSON Pointer to the element it was read from.
-Two gender-identity extensions, or two usual names, are two observations, and
-the evaluator reports them as ambiguous. The packaged reference set carries
-[`fhir-patient.json`](src/contextsafe/fixtures/reference/fhir-patient.json),
-the accepting synthetic Patient for CTP-I01; the accepted subset is published
-as the reference-only
-[FHIR R4 source profile](schemas/contextsafe-fhir-r4-source-v0.1.schema.json).
-
-What it does not claim. The conversion is whole or nothing, and nothing
-outside the allowlist is dropped: a narrative, a contained resource, any element outside the allowlist
-(`gender`, `meta`, `telecom`, `address`, `birthDate` included), any extension
-or sub-extension outside the profile (`comment`, `period`), a `display`, a
-reference, an identifier outside `urn:contextsafe:synthetic` / `CSYN-`, a
-coded value or name part outside the synthetic alphabet, a name with no part,
-a `data-absent-reason` coding on recorded sex or gender (the canonical
-concept has no presence state, so that system's `unknown` is never read as
-the recorded value `unknown`), a document over one MiB, or a Patient carrying
-none of the concepts rejects the whole source with a code and a location, and
-a fixture per class is committed under `tests/fixtures/fhir-r4-json/`. A
-recorded-sex-or-gender code outside the observation contract's closed
-alphabet, and any coding system or code over the contract's 96-character
-token bound, reject at their own location in the FHIR document, so no
-rejection names a path in the converted document. What the allowlist admits
-and the canonical model cannot hold is validated and not carried, and the
-list is closed: `Patient.id`, `Patient.active`, every `HumanName` whose
-`use` is not `usual`, `family` on the usual name, the pronouns coding's
-system, and the recorded-sex-or-gender value's system; each is a bounded
-token, a boolean, or a synthetic name part, but an emitted observation set is
-the five concepts and not the whole Patient. Values are the coding's own tokens, verbatim,
-so evaluating the reference Patient against the reference rules passes the
-name-to-use rule (the token is identical), reports `semantic_mismatch` for
-the unbound gender-identity and pronoun tokens, and leaves the two rules at
-other checkpoints indeterminate. Sex parameter for clinical use comes only
-from its own extension and this iteration does not carry it: no allowlisted
-resource carries an order context or a supporting observation, so the
-extension rejects. The reader's choices where the implementation guide is
-uncertain are one versioned profile constant whose `reviewed` field is false
-and cannot be set; no interoperability, clinical, or community reviewer has
-examined it, it is not a FHIR conformance profile, and it reads a file, never
-an endpoint.
-
-### B-024: HL7 v2 ER7 reader
-
-`contextsafe import --format hl7v2-er7 --source MESSAGE.hl7 --case CASE.json
---checkpoint ehr --output observations.json` reads one ER7 message of at most
-one MiB through the same bounded, no-follow, descriptor-retaining first pass
-as the other boundary commands and converts it, whole or not at all, into the
-same observation-set document. Delimiters are the five characters MSH-1 and
-MSH-2 declare, exactly; segments end with the carriage return the standard
-fixes; only the five delimiter escapes are handled. The segment allowlist is
-MSH, PID, GSP, OBR, and OBX, and a Z-segment, a populated field the profile
-does not name, a repetition where the profile admits one value, an unhandled
-escape, free text, a control character, a PHI canary, a direct-identifier
-pattern, a production processing ID, or a patient identifier outside the
-synthetic namespace rejects the message with a code and a
-`SEG[n]-field.rep.comp` location, never the content. PID-8 Administrative
-Sex is read by exactly one function whose return type is
-`RecordedSexOrGender`, and an observation's concept is a function of the
-type of its value, so PID-8 arrives as `recorded_sex_or_gender` with the
-context `administrative` and can reach neither gender identity nor sex
-parameter for clinical use on any input; a property suite pins it. The
-packaged `hl7v2-er7-message.hl7` is an accepting synthetic message for
-CTP-I01, and `tests/fixtures/hl7v2/` holds three rejection messages.
-
-What it does not claim. Every decision is a constant in
-`HL7V2_ER7_PROFILE`, version 0.1.0, `profile_reviewed: false` and unsettable:
-the name-type code `D` for name to use, the LOINC concept-type codes GSP-4
-may carry, and the reading of recorded sex or gender and sex parameter for
-clinical use from GSP (v2.9.1 also defines GSR and GSC for them, and both
-reject as segments outside the allowlist) are choices no interoperability,
-clinical, or community reviewer has confirmed. Values are carried verbatim:
-`U` in PID-8 is not turned into `unknown`, it rejects, and presence states
-are read from the literal tokens `declined`, `unknown`, and `absent` rather
-than from HL7 null flavors, which a mapping profile (B-026) still cannot
-bind because the reader rejects them before emitting a token. A
-coding system in GSP-5.3 is read only as the `code_system` of a specified
-gender identity value; with pronouns, recorded sex or gender, sex parameter
-for clinical use, or a presence state it rejects the message rather than
-being dropped, so a token asserted in a vendor namespace is never carried as
-if it were the fixture's own. The message cannot state a checkpoint, so the
-requested one is applied to every observation and the in-process result
-says so.
-
-### B-025: LIS export identity columns as `lis-csv` and `lis-json`
-
-`contextsafe import --format lis-csv --source fixtures/reference/lis-export.csv
---case fixtures/reference/case.json --checkpoint lis_return` (and `lis-json`
-over `lis-export.json`) reads the identity columns of a laboratory result
-export — the name, pronouns, and recorded sex a result-facing display would
-show (A-031) — into name-to-use, pronoun, and recorded-sex-or-gender
-observations at `lis_return`, one per distinct value per column, pointed at
-the first row that carries it. The column set is a versioned, reference-only
-profile with `profile_reviewed: false`: `patient_id` cross-checked against
-the case; `name_to_use`, `pronouns`, and `sex`, where `sex` becomes recorded
-sex or gender in the fixed context `laboratory` and never gender identity or
-sex parameter for clinical use; and `analyte`, `value`, `unit`, `range`,
-`flag`, `order`, `specimen`, which are recognized, scanned, and counted and
-produce no observation, because the laboratory result observation family is
-a later item. CSV is a strict RFC 4180 subset; JSON is the published
-[LIS export contract](schemas/contextsafe-lis-export-v0.1.schema.json). Both
-come through the evidence boundary's own read path, and any other column, a
-cell beginning with `=`, `+`, `-`, or `@`, an empty identity cell, an
-identifier outside the synthetic namespace anywhere, or a cell the boundary
-scan refuses rejects the whole file with a code and a position, never a
-value. Rows that disagree stay ambiguous and never pass. No laboratory,
-interoperability, clinical, or community reviewer has seen the profile; it
-is not the shape of any real system's export, and no result observation
-exists yet.
-
-### B-026: the versioned mapping profile
-
-`contextsafe import ... --mapping fixtures/reference/mapping-fhir-r4-json.json`
-applies a mapping profile after the conversion, and
-`contextsafe mapping validate --profile P.json --output canonical.json` emits
-a profile's canonical unsigned form with its SHA-256. A profile is a closed,
-versioned table for one importer format, from a source token — the carrier
-it was read from (a field code, an extension URL or `Patient.name`, `PID-5`,
-`PID-8`, or `GSP-5`, a column) and the verbatim token — to the canonical
-concept and value the observation should carry, published as the
-[mapping profile contract](schemas/contextsafe-mapping-profile-v1.schema.json)
-with its [compiled form](schemas/contextsafe-compiled-mapping-profile-v1.schema.json).
-Every importer now records the source token beside each observation, so a
-row matches on what the source said, not on the value the importer built.
-Every observation an import emits with a profile applied carries the
-profile's digest and version in its `mapping` block, so `evaluate`'s input
-hash binds them. Without `--mapping`, importers keep emitting verbatim
-tokens, byte for byte as before. Five reference profiles ship as package
-data, one per importer, binding each reference fixture's tokens to the
-reference case's values: with them, import followed by evaluate passes
-every rule at the imported checkpoint and reports `missing_evidence`,
-never `semantic_mismatch`, for the rest.
-
-What it does not claim. A profile's only admissible review status is
-`not_reviewed`, with no reviewer and no date, and any other declaration
-rejects it: a declared approval authorizes nothing, exactly as on a pack,
-and `contextsafe mapping sign` is not built. A row whose target is sex
-parameter for clinical use from a gender-identity or recorded-sex carrier
-rejects first and by name (`prohibited_spcu_mapping`, A-020 and A-021), any
-other cross-concept row rejects, two rows collapsing two source values into
-one target reject (both stay distinct observations, which evaluate as
-ambiguous), a target outside the synthetic grammar rejects, and a
-sex-parameter row binds the value token only — never an order context or a
-supporting observation. A token with no row stays verbatim and the result
-says so, and with `--log-dir` the event record says so too — one unbound
-token is enough to raise it, and a profile that binds nothing is the
-loudest case rather than the condition — so the profile is visible while it
-can still be fixed. The reference profiles are synthetic bindings for the
-reference fixtures, not the mapping of any real system; no interoperability,
-clinical, laboratory, or community reviewer has seen one; HL7 null flavors
-and an LIS's empty cell are still not bound to presence states; and the
-recording context a profile binds (a `PID-8` value to the `government-id`
-record, say) is a declaration the profile's author makes and nothing here
-has confirmed.
-
-### B-028
-
-A rule can now say *what kind* of claim it makes. A rule set that declares
-`contextsafe.rule-set/0.2.0` may name one predicate from a closed set,
-published in
-[`schemas/contextsafe-rule-set-v0.2.schema.json`](schemas/contextsafe-rule-set-v0.2.schema.json):
-`exact` (the default, and the only thing a 0.1.0 rule set could say);
-`present`, the value has status `specified`; `status_preserved`, the observed
-status equals the expected status and the value is not consulted, so a
-declined gender identity or pronoun stays declined and never becomes unknown,
-absent, or a value; `not_coerced`, the observed value's presence status and
-scalar are those of none of a closed `forbidden` set the rule carries in
-fixture tokens, so an X or unknown recorded sex or gender rewritten to the M
-or F the set names is a coercion whether or not the boundary also stamped its
-own context or source on the record, and a declined, unknown, or absent
-gender identity or pronoun rewritten to a value is a coercion whatever code
-system came with it;
-`record_count`, exactly `expected_count` distinct records remain;
-`preserved_across`, the same value hash at `preserved_from` and at the rule's
-checkpoint; and `not_overwritten_by`, the observed gender identity is not the
-case's recorded sex or gender, name to use, pronouns, or SPCU value. Each is a
-pure function in `src/contextsafe/evaluator.py`, each has its own affirmative
-and failure reason in the receipt (the receipt contract moved to 0.2 for
-them), and under every one of them missing evidence is `indeterminate`, an
-ambiguous checkpoint is `indeterminate`, and nothing passes on zero
-observations. A second reference pair, `rules-predicates.json` against
-`observations-predicates.json`, exercises every predicate on the same case:
-
-```sh
-uv run contextsafe evaluate \
-  --case fixtures/reference/case.json \
-  --observations fixtures/reference/observations-predicates.json \
-  --rules fixtures/reference/rules-predicates.json
-```
-
-Its limits are the point. The predicates are mechanism for A-005 and A-008 to
-A-015 in [Data and evidence §5](docs/05-DATA-AND-EVIDENCE.md), not approved
-assertions: no clinical, laboratory, or community review has looked at any
-rule that uses them, and the rule sets that do are labelled reference-only.
-`not_coerced` decides status and scalar and nothing else: the faithful X
-carried under a different context is not a coercion and passes it, and the
-`exact` rule the reference pair ships beside it (A-I09 beside A-I06) is what
-reports that the record is no longer the declared one, so a receipt says
-which claim turned. On the recorded-sex-or-gender concept the value set is
-F, M, X, and unknown, so "absent" in A-014 is only expressible through a
-status-bearing concept (gender identity, name to use, pronouns), which is how
-F-008 carries it. Every single-observation predicate, `not_coerced` among
-them, reports `indeterminate` with `ambiguous_evidence` when a checkpoint
-carries two records of the concept, so a multi-record case such as CTP-I10
-cannot be evaluated for A-014 at all until the observation contract can name
-which record a rule reads. `preserved_across` says a value did not change
-between two boundaries, not that it was right at either.
-A `not_overwritten_by` rule whose expected gender identity scalar the case
-manifest also declares under another concept could never pass, so
-`parse_bundle` refuses it (`overwritten_expectation_conflict`) rather than
-evaluating it. A-006, A-007, and
-A-015 need a patient-facing display observation and a name period that the
-observation contract does not carry, so they have no predicate. The pack
-contract still pins the exact-only rule-set shape, and a 0.2.0 rule set is
-refused as a pack component by name. The seeded faults this slice can detect —
-F-004, F-005, F-006, F-007, F-008, F-010, F-031 from
-[Test and evaluation §4](docs/09-TEST-AND-EVALUATION.md) — live as complete
-synthetic inputs under `tests/fixtures/seeded-faults/`, each proved to be
-reported as `fail` with its own reason and never as `pass`; of the other
-twenty-nine, F-023 and F-025 are the B-031 slice's below, and the remaining
-twenty-seven were not detectable by that slice; the B-048 subsection below
-carries the current count.
-
-### B-031
-
-A receipt now says where a value first went wrong, and only where it was
-seen going wrong. The payload's `divergence` section, computed by
-`src/contextsafe/divergence.py` from the case and the observations alone,
-walks the four checkpoints in pathway order for each of the five concepts
-and reports the state of every boundary (`observed`, `unobserved`, or
-`ambiguous`, with the value hashes seen there), the first observed boundary
-whose hashes depart from the manifest's (`from_expected`), and the first
-observed boundary whose hashes depart from the previous observed one
-(`from_previous`, which names both sides). An unobserved boundary is never a
-location: when the EHR was not observed and the interface differs from
-registration, the divergence is `at` the interface and `after` registration,
-and the closed contract has no field in which the EHR could be blamed
-(A-034). Absence is never agreement: `agreed_where_observed` speaks only for
-boundaries with evidence, a concept with none is `unobserved`, and a boundary
-that cannot be read as one state is `ambiguous` and the concept
-`indeterminate` from there (A-032). Every outcome also carries a `trace` —
-the source hash and structural source pointer of each observation the
-predicate read and the version and hash of each mapping they came through
-(A-035) — and `parse_observations` now refuses a pointer with any segment
-outside a closed structural vocabulary, so a pointer can locate a field but
-cannot carry a name. The rendered page shows the section in `en-US` and
-machine-translated `es-US`, with the sentence that says what is never blamed
-beside its original. F-023 and F-025 from
-[Test and evaluation §4](docs/09-TEST-AND-EVALUATION.md) join the seeded-fault
-library, and property tests hold that reordering observations never changes
-the section and that deleting an observed checkpoint never names the deleted
-boundary, never moves the located boundary when the deleted one was neither
-side of it, and, when the located boundary itself is deleted, locates only a
-boundary that already differed from the observed boundary behind it: the
-location can move forward across the gap the deletion opened, and never onto
-a boundary that agreed with the boundary observed before it. The page holds
-every checkpoint, concept, reason, state, and status it reads from a receipt
-to the published set before the value can become a catalog key, so an
-unpublished value is refused by its structural pointer and never reaches the
-stderr error object.
-
-Its limits: the section compares value hashes and does not say which value
-was right; it is a location, not a finding, and carries no severity (B-032);
-a record-list concept is compared as its whole list, so an observation set
-that captures only some of the declared recorded-sex-or-gender records at a
-boundary reads as diverged there, never as partial agreement;
-`expected_sha256s` is carried for all five concepts whether or not any rule
-names them and, like every hash in the payload, unsalted, so for a concept
-with a small value space such as pronouns the declared value's hash is
-recoverable by enumeration (the payload has always carried unsalted hashes;
-the section widens what is carried, not how); an outcome that stopped at an
-evidence gate traces only the side that decided it, so a preserved-across
-rule with its source observed and its target missing carries an empty trace;
-the trace names assertion, mapping, source, and runner but no oracle or pack,
-because none exists to name; A-033 rests on the existing fail-closed
-validators because no normalizer exists yet (B-022 to B-026); `ambiguous` is
-decided by observation count and hash repetition, not by the iteration-3
-ambiguity-preserving observation contract, which has no route into
-evaluation; and the pointer vocabulary is the canonical manifest and evidence
-envelope only, so FHIR and HL7 paths need it extended under review. The
-receipt contract moved to 0.3 for the section and the trace, and no clinical,
-laboratory, or community review has looked at any of it.
-
-
-### B-048
-
-Every one of the 36 published seeded faults in
-[Test and evaluation §4](docs/09-TEST-AND-EVALUATION.md) now has a committed
-answer. `tests/test_seeded_faults.py` carries a matrix that says, for each
-fault, one of four things, and a dated table under §4 restates it row for
-row with a test holding the two together. Twelve are *exercised*: a complete
-synthetic fixture under `tests/fixtures/seeded-faults/` with exactly one fault
-applied, proved to be reported with the assertion's own reason and located in
-the divergence section at the observed checkpoint the fault touched — the
-nine from B-028 and B-031, plus F-001 (name to use dropped at the EHR), F-009
-(recorded sex or gender reaching the EHR with the boundary's own context and
-source in place of the declared ones, reported as a changed record while the
-`not_coerced` rule beside it still passes, because the X survived), and F-035
-(the same value through another mapping version: the trace names it and the
-run identity moves, so two mapping versions can never share a receipt). Seven
-are *exercised outside the receipt*: the laboratory faults F-017 to F-022 and
-F-033, each a complete synthetic fixture under
-`tests/fixtures/laboratory/seeded-faults/` reported as `fail` by one of the
-laboratory result predicates with that predicate's own reason, beside a clean
-counterpart that passes every rule — a wrong patient's order, an altered
-value, a blank interval, wrong bounds, a missing flag above the bound, an
-out-of-range value flagged normal, and a range preserved in the wrong unit.
-They are counted apart from the twelve because a laboratory outcome reaches
-no receipt and no divergence section, so nothing localizes them, and because
-every analyte, unit, bound, and flag in them is a token invented for software
-tests: no laboratory medical director has supplied or approved any of them,
-and none of them is a reference range. Seven are *refused*: the faulted input never reaches evaluation because a
-fail-closed gate refuses it whole with a named code at a structural path — a
-declared GI-to-SPCU or RSG-to-SPCU mapping (F-015, F-016), an unsupported
-value that is refused rather than nearest-matched (F-024), an identifier
-outside the synthetic namespace (F-029), an observation naming another case
-(F-032), and the pack validity and receipt contract gates that already exist
-(F-028, F-030); a refusal is detection without a receipt, so it is counted
-separately and never as localization. Ten are *not yet exercisable*, and each
-row names what it waits on from a closed vocabulary: the SPCU predicates and
-their clinical review, name contexts and periods in the observation contract,
-the receipt verifier, signatures, the review state machine, and the
-presentation pass.
-
-Its limits are the whole point of writing it down. This is not the 41-fault
-evaluation B-048 defines: there is no hidden-fault set, no independent fault
-author has reviewed the corpus, no independent QA has run it, and every fault
-here was written by the implementer of the mechanism that detects it. Twelve
-of 36 at receipt level, and nineteen decided in all, is deterministic corpus
-coverage over the published library — not a
-sensitivity estimate over faults the library does not contain, and not a
-population claim of any kind. Nothing here is governed content, and no
-clinical, laboratory, or community review has looked at any fixture.
-
-### B-035 and B-036: the signing layer is designed, not built
-
-[ADR 0010](docs/adr/0010-signing-layer-dependency-and-trust-model.md) writes
-the signing layer down before any of it exists, and stops at the decision only
-the maintainer can make: the standard library has no Ed25519, so the first
-`sign` command is the first runtime dependency of a project whose
-`dependencies = []` is a supply-chain claim. The record lays out
-`cryptography`, `PyNaCl`, an optional `contextsafe[signing]` extra whose
-commands fail closed with `signing_unavailable` when the backend is absent, and
-a pure-Python implementation that is rejected outright, with the `pip-audit`,
-per-platform wheel and Windows consequences of each as read on 2026-09-04; it
-recommends the extra backed by `PyNaCl` and says why. It then fixes what B-035
-and B-036 must implement under any option: detached-signature and
-trust-manifest shapes as draft fragments inside the ADR and not in `schemas/`,
-subject hashes as the signed thing, rotation with a bounded overlap, 31-day
-revocation freshness measured against a caller-declared `--as-of` and never a
-clock, compromise recovery, the per-purpose thresholds from Architecture §6.6,
-and what a verified result would and would not prove without RFC 3161 time.
-Its status is proposed. Nothing in the tool changes: no command signs or
-verifies, no schema is published, no key or dependency is added, no security
-review of the trust model has happened, and every artifact still says
-`not_signed` or `not_verified`, which the design commits to never relabeling.
-
-### B-045: packaging and fresh-install evidence
-
-`.github/workflows/package.yml` builds the sdist and wheel, exports a CycloneDX
-SBOM from the locked graph, and on Ubuntu, macOS and Windows installs that
-wheel with `pip install --no-index` into an empty virtual environment, runs the
-Quickstart above from a directory outside the checkout, and requires the
-receipt document to reproduce the digest `tests/test_determinism.py` pins.
-Build provenance is attested over the recorded checksums only after every
-platform passes. The gate is `tools/fresh_install_gate.py`; it reads the pin
-rather than restating it, exits 2 rather than 0 for anything it could not
-examine (including a working directory that existed before it ran, since a
-kept environment would report a wheel it never installed), and its report
-carries digests, counts and codes and no path.
-`make package` builds the same artifacts locally and lists the wheel. The
-limits: these are GitHub's server images, not the desktop fresh installs RG-15
-names; the artifacts are unsigned, and provenance says which workflow produced
-them, not that anyone authorized them (B-035); the SBOM is derived from
-`uv.lock`, not read out of the wheel; and no tag exists, so it has not fired.
-
-### B-038 and B-041
-
-Audited on 2026-09-04 and completed where the audit found a gap:
-
-- **Print (B-038).** Every table has a `<thead>` and the print rules declare it
-  a repeating header group; a result row, a limitation with its source-locale
-  original, and the translation notice are each kept on one page, and a heading
-  or caption stays with what follows it. `make a11y` fails when any of those
+- **`contextsafe import` and the importer registry (B-022).** `--format
+  canonical-json --source FILE --case CASE.json --checkpoint ehr --output
+  observations.json` is the read-only conversion step between a boundary
+  envelope and the evaluator. It opens the source once through the same
+  evidence boundary scan as `evidence preflight`, emits the observation-set
+  document `evaluate --observations` accepts — one observation per record,
+  `evidence.source_sha256` the digest of the source bytes,
+  `evidence.source_pointer` the record's own pointer,
+  `mapping.mapping_version` the importer's version — cross-checks the case
+  token and synthetic identifier against the case document, and never
+  persists, copies, indexes, or logs the source.
+  `src/contextsafe/importers/` is the boundary the readers register into: a
+  shared result with a closed warning vocabulary and an `import_*` rejection
+  family, and a registry `--format` reads, so a new format is one module and
+  one entry. The conversion is whole or nothing, and nothing is normalized to
+  the closest supported value (A-033): a field code outside the closed
+  five-concept mapping, an untyped value, an identifier outside the synthetic
+  namespace, a gender-identity, name, or pronouns record whose value is a
+  recorded-sex code or a laboratory status rather than a presence state or a
+  `CSYN-` token, or any value the observation contract rejects fails the
+  source with a code and a location and produces nothing. Values are the
+  source's own tokens, carried verbatim — `CSYN-PRONOUN-THEY-THEM` stays that
+  string, not `they/them` — so an import evaluated without a mapping profile
+  reports `semantic_mismatch` where the token differs and `missing_evidence`
+  at the checkpoints it did not read, and every result records
+  `profile_reviewed: false`. The source's `plan_id` is checked for shape and
+  not against a plan, sex-parameter records reject rather than arrive without
+  the supporting-observation link the concept needs, and the result's counts
+  and warnings stay in process because the observation-set contract has no
+  field for them;
+- **the FHIR R4 JSON reader (B-023).** `--format fhir-r4-json` reads one FHIR
+  R4 JSON `Patient` — alone, or as the only entry of a `collection` or
+  `searchset` `Bundle` — through the same boundary scan and an exact element
+  allowlist. The HL7 Gender Harmony extensions map to the canonical concepts
+  by name: `individual-genderIdentity` to gender identity,
+  `individual-pronouns` to pronouns, `individual-recordedSexOrGender` to
+  recorded sex or gender with its `type` sub-extension as the context, and the
+  `HumanName` whose `use` is `usual` to name to use. Every observation carries
+  the source digest, the profile version, and an RFC 6901 JSON Pointer to the
+  element it was read from; two gender-identity extensions, or two usual
+  names, are two observations, which the evaluator reports as ambiguous. The
+  packaged reference set carries
+  [`fhir-patient.json`](src/contextsafe/fixtures/reference/fhir-patient.json),
+  the accepting synthetic Patient for CTP-I01, and the accepted subset is
+  published as the reference-only
+  [FHIR R4 source profile](schemas/contextsafe-fhir-r4-source-v0.1.schema.json).
+  Nothing outside the allowlist is dropped: a narrative, a contained resource,
+  any element outside the allowlist (`gender`, `meta`, `telecom`, `address`,
+  `birthDate` included), any extension or sub-extension outside the profile
+  (`comment`, `period`), a `display`, a reference, an identifier outside
+  `urn:contextsafe:synthetic` / `CSYN-`, a coded value or name part outside the
+  synthetic alphabet, a name with no part, a `data-absent-reason` coding on
+  recorded sex or gender (the canonical concept has no presence state, so that
+  system's `unknown` is never read as the recorded value `unknown`), a
+  document over one MiB, or a Patient carrying none of the concepts rejects
+  the whole source with a code and a location, and a fixture per class is
+  committed under `tests/fixtures/fhir-r4-json/`. A recorded-sex-or-gender code
+  outside the observation contract's closed alphabet, and any coding system or
+  code over the contract's 96-character token bound, reject at their own
+  location in the FHIR document, so no rejection names a path in the converted
+  document. What the allowlist admits and the canonical model cannot hold is
+  validated and not carried, and that list is closed too: `Patient.id`,
+  `Patient.active`, every `HumanName` whose `use` is not `usual`, `family` on
+  the usual name, the pronouns coding's system, and the
+  recorded-sex-or-gender value's system. Sex parameter for clinical use comes
+  only from its own extension and this reader does not carry it: no
+  allowlisted resource carries an order context or a supporting observation,
+  so the extension rejects. The reader's choices where the implementation
+  guide is uncertain are one versioned profile constant whose `reviewed` field
+  is false and cannot be set; no interoperability, clinical, or community
+  reviewer has examined it, it is not a FHIR conformance profile, and it reads
+  a file, never an endpoint;
+- **the HL7 v2 ER7 reader (B-024).** `--format hl7v2-er7` reads one ER7
+  message of at most one MiB through the same bounded, no-follow,
+  descriptor-retaining first pass as the other boundary commands and converts
+  it, whole or not at all, into the same observation-set document. Delimiters
+  are the five characters MSH-1 and MSH-2 declare, exactly; segments end with
+  the carriage return the standard fixes; only the five delimiter escapes are
+  handled. The segment allowlist is MSH, PID, GSP, OBR, and OBX, and a
+  Z-segment, a populated field the profile does not name, a repetition where
+  the profile admits one value, an unhandled escape, free text, a control
+  character, a PHI canary, a direct-identifier pattern, a production
+  processing ID, or a patient identifier outside the synthetic namespace
+  rejects the message with a code and a `SEG[n]-field.rep.comp` location,
+  never the content. PID-8 Administrative Sex is read by exactly one function
+  whose return type is `RecordedSexOrGender`, and an observation's concept is
+  a function of the type of its value, so PID-8 arrives as
+  `recorded_sex_or_gender` with the context `administrative` and can reach
+  neither gender identity nor sex parameter for clinical use on any input; a
+  property suite pins it. The packaged `hl7v2-er7-message.hl7` is an accepting
+  synthetic message for CTP-I01, and `tests/fixtures/hl7v2/` holds three
+  rejection messages. Every decision is a constant in `HL7V2_ER7_PROFILE`,
+  version 0.1.0, `profile_reviewed: false` and unsettable: the name-type code
+  `D` for name to use, the LOINC concept-type codes GSP-4 may carry, and the
+  reading of recorded sex or gender and sex parameter for clinical use from
+  GSP (v2.9.1 also defines GSR and GSC for them, and both reject as segments
+  outside the allowlist) are choices no interoperability, clinical, or
+  community reviewer has confirmed. Values are carried verbatim: `U` in PID-8
+  is not turned into `unknown`, it rejects, and presence states are read from
+  the literal tokens `declined`, `unknown`, and `absent` rather than from HL7
+  null flavors, which a mapping profile still cannot bind because the reader
+  rejects them before emitting a token. A coding system in GSP-5.3 is read
+  only as the `code_system` of a specified gender identity value; with
+  pronouns, recorded sex or gender, sex parameter for clinical use, or a
+  presence state it rejects the message rather than being dropped, so a token
+  asserted in a vendor namespace is never carried as if it were the fixture's
+  own. The message cannot state a checkpoint, so the requested one is applied
+  to every observation and the in-process result says so;
+- **the LIS export identity columns (B-025).** `--format lis-csv` over
+  `fixtures/reference/lis-export.csv`, and `--format lis-json` over
+  `lis-export.json`, read the identity columns of a laboratory result export —
+  the name, pronouns, and recorded sex a result-facing display would show
+  (A-031) — into name-to-use, pronoun, and recorded-sex-or-gender observations
+  at `lis_return`, one per distinct value per column, pointed at the first row
+  that carries it. The column set is a versioned, reference-only profile with
+  `profile_reviewed: false`: `patient_id` cross-checked against the case;
+  `name_to_use`, `pronouns`, and `sex`, where `sex` becomes recorded sex or
+  gender in the fixed context `laboratory` and never gender identity or sex
+  parameter for clinical use; and `analyte`, `value`, `unit`, `range`, `flag`,
+  `order`, `specimen`, which are recognized, scanned, and counted and produce
+  no observation, because the laboratory result observation family is a later
+  item. CSV is a strict RFC 4180 subset; JSON is the published
+  [LIS export contract](schemas/contextsafe-lis-export-v0.1.schema.json). Both
+  come through the evidence boundary's own read path, and any other column, a
+  cell beginning with `=`, `+`, `-`, or `@`, an empty identity cell, an
+  identifier outside the synthetic namespace anywhere, or a cell the boundary
+  scan refuses rejects the whole file with a code and a position, never a
+  value. Rows that disagree stay ambiguous and never pass. No laboratory,
+  interoperability, clinical, or community reviewer has seen the profile; it
+  is not the shape of any real system's export, and no result observation
+  exists yet;
+- **the versioned mapping profile (B-026).** `contextsafe import ... --mapping
+  fixtures/reference/mapping-fhir-r4-json.json` applies a mapping profile
+  after the conversion, and `contextsafe mapping validate --profile P.json
+  --output canonical.json` emits a profile's canonical unsigned form with its
+  SHA-256. A profile is a closed, versioned table for one importer format,
+  from a source token — the carrier it was read from (a field code, an
+  extension URL or `Patient.name`, `PID-5`, `PID-8`, or `GSP-5`, a column) and
+  the verbatim token — to the canonical concept and value the observation
+  should carry, published as the
+  [mapping profile contract](schemas/contextsafe-mapping-profile-v1.schema.json)
+  with its [compiled form](schemas/contextsafe-compiled-mapping-profile-v1.schema.json).
+  Every importer records the source token beside each observation, so a row
+  matches on what the source said, not on the value the importer built, and
+  every observation emitted with a profile applied carries the profile's
+  digest and version in its `mapping` block, so `evaluate`'s input hash binds
+  them. Without `--mapping`, importers keep emitting verbatim tokens, byte for
+  byte. Five reference profiles ship as package data, one per importer,
+  binding each reference fixture's tokens to the reference case's values: with
+  them, import followed by evaluate passes every rule at the imported
+  checkpoint and reports `missing_evidence`, never `semantic_mismatch`, for
+  the rest. A profile's only admissible review status is `not_reviewed`, with
+  no reviewer and no date, and any other declaration rejects it: a declared
+  approval authorizes nothing, exactly as on a pack, and `contextsafe mapping
+  sign` is not built. A row whose target is sex parameter for clinical use
+  from a gender-identity or recorded-sex carrier rejects first and by name
+  (`prohibited_spcu_mapping`, A-020 and A-021), any other cross-concept row
+  rejects, two rows collapsing two source values into one target reject (both
+  stay distinct observations, which evaluate as ambiguous), a target outside
+  the synthetic grammar rejects, and a sex-parameter row binds the value token
+  only — never an order context or a supporting observation. A token with no
+  row stays verbatim and the result says so, and with `--log-dir` the event
+  record says so too — one unbound token is enough to raise it, and a profile
+  that binds nothing is the loudest case rather than the condition — so the
+  profile is visible while it can still be fixed. The reference profiles are
+  synthetic bindings for the reference fixtures, not the mapping of any real
+  system; no interoperability, clinical, laboratory, or community reviewer has
+  seen one; HL7 null flavors and an LIS's empty cell are still not bound to
+  presence states; and the recording context a profile binds (a `PID-8` value
+  to the `government-id` record, say) is a declaration the profile's author
+  makes and nothing here has confirmed;
+- **assertion predicates, so a rule can say what kind of claim it makes
+  (B-028).** A rule set that declares `contextsafe.rule-set/0.2.0` may name one
+  predicate from a closed set, published in
+  [`schemas/contextsafe-rule-set-v0.2.schema.json`](schemas/contextsafe-rule-set-v0.2.schema.json):
+  `exact` (the default, and the only thing a 0.1.0 rule set could say);
+  `present`, the value has status `specified`; `status_preserved`, the
+  observed status equals the expected status and the value is not consulted,
+  so a declined gender identity or pronoun stays declined and never becomes
+  unknown, absent, or a value; `not_coerced`, the observed value's presence
+  status and scalar are those of none of a closed `forbidden` set the rule
+  carries in fixture tokens, so an X or unknown recorded sex or gender
+  rewritten to the M or F the set names is a coercion whether or not the
+  boundary also stamped its own context or source on the record, and a
+  declined, unknown, or absent gender identity or pronoun rewritten to a value
+  is a coercion whatever code system came with it; `record_count`, exactly
+  `expected_count` distinct records remain; `preserved_across`, the same value
+  hash at `preserved_from` and at the rule's checkpoint; and
+  `not_overwritten_by`, the observed gender identity is not the case's
+  recorded sex or gender, name to use, pronouns, or SPCU value. Each is a pure
+  function in `src/contextsafe/evaluator.py`, each has its own affirmative and
+  failure reason in the receipt (the receipt contract moved to 0.2 for them),
+  and under every one of them missing evidence
+  is `indeterminate`, an ambiguous checkpoint is `indeterminate`, and nothing
+  passes on zero observations. A second reference pair,
+  `rules-predicates.json` against `observations-predicates.json`, exercises
+  every predicate on the same case. The predicates are mechanism for A-005 and
+  A-008 to A-015 in
+  [Data and evidence §5](docs/05-DATA-AND-EVIDENCE.md), not approved
+  assertions: no clinical, laboratory, or community review has looked at any
+  rule that uses them, and the rule sets that do are labelled reference-only.
+  `not_coerced` decides status and scalar and nothing else — the faithful X
+  carried under a different context is not a coercion and passes it, and the
+  `exact` rule the reference pair ships beside it (A-I09 beside A-I06) is what
+  reports that the record is no longer the declared one, so a receipt says
+  which claim turned. On the recorded-sex-or-gender concept the value set is
+  F, M, X, and unknown, so "absent" in A-014 is only expressible through a
+  status-bearing concept, which is how F-008 carries it. Every
+  single-observation predicate reports `indeterminate` with
+  `ambiguous_evidence` when a checkpoint carries two records of the concept,
+  so a multi-record case such as CTP-I10 cannot be evaluated for A-014 at all
+  until the observation contract can name which record a rule reads.
+  `preserved_across` says a value did not change between two boundaries, not
+  that it was right at either. A `not_overwritten_by` rule whose expected
+  gender identity scalar the case manifest also declares under another concept
+  could never pass, so `parse_bundle` refuses it
+  (`overwritten_expectation_conflict`) rather than evaluating it. A-006,
+  A-007, and A-015 need a patient-facing display observation and a name period
+  that the observation contract does not carry, so they have no predicate. The
+  pack contract still pins the exact-only rule-set shape, and a 0.2.0 rule set
+  is refused as a pack component by name. The seeded faults this slice can
+  detect — F-004, F-005, F-006, F-007, F-008, F-010, F-031 from
+  [Test and evaluation §4](docs/09-TEST-AND-EVALUATION.md) — live as complete
+  synthetic inputs under `tests/fixtures/seeded-faults/`, each proved to be
+  reported as `fail` with its own reason and never as `pass`; of the other
+  twenty-nine, F-023 and F-025 are the B-031 slice's below, and the remaining
+  twenty-seven were not detectable by that slice; the B-048 bullet below
+  carries the current count;
+- **first observed divergence and the evidence trace (B-031).** A receipt now
+  says where a value first went wrong, and only where it was seen going wrong.
+  The payload's `divergence` section, computed by
+  `src/contextsafe/divergence.py` from the case and the observations alone,
+  walks the four checkpoints in pathway order for each of the five concepts
+  and reports the state of every boundary (`observed`, `unobserved`, or
+  `ambiguous`, with the value hashes seen there), the first observed boundary
+  whose hashes depart from the manifest's (`from_expected`), and the first
+  observed boundary whose hashes depart from the previous observed one
+  (`from_previous`, which names both sides). An unobserved boundary is never a
+  location: when the EHR was not observed and the interface differs from
+  registration, the divergence is `at` the interface and `after` registration,
+  and the closed contract has no field in which the EHR could be blamed
+  (A-034). Absence is never agreement: `agreed_where_observed` speaks only for
+  boundaries with evidence, a concept with none is `unobserved`, and a
+  boundary that cannot be read as one state is `ambiguous` and the concept
+  `indeterminate` from there (A-032). Every outcome also carries a `trace` —
+  the source hash and structural source pointer of each observation the
+  predicate read and the version and hash of each mapping they came through
+  (A-035) — and `parse_observations` refuses a pointer with any segment
+  outside a closed structural vocabulary, so a pointer can locate a field but
+  cannot carry a name. F-023 and F-025 join the seeded-fault library, and
+  property tests hold that reordering observations never changes the section
+  and that deleting an observed checkpoint never names the deleted boundary,
+  never moves the located boundary when the deleted one was neither side of it,
+  and, when the located boundary itself is deleted, locates only a boundary
+  that already differed from the observed boundary behind it. The rendered page
+  shows the section in `en-US` and
+  machine-translated `es-US`, with the sentence that says what is never blamed
+  beside its original, and it holds every checkpoint, concept, reason, state,
+  and status it reads from a receipt to the published set before the value can
+  become a catalog key, so an unpublished value is refused by its structural
+  pointer and never reaches the stderr error object. The section compares
+  value hashes and does not say which value was right; it is a location, not a
+  finding, and carries no severity. A record-list concept is compared as its
+  whole list, so an observation set that captures only some of the declared
+  recorded-sex-or-gender records at a boundary reads as diverged there, never
+  as partial agreement. `expected_sha256s` is carried for all five concepts
+  whether or not any rule names them and, like every hash in the payload,
+  unsalted, so for a concept with a small value space such as pronouns the
+  declared value's hash is recoverable by enumeration (the payload has always
+  carried unsalted hashes; the section widens what is carried, not how). An
+  outcome that stopped at an evidence gate traces only the side that decided
+  it, so a preserved-across rule with its source observed and its target
+  missing carries an empty trace; the trace names assertion, mapping, source,
+  and runner but no oracle or pack, because none exists to name; A-033 rests
+  on the existing fail-closed validators because no normalizer exists;
+  `ambiguous` is decided by observation count and hash repetition, not by the
+  iteration-3 ambiguity-preserving observation contract, which has no route
+  into evaluation; and the pointer vocabulary is the canonical manifest and
+  evidence envelope only, so FHIR and HL7 paths need it extended under review.
+  The receipt contract moved to 0.3 for the section and the trace, and no
+  clinical, laboratory, or community review has looked at any of it;
+- **the append-only review log (B-032).** `contextsafe finding review --receipt
+  R.json --event E.json --log LOG.jsonl` records one declared review decision
+  about one finding, and `contextsafe finding list --log LOG.jsonl` derives the
+  current disposition per outcome from it; both print the same derived state
+  document and accept `--output`. An event binds the outcome and the receipt's
+  payload and rule-set hashes to a decision from a closed set (`confirmed`,
+  `rejected`, `severity_changed`, `owner_assigned`, `remediated`,
+  `accepted_residual_risk`, `withdrawn`), a severity from a closed label set,
+  an owner as a role plus the SHA-256 of an opaque handle, a rationale *code*,
+  an optional external reference under the
+  [ADR 0006](docs/adr/0006-provenance-token-grammar-and-boundary-scan.md)
+  grammar, and declared signers as a role plus an organization label. **There
+  is no free-text field, by construction**, as with the support bundle, and
+  the residual is stated rather than implied: a name-shaped token still fits
+  the ADR 0006 grammars (`Jordan.Rivera` is a well-formed provenance label,
+  `JORDAN-RIVERA` a well-formed system label), only the configured canaries and
+  direct-identifier shapes are scanned for, and a grammar cannot see ordinary
+  letters. The closed shape removes the field a name would be typed into, not
+  the possibility of typing one into a label. The state machine is data, the
+  table and the per-decision rules are pinned as literals a change must
+  confront, and every transition the table does not contain is tested as a
+  refusal. The log is one canonical line per event, hash-chained; every read
+  re-hashes and replays the whole file before anything is appended, a single
+  changed byte anywhere in it is refused, no line is ever rewritten, and
+  `--output` naming the log is refused as `output_path_unsafe`: by device and
+  inode when the log exists (a symlink or a hard link to it, from anywhere),
+  and by parent-directory inode plus case- and normalization-folded leaf name
+  when it does not yet exist (`/tmp/x/log` against `/private/tmp/x/log`, a
+  symlinked parent, `REVIEW.jsonl` against `review.jsonl`). The fold is applied
+  on every filesystem rather than probing which kind the log is on, so on a
+  case-sensitive one it over-refuses a name that is a different file; the check
+  runs before the log is opened and, for `finding review`, again after the
+  append. What the chain cannot see is a record removed from its end: a log cut
+  back to an earlier line is a valid shorter log, and detecting that needs an
+  external record of the state document's `log_head_sha256`, which is one
+  reason the document carries it. Two operational edges are stated rather than
+  closed: a `finding review` whose `--output` cannot be written after the
+  append exits 2 with `output_io_error` having recorded the event, so the next
+  attempt to record the same event is refused as `illegal_transition` and
+  `finding list` is the way to get the state; and a first event that is refused
+  at the transition after the receipt binding held leaves a new, empty log file
+  behind, which replays to the empty state. **Signers are declared, not
+  verified.** Every event and every signer says `signature_status:
+  not_verified`, an accepted residual risk needs two declared signers with
+  distinct roles and organizations or is refused, and **a declared signer
+  authorizes nothing**. A `remediated` decision binds no rerun receipt, so its
+  rationale code is a declaration the tool cannot check, exactly like a signer.
+  The vocabularies are reference-only and ungoverned, not the approved rubric;
+  dispositions are not bound into any receipt, and the receipt contract is
+  unchanged. Contracts:
+  [review event](schemas/contextsafe-review-event-v1.schema.json) and
+  [review state](schemas/contextsafe-review-state-v1.schema.json);
+- **the signing layer, designed and not built (B-035 and B-036).**
+  [ADR 0010](docs/adr/0010-signing-layer-dependency-and-trust-model.md) writes
+  the signing layer down before any of it exists, and stops at the decision
+  only the maintainer can make: the standard library has no Ed25519, so the
+  first `sign` command is the first runtime dependency of a project whose
+  `dependencies = []` is a supply-chain claim. The record lays out
+  `cryptography`, `PyNaCl`, an optional `contextsafe[signing]` extra whose
+  commands fail closed with `signing_unavailable` when the backend is absent,
+  and a pure-Python implementation that is rejected outright, with the
+  `pip-audit`, per-platform wheel and Windows consequences of each as read on
+  2026-09-04; it recommends the extra backed by `PyNaCl` and says why. It then
+  fixes what B-035 and B-036 must implement under any option:
+  detached-signature and trust-manifest shapes as draft fragments inside the
+  ADR and not in `schemas/`, subject hashes as the signed thing, rotation with
+  a bounded overlap, 31-day revocation freshness measured against a
+  caller-declared `--as-of` and never a clock, compromise recovery, the
+  per-purpose thresholds from Architecture §6.6, and what a verified result
+  would and would not prove without RFC 3161 time. Its status is proposed.
+  Nothing in the tool changes: no command signs or verifies, no schema is
+  published, no key or dependency is added, no security review of the trust
+  model has happened, and every artifact still says `not_signed` or
+  `not_verified`, which the design commits to never relabeling;
+- **the receipt delta (B-037).** `contextsafe receipt diff --before A.json
+  --after B.json --output delta.json` compares two receipt documents rule by
+  rule and emits a deterministic, envelope-free delta
+  ([contract](schemas/contextsafe-receipt-delta-v0.1.schema.json)): per rule,
+  the status and reason in each receipt, whether the outcome changed, whether
+  the evidence hashes changed, and a closed change code; counts of regressed
+  (pass to fail, indeterminate, or blocked), improved, unchanged, and
+  changed_other; and the payload hash of each receipt. Compatibility is
+  fail-closed — identical case, rule-set hash, schema versions, concept and
+  checkpoint sets, and rule bindings, or exit 2 with an
+  `incompatible_receipts` error that names the field class and never a value —
+  and each receipt is first parsed strictly against the published shape, with
+  its `payload_sha256` required to cover its payload. `render` stays a
+  top-level command for now and may move under `receipt` later. Both receipts
+  are unsigned and carry no trusted time, so `before` and `after` are the
+  caller's labels and **a delta over unsigned receipts proves nothing about
+  which run came first**; swapping the inputs mirrors the delta exactly.
+  Payload-hash agreement is an internal-consistency check, not verification:
+  no signature, approval, or evidence is verified. The contract is
+  reference-only and ungoverned, and a regression it reports is a finding for
+  a reviewer, not a verdict;
+- **print, evidence-minimized presentation, and the pseudolocale (B-038 and
+  B-041), audited on 2026-09-04 and completed where the audit found a gap.**
+  Every table has a `<thead>` and the print rules declare it a repeating
+  header group; a result row, a limitation with its source-locale original,
+  and the translation notice are each kept on one page, and a heading or
+  caption stays with what follows it. `make a11y` fails when any of those
   declarations is missing, when a table has no header group, when any print
   rule on any selector sets a break property or a `thead` display to anything
   else, or when any print rule but the skip link's hides by any technique the
@@ -771,116 +788,97 @@ Audited on 2026-09-04 and completed where the audit found a gap:
   margin past the edge. Every `@media` block whose query reaches the printer
   is read as print rules, a block the gate cannot classify is a finding,
   declarations are read the way CSS reads them (case-insensitively, with
-  `!important` set aside), and lengths are measured in their unit. The gate
-  does not try to know which selectors cover a disclosure; hiding anything
-  else is the finding.
-- **Evidence-minimized presentation (A-036).** The renderer recomputes
-  `payload_sha256` from the payload and refuses a document whose hash does not
-  cover it, and refuses any object carrying a field the receipt contract does
-  not publish rather than rendering around it. `make a11y` adds a
-  `minimization` check: every visible run of text is catalog text or one of the
-  receipt values the page may present, named by pointer, and a catalog message
-  with a placeholder counts only when the placeholder holds one of those
-  values, so no message is a prefix that free text can hide behind. A result's
-  expected, observed, and evidence hashes stay in the JSON and off the page,
-  and the hash the gate expects is recomputed, never read from the document:
-  the negative control forges the field and a page that carries it, which a
-  gate reading the field would audit and the recomputing gate refuses.
-- **Pseudolocale (B-041).** `qps-ploc` expands every message by at least 35
-  percent, and `make i18n` measures that floor on the body without its
-  brackets, that no accentable letter outside a placeholder is left plain, and
-  placeholder parity on the generated catalog (`pseudolocale-fidelity`)
-  instead of trusting the transform. `hardcoded-string` accepts source-locale
-  wording only where the page marks it as a source-locale original.
-
-What this does not claim: the print checks are computed from the stylesheet
-and the markup, not from a browser that printed the page, so the print-preview
-task in [Accessibility §7](docs/08-ACCESSIBILITY-I18N.md) remains B-044's. No
-locale was added; the pseudolocale is never shipped to a reader, and `es-US`
-remains an unreviewed machine translation (B-042).
-
-### B-037: the receipt delta
-
-`contextsafe receipt diff --before A.json --after B.json --output delta.json`
-compares two receipt documents rule by rule and emits a deterministic,
-envelope-free delta
-([contract](schemas/contextsafe-receipt-delta-v0.1.schema.json)): per rule,
-the status and reason in each receipt, whether the outcome changed, whether
-the evidence hashes changed, and a closed change code; counts of regressed
-(pass to fail, indeterminate, or blocked), improved, unchanged, and
-changed_other; and the payload hash of each receipt. Compatibility is
-fail-closed — identical case, rule-set hash, schema versions, concept and
-checkpoint sets, and rule bindings, or exit 2 with an `incompatible_receipts`
-error that names the field class and never a value — and each receipt is first
-parsed strictly against the published shape, with its `payload_sha256`
-required to cover its payload. `render` stays a top-level command for now and
-may move under `receipt` later.
-
-Its limits, which the delta states in its own limitations: both receipts are
-unsigned and carry no trusted time, so `before` and `after` are the caller's
-labels and **a delta over unsigned receipts proves nothing about which run
-came first**; swapping the inputs mirrors the delta exactly. Payload-hash
-agreement is an internal-consistency check, not verification — no signature,
-approval, or evidence is verified (B-036). The contract is reference-only and
-ungoverned, and a regression it reports is a finding for a reviewer, not a
-verdict.
-
-### B-032
-
-`contextsafe finding review --receipt R.json --event E.json --log LOG.jsonl`
-records one declared review decision about one finding in an append-only
-log, and `contextsafe finding list --log LOG.jsonl` derives the current
-disposition per outcome from it; both print the same derived state document
-and accept `--output`. An event binds the outcome and the receipt's payload
-and rule-set hashes to a decision from a closed set (`confirmed`, `rejected`,
-`severity_changed`, `owner_assigned`, `remediated`, `accepted_residual_risk`,
-`withdrawn`), a severity from a closed label set, an owner as a role plus the
-SHA-256 of an opaque handle, a rationale *code*, an optional external
-reference under the [ADR 0006](docs/adr/0006-provenance-token-grammar-and-boundary-scan.md)
-grammar, and declared signers as a role plus an organization label. **There
-is no free-text field, by construction**, as with the support bundle, and the
-residual is stated rather than implied: a name-shaped token still fits the
-ADR 0006 grammars (`Jordan.Rivera` is a well-formed provenance label,
-`JORDAN-RIVERA` a well-formed system label), only the configured canaries and
-direct-identifier shapes are scanned for, and a grammar cannot see ordinary
-letters. The closed shape removes the field a name would be typed into, not
-the possibility of typing one into a label. The state machine is data, the
-table and the per-decision rules are pinned as literals a change must
-confront, and every transition the table does not contain is tested as a
-refusal. The log is one canonical line per event, hash-chained; every read
-re-hashes and replays the whole file before anything is appended, a single
-changed byte anywhere in it is refused, no line is ever rewritten, and
-`--output` naming the log is refused as `output_path_unsafe`: by device and
-inode when the log exists (a symlink or a hard link to it, from anywhere),
-and by parent-directory inode plus case- and normalization-folded leaf name
-when it does not yet exist (`/tmp/x/log` against `/private/tmp/x/log`, a
-symlinked parent, `REVIEW.jsonl` against `review.jsonl`). The fold is applied
-on every filesystem rather than probing which kind the log is on, so on a
-case-sensitive one it over-refuses a name that is a different file; the check
-runs before the log is opened and, for `finding review`, again after the
-append. What the chain cannot see is a record removed from its end: a log cut
-back to an earlier line is a valid shorter log. Detecting that needs an
-external record of the state document's `log_head_sha256`, which is one
-reason the document carries it. Two operational edges are stated rather than
-closed: a `finding review` whose `--output` cannot be written after the
-append exits 2 with `output_io_error` having recorded the event, so the next
-attempt to record the same event is refused as `illegal_transition` and
-`finding list` is the way to get the state; and a first event that is
-refused at the transition after the receipt binding held leaves a new,
-empty log file behind, which replays to the empty state. Its limits are the
-point: **signers are declared, not verified.**
-Every event and every signer says `signature_status: not_verified`, an
-accepted residual risk needs two declared signers with distinct roles and
-organizations or is refused, and **a declared signer authorizes nothing** —
-review signatures are B-035. A `remediated` decision binds no rerun receipt,
-so its rationale code is a declaration the tool cannot check, exactly like a
-signer. The vocabularies are reference-only and
-ungoverned, not the approved rubric. Dispositions are not bound into any
-receipt; the receipt contract is unchanged. Like the other descriptor-anchored
-commands, both fail closed with `input_path_unsupported` where the platform
-lacks `O_NOFOLLOW`. Contracts:
-[review event](schemas/contextsafe-review-event-v1.schema.json) and
-[review state](schemas/contextsafe-review-state-v1.schema.json).
+  `!important` set aside), and lengths are measured in their unit; the gate
+  does not try to know which selectors cover a disclosure, so hiding anything
+  else is the finding. The renderer recomputes `payload_sha256` from the
+  payload and refuses a document whose hash does not cover it, and refuses any
+  object carrying a field the receipt contract does not publish rather than
+  rendering around it (A-036). `make a11y` adds a `minimization` check: every
+  visible run of text is catalog text or one of the receipt values the page
+  may present, named by pointer, and a catalog message with a placeholder
+  counts only when the placeholder holds one of those values, so no message is
+  a prefix that free text can hide behind. A result's expected, observed, and
+  evidence hashes stay in the JSON and off the page, and the hash the gate
+  expects is recomputed, never read from the document: the negative control
+  forges the field and a page that carries it, which a gate reading the field
+  would audit and the recomputing gate refuses. `qps-ploc` expands every
+  message by at least 35 percent, and `make i18n` measures that floor on the
+  body without its brackets, that no accentable letter outside a placeholder is
+  left plain, and placeholder parity on the generated catalog
+  (`pseudolocale-fidelity`) instead of trusting the transform;
+  `hardcoded-string` accepts source-locale wording only where the page marks
+  it as a source-locale original. The print checks are computed from the
+  stylesheet and the markup, not from a browser that printed the page, so the
+  print-preview task in
+  [Accessibility §7](docs/08-ACCESSIBILITY-I18N.md) remains B-044's. No locale
+  was added; the pseudolocale is never shipped to a reader, and `es-US`
+  remains an unreviewed machine translation (B-042);
+- **packaging and fresh-install evidence (B-045).**
+  `.github/workflows/package.yml` builds the sdist and wheel, exports a
+  CycloneDX SBOM from the locked graph, and on Ubuntu, macOS and Windows
+  installs that wheel with `pip install --no-index` into an empty virtual
+  environment, runs the Quickstart above from a directory outside the
+  checkout, and requires the receipt document to reproduce the digest
+  `tests/test_determinism.py` pins. Build provenance is attested over the
+  recorded checksums only after every platform passes. The gate is
+  `tools/fresh_install_gate.py`; it reads the pin rather than restating it,
+  exits 2 rather than 0 for anything it could not examine (including a working
+  directory that existed before it ran, since a kept environment would report
+  a wheel it never installed), and its report carries digests, counts and
+  codes and no path. `make package` builds the same artifacts locally and
+  lists the wheel. These are GitHub's server images, not the desktop fresh
+  installs RG-15 names; the artifacts are unsigned, and provenance says which
+  workflow produced them, not that anyone authorized them (B-035); the SBOM is
+  derived from `uv.lock`, not read out of the wheel; and no tag exists, so it
+  has not fired;
+- **a committed answer for every published seeded fault (B-048).** Each of the
+  36 published seeded faults in
+  [Test and evaluation §4](docs/09-TEST-AND-EVALUATION.md) now has one.
+  `tests/test_seeded_faults.py` carries a matrix that says, for each fault, one
+  of four things, and a dated table under §4 restates it row for row with a
+  test holding the two together. Twelve are *exercised*: a complete synthetic
+  fixture under `tests/fixtures/seeded-faults/` with exactly one fault applied,
+  proved to be reported with the assertion's own reason and located in the
+  divergence section at the observed checkpoint the fault touched — the nine
+  from B-028 and B-031, plus F-001 (name to use dropped at the EHR), F-009
+  (recorded sex or gender reaching the EHR with the boundary's own context and
+  source in place of the declared ones, reported as a changed record while the
+  `not_coerced` rule beside it still passes, because the X survived), and F-035
+  (the same value through another mapping version: the trace names it and the
+  run identity moves, so two mapping versions can never share a receipt). Seven
+  are *exercised outside the receipt*: the laboratory faults F-017 to F-022 and
+  F-033, each a complete synthetic fixture under
+  `tests/fixtures/laboratory/seeded-faults/` reported as `fail` by one of the
+  laboratory result predicates with that predicate's own reason, beside a clean
+  counterpart that passes every rule — a wrong patient's order, an altered
+  value, a blank interval, wrong bounds, a missing flag above the bound, an
+  out-of-range value flagged normal, and a range preserved in the wrong unit.
+  They are counted apart from the twelve because a laboratory outcome reaches
+  no receipt and no divergence section, so nothing localizes them, and because
+  every analyte, unit, bound, and flag in them is a token invented for software
+  tests: no laboratory medical director has supplied or approved any of them,
+  and none of them is a reference range. Seven
+  are *refused*: the faulted input never reaches evaluation because a
+  fail-closed gate refuses it whole with a named code at a structural path — a
+  declared GI-to-SPCU or RSG-to-SPCU mapping (F-015, F-016), an unsupported
+  value that is refused rather than nearest-matched (F-024), an identifier
+  outside the synthetic namespace (F-029), an observation naming another case
+  (F-032), and the pack validity and receipt contract gates that already exist
+  (F-028, F-030); a refusal is detection without a receipt, so it is counted
+  separately and never as localization. Ten are *not yet exercisable*, and each
+  row names what it waits on from a closed vocabulary: the SPCU predicates and
+  their clinical review, name contexts and periods in the observation contract,
+  the receipt verifier, signatures, the review state machine, and the
+  presentation pass. This is not
+  the 41-fault evaluation B-048 defines: there is no hidden-fault set, no
+  independent fault author has reviewed the corpus, no independent QA has run
+  it, and every fault here was written by the implementer of the mechanism
+  that detects it. Twelve of 36 at receipt level, and nineteen decided in all,
+  is deterministic corpus coverage over the
+  published library — not a sensitivity estimate over faults the library does
+  not contain, and not a population claim of any kind. Nothing here is
+  governed content, and no clinical, laboratory, or community review has
+  looked at any fixture.
 
 The durable evidence store has no CLI import route; `contextsafe import` writes
 only an observation-set document and never an evidence record. Every iteration-3 evidence record says
@@ -898,11 +896,13 @@ real clinical or community review occurred. The committed
 no approvals, and must fail compilation. Tests construct visibly test-only approval
 declarations in memory solely to exercise the state machine.
 
-These slices have no signatures, HL7/LIS adapters, clinical oracle, HTML report,
-network access, authorized evidence-import command, hosted service, or approved
-patient-data pathway. Iteration 3 contains internal-test-only local persistence, but
-none of its records can authorize execution or support a receipt. The FHIR R4
-reader converts one synthetic file and is not an adapter to any system.
+These slices have no signatures, clinical oracle, network access, authorized
+evidence-import command, hosted service, or approved patient-data pathway.
+Iteration 3 contains internal-test-only local persistence, but
+none of its records can authorize execution or support a receipt. The FHIR R4,
+HL7 v2 and LIS readers each convert one synthetic file and are adapters to no
+system: they read a file, never an endpoint, under a profile no
+interoperability, clinical, laboratory, or community reviewer has examined.
 Patient data is prohibited, but bounded checks cannot prove an input is synthetic.
 Its fixture rules use invented tokens and are not medical guidance. It was built
 ahead of the plan's discovery and governance gates as internal risk-reduction work,
@@ -931,6 +931,13 @@ uv run contextsafe evaluate \
 # records fail outcomes. To block a pipeline on findings instead, add
 # --fail-on finding: the receipt is emitted byte-identically and the process
 # then exits 1 if the payload contains at least one fail outcome.
+
+# The second reference pair exercises every 0.2.0 rule-set predicate on the
+# same case. Both rule sets are reference-only and ungoverned.
+uv run contextsafe evaluate \
+  --case fixtures/reference/case.json \
+  --observations fixtures/reference/observations-predicates.json \
+  --rules fixtures/reference/rules-predicates.json
 
 # Requires current approval declarations but still emits an unsigned artifact.
 # The committed draft intentionally fails.
@@ -969,10 +976,15 @@ zones, locales, hash seeds, UTF-8 modes, working directories, and input
 directories and requires byte-identical results, and a CI matrix reproduces the
 pinned reference-receipt digest on Ubuntu, macOS, and Windows. That is
 byte-reproducibility evidence only; it is not packaging, fresh-install, or
-release evidence. `pack validate`, `plan validate`, `evidence preflight`, and
-`import` need descriptor-relative no-follow reads, so on a platform without them —
-Windows included — they fail closed with `input_path_unsupported` rather than
-run with a weaker guarantee.
+release evidence. `pack validate`, `plan validate`, `evidence preflight`,
+`import`, and both `finding` commands need descriptor-relative no-follow reads,
+so on a platform without them — Windows included — they fail closed rather than
+run with a weaker guarantee: `input_path_unsupported` for the boundary reads and
+the review log, and `component_path_escape` for a pack component, because the
+pack compiler maps an unsupported platform onto the same code as an escaping
+path.
+[Operations §3.1](docs/10-OPERATIONS-SRE.md) has the command-by-command matrix
+and says what an operator on Windows can still run.
 
 Every command also accepts `--quiet`, which suppresses the stdout success
 payload while leaving exit codes, `--output` files, and stderr JSON errors
@@ -1055,6 +1067,7 @@ A successful v1 allows one design partner to:
 - [Test and evaluation strategy](docs/09-TEST-AND-EVALUATION.md)
 - [Operations and SRE](docs/10-OPERATIONS-SRE.md)
 - [Roadmap](docs/12-ROADMAP.md)
+- [The 2026-09 wave: where all fifty-seven backlog items stand](docs/ROADMAP-WAVE-2026-09.md)
 - [Prioritized backlog](docs/13-BACKLOG.md)
 - [Risk register](docs/14-RISK-REGISTER.md)
 - [V1 release checklist](docs/15-V1-RELEASE-CHECKLIST.md)
