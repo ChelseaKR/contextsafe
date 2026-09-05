@@ -370,6 +370,115 @@ community reviewer has confirmed; the `mapping sign` command, a signer key,
 a trust manifest, and the enrolled ContextSafe interoperability reviewer it
 needs all wait on B-035; and the sibling `contextsafe-observation-v1`
 contract, which no runtime parser reads, carries no profile binding.
+Implementation note (2026-09-04, B-028): the identity, name-to-use, pronoun,
+and recorded-sex-or-gender predicates of A-005 and A-008 to A-015 exist as
+mechanism. A rule set declaring `contextsafe.rule-set/0.2.0` may name one of a
+closed set — `exact` (the default), `present`, `status_preserved`,
+`not_coerced`, `record_count`, `preserved_across`, `not_overwritten_by` — each
+a pure function in `src/contextsafe/evaluator.py` with one affirmative and one
+failure reason in the receipt contract, which moved to 0.2 for those reasons.
+Missing or ambiguous evidence stays indeterminate under every predicate; a rule
+that would be vacuous for its concept, or that the case manifest contradicts,
+is refused; and the 0.1.0 rule-set shape, the reference `rules.json`, and the
+pack contract that pins it are untouched. A second ungoverned reference pair
+(`rules-predicates.json`, `observations-predicates.json`) exercises every
+predicate against CTP-I01, and `tests/fixtures/seeded-faults/` carries F-004,
+F-005, F-006, F-007, F-008, F-010, and F-031 with tests proving each is
+reported as fail with its own reason and never as pass. B-028 is not closed:
+the predicates are reference-only and ungoverned, because B-010 — the authored
+assertions with applicability, evidence, severity rubric, and clinical,
+laboratory, and community approval — has not happened, and no predicate here
+is an approved assertion; A-006, A-007, and A-015 (patient-facing display,
+legal-name contexts, expired name history) need a display observation and a
+name period the observation contract does not carry; `not_coerced` decides
+presence status and scalar only, so the faithful X under a rewritten context
+passes it and is the `exact` rule's to report, and a checkpoint carrying two
+records of one concept is `ambiguous_evidence` under it, so a multi-record
+case cannot be evaluated for A-014; `preserved_across` states preservation,
+not correctness; and a 0.2.0 rule set is refused as a pack component
+(`incompatible_component`) until the pack contract's `rule_set_schema` pin is
+revisited, which is a contract decision for the maintainer. The receipt
+contract file the B-033 note below (Phase 4) names is now
+`schemas/contextsafe-receipt-v0.2.schema.json`. Review fixes of the same day:
+`not_coerced` first compared whole typed values, so X rewritten to F was
+reported as `pass`/`value_not_coerced` whenever the boundary also stamped its
+own context or source on the record, a false affirmative on the fault (F-007)
+the predicate exists to detect; it now compares the presence status and the
+scalar (`coercion_key` in `models.py`), the validator applies the same
+projection to the forbidden set's uniqueness, its conflict with the expected
+value, and its conflict with the case manifest, and tests hold that M or F
+under a rewritten context, source, or both is `fail`/`value_coerced` in the
+reference pair and in F-007 and F-008 while the faithful X under another
+context is not a coercion; the reference pair ships A-I09, the `exact` rule
+beside A-I06, so a receipt says which of the two claims turned; the property
+generator reaches pass and fail under every predicate by design (one
+observation at every checkpoint a predicate reads, values drawn from the
+faithful, forbidden, restamped-forbidden, status-moved, and other-concept
+cases) with a derandomized guard test that fails when a branch stops being
+reached; run against the earlier generator, that guard does not reach
+`preserved_across` pass or fail, `not_coerced` fail, or `not_overwritten_by`
+fail within its bound, so the invariants over those branches were asserting
+nothing; `parse_bundle` refuses a `not_overwritten_by` rule whose expected
+scalar the manifest also declares under another concept
+(`overwritten_expectation_conflict`), since a faithful observation could never
+pass it, and a `record_count` rule over a manifest that declares one record
+twice (`indistinct_declared_records`), since the predicate counts distinct
+hashes and a faithful copy could only be reported as a changed count. The
+case contract itself still admits the repeated record; refusing it there is a
+0.1 case-contract decision this pass did not take. `make mutants` still
+declares only `contract_validation.py` and
+`identifiers.py`; extending that declaration to `evaluator.py` and
+`validation.py` is an ADR 0009 decision the maintainer has not taken.
+
+Implementation note (2026-09-04, B-031): the first observed divergence and
+the evidence trace of A-032 to A-035 exist as mechanism. `contextsafe.divergence`
+walks the checkpoints in pathway order (registration, EHR, interface,
+laboratory return) for every concept the manifest declares and reports, from
+the case and the observations alone, the first observed checkpoint whose value
+hashes depart from the manifest's and, separately, from the previous observed
+checkpoint. A checkpoint with no observation is `unobserved` and is never
+named as a location: a divergence found across an unobserved gap is located
+between the two observed sides, and the receipt shape has no field in which
+the gap could be blamed (A-034). Absence is never agreement: the section says
+`agreed_where_observed` only about boundaries that had evidence, marks every
+other boundary `unobserved`, and reports a boundary that cannot be read as one
+state (two observations of a single-valued concept, or one record captured
+twice) as `ambiguous` and the concept `indeterminate` from there (A-032).
+Every outcome now carries a `trace`: the source hash and structural pointer of
+each observation the predicate read and the version and hash of each mapping
+they came through (A-035); the validator refuses any observation whose pointer
+carries a segment outside a closed structural vocabulary
+(`non_structural_pointer`), and a property test holds that nothing but those
+words and integers can reach a receipt. The receipt contract moved to 0.3 for
+the section and the trace; the HTML page renders the section in `en-US` and
+machine-translated `es-US` with the explainer beside its original; and
+`tests/fixtures/seeded-faults/` carries F-023 (an omitted checkpoint reported
+as indeterminate and unobserved, never pass) and F-025 (a divergence across an
+unobserved EHR located at the interface and never at the EHR), with property
+tests that reordering observations never changes the section and that
+deleting an observed checkpoint never names the deleted boundary, never moves
+the located boundary when the deleted one was neither side, and, when the
+located boundary itself is deleted, locates only a boundary that already
+differed from the observed boundary behind it, never one that agreed with the
+boundary observed before it. The contract enforces the status-to-location
+pairings its comments stated, and the page refuses an unpublished checkpoint,
+concept, reason, state, or status by structural pointer before the value can
+become a catalog key, so no receipt value reaches the stderr error object.
+B-031 is not closed:
+`unsupported source values remain explicit` (A-033) is enforced today only by
+the fail-closed validators of the one source profile that exists, and there is
+no normalizer that could normalize anything until B-022 to B-026 exist; the
+trace names assertion, mapping, source, and runner but no oracle or pack,
+because no governed oracle or pack exists to name (B-010, B-029, B-030);
+`ambiguous` is decided by observation count and hash repetition, not by the
+ambiguity-preserving observation contract of iteration 3, which has no route
+into evaluation yet; the section is not a finding and carries no severity,
+which is B-032; and the structural pointer vocabulary is the canonical
+manifest and evidence-envelope field names only, so a FHIR or HL7 source path
+needs the vocabulary extended under review when those importers arrive. The
+receipt contract file the B-028 note above and the B-033 note below name is
+now `schemas/contextsafe-receipt-v0.3.schema.json`; the 0.2 file is not kept
+beside it.
 
 ## Phase 4 — review and receipts
 
@@ -554,6 +663,53 @@ treatment; the FHIR reader (B-023) and the canonical importer (B-022) exist
 and add none, because neither the diagnostics nor the bundle enumerates the
 importer registry's formats. No independent security review of the bundle contents has happened
 (B-040).
+
+Implementation note (2026-09-04, B-048): the part of the seeded-fault
+corpus that needs no external person is committed. For every one of F-001 to
+F-036 in [Test and evaluation §4](09-TEST-AND-EVALUATION.md),
+`tests/test_seeded_faults.py` carries a matrix row saying one of three things,
+and the dated table under §4 restates it row for row with a test holding the
+two together. Twelve faults are exercised at receipt level — the nine from
+B-028 and B-031 plus F-001 (name to use dropped at the EHR: `value_not_present`
+and `value_changed_across_checkpoints`), F-009 (recorded sex or gender
+reaching the EHR with the boundary's own context and source in place of the
+declared ones: a changed record, and the `not_coerced` rule beside it still
+passes because the X itself survived), and F-035 (the same faithful value
+through mapping version 0.2.0: the trace names the version and mapping hash
+and `input_sha256`, `result_sha256`, and `payload_sha256` all move, so two
+mapping versions can never share a run identity) — each as a complete
+synthetic fixture with exactly one fault applied, proved to be reported with
+the assertion's own reason and located in the divergence section at the
+observed checkpoint the fault touched, with a test over the whole library
+that no located boundary is ever an unobserved one and that the detecting
+rule reads the checkpoint the section locates. Seven are refused before
+evaluation by a fail-closed gate with a named code at a structural path, and
+counted separately because a refusal is detection without a receipt: F-015
+and F-016 as a declared GI-to-SPCU or RSG-to-SPCU mapping
+(`prohibited_spcu_mapping`), F-024 as an unsupported recorded-sex-or-gender
+token (`invalid_rsg_value`, never nearest-matched), F-029 as a case
+identifier outside the synthetic namespace (`invalid_synthetic_identifier`,
+beside the preflight canary suite), F-032 as an observation naming another
+case (`case_mismatch`), and F-028 and F-030 by the pack validity and receipt
+contract tests that already exist; each fixture also exits 2 through the CLI
+with no receipt written and no value in the error object. Seventeen are not
+yet exercisable, and every row names what it waits on from a closed
+vocabulary: seven laboratory rows (F-017 to F-022, F-033) on the laboratory
+fixture and importer (B-011, B-025, B-030); F-011 to F-014 on the SPCU
+predicates and the clinical review they need (B-029); F-002 and F-003 on name
+contexts and periods the observation contract does not carry; F-026 on the
+receipt verifier (B-036); F-027 on the evidence-minimized presentation pass
+(B-038); F-034 on signatures (B-035); F-036 on the review state machine
+(B-032). B-048 is not closed, and this note is not evidence toward its
+acceptance statement: there is no hidden-fault set; no independent fault
+author has reviewed the corpus and no independent QA has run it, because both
+are people (B-004, B-013, and the 16 QA hours the row budgets) and neither
+exists yet; every fault here was written by the implementer of the mechanism
+that detects it; 12 of 36 is deterministic corpus coverage over the published
+library and makes no population-sensitivity claim; and the 41/41 detection
+and localization figure the row requires cannot be computed until the
+seventeen waiting rows have a mechanism and the five hidden faults have an
+author.
 
 ## Phase 6 — pilot and v1
 

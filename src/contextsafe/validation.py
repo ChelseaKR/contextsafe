@@ -11,6 +11,7 @@ from contextsafe.models import (
     OBSERVATION_SCHEMA_VERSION,
     OBSERVATION_SET_SCHEMA_VERSION,
     RULE_SET_SCHEMA_VERSION,
+    SUPPORTED_RULE_SET_SCHEMA_VERSIONS,
     Checkpoint,
     ConceptKind,
     EvaluationBundle,
@@ -22,12 +23,14 @@ from contextsafe.models import (
     Pronouns,
     RecordedSexOrGender,
     Rule,
+    RulePredicate,
     RuleSet,
     SemanticValue,
     SexParameterForClinicalUse,
     SyntheticCase,
     SyntheticIdentifier,
     ValueStatus,
+    coercion_key,
 )
 
 _CASE_ID = re.compile(r"^CTP-[A-Z0-9]{3,16}$")
@@ -38,14 +41,73 @@ _SHA256 = re.compile(r"^[0-9a-f]{64}$")
 _SOURCE_POINTER = re.compile(
     r"^(?:\$[.\[\]A-Za-z0-9_-]{1,127}|(?:/[A-Za-z0-9_.-]+){1,16})$"
 )
-"""Where in its source an observation was read from.
+"""Where in its source an observation was read from: the alphabet.
 
 Two grammars, one field. The first is the ``$``-rooted path every ContextSafe
-document has always used. The second is an RFC 6901 JSON Pointer, which is
-how a FHIR document names an element; it is admitted since the FHIR R4 reader
-(B-023) with unescaped alphanumeric reference tokens only, because every
-element name the reader accepts is one, and at most sixteen deep. Both are
-structural: neither can carry a value from the source.
+document has always used; the HL7 v2 reader (B-024) writes its
+``$.SEG[n]-field.rep.comp`` pointers in it. The second is an RFC 6901 JSON
+Pointer, which is how a FHIR document names an element; it is admitted since
+the FHIR R4 reader (B-023) with unescaped alphanumeric reference tokens only,
+because every element name the reader accepts is one, and at most sixteen
+deep. Both are structural: neither can carry a value from the source. This
+pattern bounds the alphabet; ``_structural_pointer`` bounds the words.
+"""
+_POINTER_SEGMENT = re.compile(r"\.([A-Za-z0-9_-]+)|\[(0|[1-9][0-9]*)\]")
+_HL7_POINTER = re.compile(
+    r"^\$\.([A-Z][A-Z0-9]{2})\[(?:0|[1-9][0-9]*)\]-(?:0|[1-9][0-9]*)"
+    r"\.(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)$"
+)
+_POINTER_INDEX = re.compile(r"^(?:0|[1-9][0-9]*)$")
+STRUCTURAL_POINTER_SEGMENTS: frozenset[str] = frozenset(
+    {
+        # the canonical case manifest and the canonical JSON evidence envelope
+        "concepts",
+        "gender_identity",
+        "recorded_sex_or_gender",
+        "sex_parameter_for_clinical_use",
+        "name_to_use",
+        "pronouns",
+        "status",
+        "value",
+        "code_system",
+        "context",
+        "source",
+        "context_id",
+        "supporting_observation_ids",
+        "use",
+        "records",
+        "field_code",
+        "value_code",
+        "context_code",
+        # the FHIR R4 reader (B-023): the element names on the path to a carrier
+        "entry",
+        "resource",
+        "name",
+        "extension",
+        # the HL7 v2 ER7 reader (B-024): its segment allowlist
+        "MSH",
+        "PID",
+        "GSP",
+        "OBR",
+        "OBX",
+        # the LIS export readers (B-025): the row array and the identity columns
+        "rows",
+        "sex",
+    }
+)
+"""The closed vocabulary a source pointer may be built from (B-031, A-035).
+
+A pointer names where in a source a value was read, and the receipt trace
+carries it verbatim, so it must be a structural path and nothing else. Three
+dialects are admitted, each over this one vocabulary: the ``$``-rooted path of
+the canonical case manifest, the canonical JSON evidence envelope, and the LIS
+export readers, joined by ``.`` and indexed by ``[n]``; the RFC 6901 JSON
+Pointer the FHIR R4 reader emits, whose reference tokens are element names or
+indices; and the HL7 v2 reader's ``$.SEG[n]-field.rep.comp``, whose only word
+is the segment name. A word outside this set is free text where none is
+allowed, and the whole observation set is refused rather than the segment
+being carried, hashed, or dropped. A source profile that needs more names
+extends this set under review, not by widening a grammar.
 """
 _SAFE_TOKEN = re.compile(r"^[A-Za-z0-9:/_.-]{1,96}$")
 _ORDER_CONTEXT_TOKEN = re.compile(r"^ORDER-CSYN-[A-Za-z0-9:/_.-]+$")
@@ -83,6 +145,36 @@ location before conversion, instead of the converted document being rejected
 here at a path the source never had. The set is the contract's, not the
 reader's: nothing else may extend it, and nothing maps a value into it.
 """
+_RULE_KEYS = frozenset(
+    {"rule_id", "version", "case_id", "checkpoint", "concept", "expected", "required"}
+)
+_PREDICATE_FIELDS: dict[RulePredicate, frozenset[str]] = {
+    RulePredicate.EXACT: frozenset(),
+    RulePredicate.PRESENT: frozenset(),
+    RulePredicate.STATUS_PRESERVED: frozenset(),
+    RulePredicate.NOT_COERCED: frozenset({"forbidden"}),
+    RulePredicate.RECORD_COUNT: frozenset({"expected_count"}),
+    RulePredicate.PRESERVED_ACROSS: frozenset({"preserved_from"}),
+    RulePredicate.NOT_OVERWRITTEN_BY: frozenset(),
+}
+"""The one field each predicate reads; any other predicate field is unknown."""
+_STATUS_CONCEPTS = frozenset(
+    {ConceptKind.GENDER_IDENTITY, ConceptKind.NAME_TO_USE, ConceptKind.PRONOUNS}
+)
+"""Concepts whose values carry presence semantics (a ``status``)."""
+_PREDICATE_CONCEPTS: dict[RulePredicate, frozenset[ConceptKind]] = {
+    RulePredicate.PRESENT: _STATUS_CONCEPTS,
+    RulePredicate.STATUS_PRESERVED: _STATUS_CONCEPTS,
+    RulePredicate.NOT_OVERWRITTEN_BY: frozenset({ConceptKind.GENDER_IDENTITY}),
+}
+"""Predicates that are only meaningful for some concepts.
+
+``present`` and ``status_preserved`` on a concept with no status would pass on
+every observation, and A-011 is a claim about gender identity. A rule that
+would be vacuously true is rejected rather than allowed to look like evidence.
+"""
+_MAX_FORBIDDEN = 16
+_MAX_EXPECTED_COUNT = 64
 
 
 def _error(code: str, path: str, message: str) -> ContextSafeError:
@@ -130,6 +222,49 @@ def _string(value: object, path: str, *, pattern: re.Pattern[str] | None = None)
             "invalid_format", path, "string does not match the required format"
         )
     return value
+
+
+def _structural_pointer(value: object, path: str) -> str:
+    """Return a source pointer built only from structural segments.
+
+    ``_SOURCE_POINTER`` bounds the alphabet; this bounds the words, in whichever
+    of the three dialects the pointer is written. ``$`` alone is not a location,
+    so at least one segment is required, and the segments must account for
+    every character after the root.
+    """
+
+    pointer = _string(value, path, pattern=_SOURCE_POINTER)
+    if pointer.startswith("/"):
+        structural = all(
+            _POINTER_INDEX.fullmatch(token) is not None
+            or token in STRUCTURAL_POINTER_SEGMENTS
+            for token in pointer[1:].split("/")
+        )
+    elif (hl7 := _HL7_POINTER.fullmatch(pointer)) is not None:
+        structural = hl7.group(1) in STRUCTURAL_POINTER_SEGMENTS
+    else:
+        structural = _walks_the_vocabulary(pointer[1:])
+    if not structural:
+        raise _error(
+            "non_structural_pointer",
+            path,
+            "source pointer must be a path of structural segments only",
+        )
+    return pointer
+
+
+def _walks_the_vocabulary(body: str) -> bool:
+    """True when ``body`` is wholly ``.word`` and ``[n]`` segments over the set."""
+
+    position = 0
+    for match in _POINTER_SEGMENT.finditer(body):
+        if match.start() != position:
+            return False
+        name = match.group(1)
+        if name is not None and name not in STRUCTURAL_POINTER_SEGMENTS:
+            return False
+        position = match.end()
+    return position == len(body)
 
 
 def _nullable_string(value: object, path: str) -> str | None:
@@ -497,10 +632,8 @@ def _observation(value: object, path: str) -> Observation:
             f"{path}.evidence.source_sha256",
             pattern=_SHA256,
         ),
-        source_pointer=_string(
-            evidence_data["source_pointer"],
-            f"{path}.evidence.source_pointer",
-            pattern=_SOURCE_POINTER,
+        source_pointer=_structural_pointer(
+            evidence_data["source_pointer"], f"{path}.evidence.source_pointer"
         ),
     )
     return Observation(
@@ -541,32 +674,129 @@ def parse_observations(value: object) -> tuple[Observation, ...]:
     return observations
 
 
-def _rule(value: object, path: str) -> Rule:
-    data = _object(value, path)
-    _exact_keys(
-        data,
-        frozenset(
-            {
-                "rule_id",
-                "version",
-                "case_id",
-                "checkpoint",
-                "concept",
-                "expected",
-                "required",
-            }
-        ),
-        path,
+def _rule_keys(
+    data: dict[str, object], path: str, *, predicates: bool
+) -> RulePredicate:
+    """Return the rule's predicate after checking its key set fails closed.
+
+    Under the 0.1.0 shape no predicate key exists at all. Under 0.2.0 the
+    predicate is optional and defaults to ``exact``; the field a predicate
+    reads is required for that predicate and unknown for every other.
+    """
+
+    if not predicates:
+        _exact_keys(data, _RULE_KEYS, path)
+        return RulePredicate.EXACT
+    predicate = RulePredicate.EXACT
+    if "predicate" in data:
+        predicate = _enum(RulePredicate, data["predicate"], f"{path}.predicate")
+    specific = _PREDICATE_FIELDS[predicate]
+    unexpected = data.keys() - _RULE_KEYS - {"predicate"} - specific
+    if unexpected:
+        raise _error("unknown_field", path, "field is not allowed for this predicate")
+    missing = sorted((_RULE_KEYS | specific) - data.keys())
+    if missing:
+        raise _error(
+            "missing_field", f"{path}.{missing[0]}", "required field is missing"
+        )
+    return predicate
+
+
+def _forbidden(
+    data: dict[str, object], path: str, concept: ConceptKind, expected: SemanticValue
+) -> tuple[SemanticValue, ...]:
+    raw = _array(data["forbidden"], f"{path}.forbidden")
+    if not raw or len(raw) > _MAX_FORBIDDEN:
+        raise _error(
+            "invalid_forbidden_set",
+            f"{path}.forbidden",
+            f"between 1 and {_MAX_FORBIDDEN} forbidden values are required",
+        )
+    forbidden = tuple(
+        _semantic_value(concept, item, f"{path}.forbidden[{index}]")
+        for index, item in enumerate(raw)
     )
+    keys = {coercion_key(item) for item in forbidden}
+    if len(keys) != len(forbidden):
+        raise _error(
+            "duplicate_forbidden_value",
+            f"{path}.forbidden",
+            "values must be distinct in status and scalar",
+        )
+    if coercion_key(expected) in keys:
+        raise _error(
+            "forbidden_expected_conflict",
+            f"{path}.forbidden",
+            "the expected value cannot also be forbidden",
+        )
+    return forbidden
+
+
+def _expected_count(data: dict[str, object], path: str) -> int:
+    value = data["expected_count"]
+    if (
+        isinstance(value, bool)
+        or not isinstance(value, int)
+        or not 1 <= value <= _MAX_EXPECTED_COUNT
+    ):
+        raise _error(
+            "invalid_expected_count",
+            f"{path}.expected_count",
+            f"expected an integer between 1 and {_MAX_EXPECTED_COUNT}",
+        )
+    return value
+
+
+def _preserved_from(
+    data: dict[str, object], path: str, checkpoint: Checkpoint
+) -> Checkpoint:
+    preserved_from = _enum(Checkpoint, data["preserved_from"], f"{path}.preserved_from")
+    if preserved_from is checkpoint:
+        raise _error(
+            "invalid_checkpoint_pair",
+            f"{path}.preserved_from",
+            "preserved_from must name a different checkpoint",
+        )
+    return preserved_from
+
+
+def _rule(value: object, path: str, *, predicates: bool) -> Rule:
+    data = _object(value, path)
+    predicate = _rule_keys(data, path, predicates=predicates)
     concept = _enum(ConceptKind, data["concept"], f"{path}.concept")
+    allowed_concepts = _PREDICATE_CONCEPTS.get(predicate)
+    if allowed_concepts is not None and concept not in allowed_concepts:
+        raise _error(
+            "predicate_concept_mismatch",
+            f"{path}.predicate",
+            "predicate is not defined for this concept",
+        )
+    checkpoint = _enum(Checkpoint, data["checkpoint"], f"{path}.checkpoint")
+    expected = _semantic_value(concept, data["expected"], f"{path}.expected")
     return Rule(
         rule_id=_string(data["rule_id"], f"{path}.rule_id", pattern=_RULE_ID),
         version=_string(data["version"], f"{path}.version", pattern=_SEMVER),
         case_id=_string(data["case_id"], f"{path}.case_id", pattern=_CASE_ID),
-        checkpoint=_enum(Checkpoint, data["checkpoint"], f"{path}.checkpoint"),
+        checkpoint=checkpoint,
         concept=concept,
-        expected=_semantic_value(concept, data["expected"], f"{path}.expected"),
+        expected=expected,
         required=_boolean(data["required"], f"{path}.required"),
+        predicate=predicate,
+        forbidden=(
+            _forbidden(data, path, concept, expected)
+            if predicate is RulePredicate.NOT_COERCED
+            else ()
+        ),
+        expected_count=(
+            _expected_count(data, path)
+            if predicate is RulePredicate.RECORD_COUNT
+            else None
+        ),
+        preserved_from=(
+            _preserved_from(data, path, checkpoint)
+            if predicate is RulePredicate.PRESERVED_ACROSS
+            else None
+        ),
     )
 
 
@@ -577,12 +807,13 @@ def parse_rule_set(value: object) -> RuleSet:
     data = _object(value, "$")
     _exact_keys(data, frozenset({"schema_version", "rules"}), "$")
     schema_version = _string(data["schema_version"], "$.schema_version")
-    if schema_version != RULE_SET_SCHEMA_VERSION:
+    if schema_version not in SUPPORTED_RULE_SET_SCHEMA_VERSIONS:
         raise _error(
             "unsupported_schema", "$.schema_version", "rule-set schema is unsupported"
         )
+    predicates = schema_version != RULE_SET_SCHEMA_VERSION
     rules = tuple(
-        _rule(item, f"$.rules[{index}]")
+        _rule(item, f"$.rules[{index}]", predicates=predicates)
         for index, item in enumerate(_array(data["rules"], "$.rules"))
     )
     ids = [rule.rule_id for rule in rules]
@@ -621,10 +852,104 @@ def parse_bundle(
         ConceptKind.PRONOUNS: (case.pronouns,),
     }
     for index, rule in enumerate(rule_set.rules):
-        if rule.expected not in case_values[rule.concept]:
-            raise _error(
-                "rule_expectation_mismatch",
-                f"$.rules[{index}].expected",
-                "rule expectation must be declared by the case manifest",
-            )
+        _check_rule_against_case(rule, case_values, f"$.rules[{index}]")
     return EvaluationBundle(case=case, observations=observations, rule_set=rule_set)
+
+
+def _check_rule_against_case(
+    rule: Rule,
+    case_values: dict[ConceptKind, tuple[SemanticValue, ...]],
+    path: str,
+) -> None:
+    """Refuse a rule the case manifest contradicts.
+
+    A rule can only expect what the manifest declares (every predicate), can
+    only forbid what the manifest does not declare in status and scalar under
+    any context (``not_coerced``), can only demand presence of a value the
+    manifest specifies (``present``), can only count records the manifest
+    carries as distinct (``record_count``), and can only expect a scalar no
+    other concept of the manifest carries (``not_overwritten_by``). Each of
+    these would otherwise be a rule that could not pass or could not fail.
+    """
+
+    declared = case_values[rule.concept]
+    if rule.expected not in declared:
+        raise _error(
+            "rule_expectation_mismatch",
+            f"{path}.expected",
+            "rule expectation must be declared by the case manifest",
+        )
+    declared_keys = {coercion_key(item) for item in declared}
+    if any(coercion_key(item) in declared_keys for item in rule.forbidden):
+        raise _error(
+            "forbidden_case_conflict",
+            f"{path}.forbidden",
+            "a forbidden value cannot be declared by the case manifest",
+        )
+    if (
+        rule.predicate is RulePredicate.PRESENT
+        and getattr(rule.expected, "status", None) is not ValueStatus.SPECIFIED
+    ):
+        raise _error(
+            "predicate_expectation_mismatch",
+            f"{path}.expected",
+            "present requires an expected value with specified status",
+        )
+    if rule.expected_count is not None:
+        _check_record_count(rule.expected_count, declared, path)
+    if rule.predicate is RulePredicate.NOT_OVERWRITTEN_BY:
+        _check_overwritten_expectation(rule, case_values, path)
+
+
+def _check_record_count(
+    expected_count: int, declared: tuple[SemanticValue, ...], path: str
+) -> None:
+    """Refuse a ``record_count`` rule the manifest cannot be observed to meet.
+
+    The predicate demands ``expected_count`` observations with distinct hashes,
+    so a manifest that declares the same record twice could only ever be
+    reported as ``record_count_changed``; that is a contradiction between the
+    rule and the manifest, refused here, not a fault at the boundary.
+    """
+
+    if expected_count != len(declared):
+        raise _error(
+            "rule_count_mismatch",
+            f"{path}.expected_count",
+            "expected_count must equal the records the case manifest declares",
+        )
+    if len(set(declared)) != len(declared):
+        raise _error(
+            "indistinct_declared_records",
+            f"{path}.expected_count",
+            "record_count needs distinct records in the case manifest",
+        )
+
+
+def _check_overwritten_expectation(
+    rule: Rule,
+    case_values: dict[ConceptKind, tuple[SemanticValue, ...]],
+    path: str,
+) -> None:
+    """Refuse a ``not_overwritten_by`` rule whose faithful value is ruled out.
+
+    The predicate reports fail when the observed scalar equals a scalar the
+    manifest declares under another concept. If the expected scalar itself is
+    one of those, a faithful observation fails and the rule can never pass, so
+    the manifest and the rule contradict each other and the bundle is refused
+    rather than evaluated.
+    """
+
+    other_scalars = {
+        value.value
+        for concept, values in case_values.items()
+        if concept is not rule.concept
+        for value in values
+        if value.value is not None
+    }
+    if rule.expected.value in other_scalars:
+        raise _error(
+            "overwritten_expectation_conflict",
+            f"{path}.expected",
+            "the expected value is declared by another concept of the case manifest",
+        )

@@ -83,6 +83,98 @@ The evaluator must detect every applicable injected defect and localize it no la
 
 F-001–F-036 are reviewed by an independent fault author before the evaluation corpus is frozen. At least five additional hidden faults are authored by an independent reviewer and withheld from implementation until pre-release evaluation.
 
+### Corpus status, 2026-09-04
+
+The part of B-048 that needs no external person is committed:
+`tests/fixtures/seeded-faults/` and `tests/test_seeded_faults.py` hold, for
+every published fault, one of three things, and the matrix in that test
+module (`MATRIX`) says which. **Exercised** means a complete synthetic fixture
+(case, rule set, and observation set with exactly one fault applied) and tests
+proving the fault is reported as the assertion demands — `fail` with the
+predicate's own reason, or `indeterminate` and `unobserved` where absence is
+the fault — and located in the receipt's divergence section at the observed
+checkpoint the fault touched and nowhere else. **Refused** means the faulted
+input cannot reach evaluation: a fail-closed gate refuses it whole with a
+named code at a structural path, pinned by a fixture under
+`seeded-faults/refused/` or by a named test elsewhere; a refusal is detection
+without a receipt and is counted separately from exercised, never as
+localization. **Not yet exercisable** means nothing here can express or
+decide the fault, and the row names the missing item from a closed
+vocabulary. The mutation and detector columns are compared against the table
+above verbatim, and this table is compared row for row against the test data,
+so neither can drift from the other.
+
+As of 2026-09-04: 12 of 36 exercised at receipt level, 7 refused before evaluation, and 17 not yet exercisable.
+
+This is not the 41-fault evaluation B-048 defines. There is no hidden-fault
+set; no independent fault author has reviewed the corpus and no independent
+QA has run it; every fault here was written by the implementer of the
+mechanism that detects it, so the counts are deterministic corpus coverage
+over the published library and nothing more — no population-sensitivity claim
+of any kind, and no evidence about faults this library does not contain. An
+exercised row may still name a missing item: F-001 is reported at the EHR as
+a value change, not at a patient-facing display (A-006), and F-035 proves the
+run identity moves with the mapping version, not that a verifier would notice
+a claimed one. Rows waiting on SPCU predicates wait on clinical review, not
+only on code; rows waiting on laboratory results wait on the laboratory lead's
+fixture (B-011) as well as the importer.
+
+| Fault | Status | Evidence | Missing item |
+|---|---|---|---|
+| F-001 | exercised | `F-001.json`: A-I02 `value_not_present` at `ehr` | patient-facing display observation (E-DISPLAY, B-019) |
+| F-002 | not yet exercisable | — | patient-facing display observation (E-DISPLAY, B-019); name contexts and periods in the observation contract (B-019) |
+| F-003 | not yet exercisable | — | name contexts and periods in the observation contract (B-019) |
+| F-004 | exercised | `F-004.json`: A-I02 `value_not_present` at `ehr` | — |
+| F-005 | exercised | `F-005.json`: A-I01 `status_not_preserved` at `ehr` | — |
+| F-006 | exercised | `F-006.json`: A-I05 `overwritten_by_other_concept` at `ehr` | — |
+| F-007 | exercised | `F-007.json`: A-I06 `value_coerced` at `registration` | — |
+| F-008 | exercised | `F-008.json`: A-I01 `value_coerced` at `registration` | — |
+| F-009 | exercised | `F-009.json`: A-I02 `value_changed_across_checkpoints` at `ehr` | — |
+| F-010 | exercised | `F-010.json`: A-I01 `record_count_changed` at `registration` | — |
+| F-011 | not yet exercisable | — | SPCU predicates awaiting clinical review (B-029) |
+| F-012 | not yet exercisable | — | SPCU predicates awaiting clinical review (B-029) |
+| F-013 | not yet exercisable | — | SPCU predicates awaiting clinical review (B-029) |
+| F-014 | not yet exercisable | — | SPCU predicates awaiting clinical review (B-029) |
+| F-015 | refused | `refused/F-015.json`: `prohibited_spcu_mapping` at `$.observations[0].mapping` (declared form only; undeclared derivation needs A-020/A-021, B-029) | SPCU predicates awaiting clinical review (B-029) |
+| F-016 | refused | `refused/F-016.json`: `prohibited_spcu_mapping` at `$.observations[0].mapping` (declared form only; undeclared derivation needs A-020/A-021, B-029) | SPCU predicates awaiting clinical review (B-029) |
+| F-017 | not yet exercisable | — | laboratory results (B-011, B-025, B-030) |
+| F-018 | not yet exercisable | — | laboratory results (B-011, B-025, B-030) |
+| F-019 | not yet exercisable | — | laboratory results (B-011, B-025, B-030) |
+| F-020 | not yet exercisable | — | laboratory results (B-011, B-025, B-030) |
+| F-021 | not yet exercisable | — | laboratory results (B-011, B-025, B-030) |
+| F-022 | not yet exercisable | — | laboratory results (B-011, B-025, B-030) |
+| F-023 | exercised | `F-023.json`: A-I02 and A-I03 `missing_evidence`; `lis_return` unobserved | — |
+| F-024 | refused | `refused/F-024.json`: `invalid_rsg_value` at `$.observations[0].value.value` | normalizer and adapters (B-022 to B-026) |
+| F-025 | exercised | `F-025.json`: A-I02 `value_changed_across_checkpoints` at `interface`; `ehr` never named | — |
+| F-026 | not yet exercisable | — | receipt verifier (B-036) |
+| F-027 | not yet exercisable | — | evidence-minimized presentation (B-038); patient-facing display observation (E-DISPLAY, B-019) |
+| F-028 | refused | `tests/test_pack.py::test_pack_rejects_inactive_expired_or_incompatible_content` | authored assertions with validity (B-010) |
+| F-029 | refused | `refused/F-029.json`: `invalid_synthetic_identifier` at `$.synthetic_identifier`; `tests/test_preflight.py::test_field_namespace_free_text_and_canary_fail_closed` | — |
+| F-030 | refused | `tests/test_receipt_schema.py::test_stripped_or_padded_limitations_fail_the_contract` | — |
+| F-031 | exercised | `F-031.json`: A-I01 `status_not_preserved` at `ehr` | — |
+| F-032 | refused | `refused/F-032.json`: `case_mismatch` at `$.observations` | authored assertions with validity (B-010) |
+| F-033 | not yet exercisable | — | laboratory results (B-011, B-025, B-030) |
+| F-034 | not yet exercisable | — | signatures and role thresholds (B-035) |
+| F-035 | exercised | `F-035.json`: trace names mapping `0.2.0`; `payload_sha256` moves | receipt verifier (B-036) |
+| F-036 | not yet exercisable | — | review and disposition state machine (B-032) |
+
+Why the not-yet-exercisable rows are not stretched: an SPCU that is absent at
+a boundary is indistinguishable, under the observation contract, from a
+boundary nobody observed, so F-011 can only be `indeterminate` today and a
+`fail` needs an observed-absence form and the A-016/A-024 predicates; F-012
+reads as `diverged` at the interface in the divergence section but no
+predicate can name which order carried the wrong SPCU; F-013 needs an
+effective period the contract does not carry; F-014's detached support is
+refused as `invalid_support` before evaluation rather than reported, and a
+relinked support is only a changed value, which says nothing about
+traceability; F-002 and F-003 need a legal-name context and a name period, and
+`legal_name` is a prohibited key by design; F-026 would be a hash comparison
+the verifier has to make, and no verifier exists; F-027 needs a result-facing
+display observation and the B-038 presentation pass; and the seven laboratory
+rows have no analyte, interval, unit, or flag in any contract. Stretching any
+of them into an exercised row would count a detection the mechanism does not
+make.
+
 ## 5. Positive and boundary fixtures
 
 - Every case/assertion expected pass path.

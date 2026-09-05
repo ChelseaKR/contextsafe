@@ -150,7 +150,10 @@ def scannable_repo(tmp_path: Path) -> Path:
     repo.mkdir()
     _git(repo, "init", "-q")
     (repo / "README.md").write_text("nothing secret here\n", encoding="utf-8")
-    _git(repo, "add", "--", "README.md")
+    (repo / ".gitleaks.toml").write_text(
+        "[extend]\nuseDefault = true\n", encoding="utf-8"
+    )
+    _git(repo, "add", "--", "README.md", ".gitleaks.toml")
     _git(
         repo,
         "-c",
@@ -225,6 +228,10 @@ def test_the_secret_scan_refuses_a_repository_with_no_objects(
     repo = tmp_path / "empty"
     repo.mkdir()
     _git(repo, "init", "-q")
+    # The config check precedes the enumeration; this test is about the latter.
+    (repo / ".gitleaks.toml").write_text(
+        "[extend]\nuseDefault = true\n", encoding="utf-8"
+    )
     binary = _fake_gitleaks(tmp_path, version=PINNED, detect_exit=CLEAN)
     result = _scan(repo, GITLEAKS_BIN=str(binary))
     assert result.returncode == UNAVAILABLE
@@ -280,6 +287,26 @@ def test_a_clean_scan_is_three_scans_pointed_at_three_different_things(
     assert "--source ." in worktree
     assert "--no-git" in worktree
     assert all("--redact" in call for call in calls)
+    assert all("--config " in call for call in calls), calls
+
+
+def test_the_secret_scan_refuses_when_its_allowlist_is_absent(
+    scannable_repo: Path, tmp_path: Path
+) -> None:
+    """A missing config is the absent-scanner failure wearing another hat.
+
+    gitleaks discovers a config beside its ``--source``, and phase 2's source
+    is a temporary directory, so a discovered config would apply to two phases
+    and not to the third. The config is passed explicitly for that reason, and
+    running without one would quietly widen what the gate reports on.
+    """
+
+    (scannable_repo / ".gitleaks.toml").unlink()
+    binary = _fake_gitleaks(tmp_path, version=PINNED, detect_exit=CLEAN)
+    result = _scan(scannable_repo, GITLEAKS_BIN=str(binary))
+    assert result.returncode == UNAVAILABLE
+    assert "no gitleaks config" in result.stderr
+    assert _detect_invocations(binary) == []
 
 
 def test_the_scan_refuses_an_object_it_cannot_classify(

@@ -1,0 +1,143 @@
+{
+  "fault": "F-001",
+  "mutation": "drop current NtU: the name-to-use observation at the EHR survives with status absent and no value while registration still carries CSYN-ASTER, so A-005 reports the value not present at the EHR and not preserved from registration; a name-to-use observation removed entirely would be missing evidence and indeterminate under every predicate, not fail",
+  "assertion": "A-005",
+  "case": {
+    "schema_version": "contextsafe.case/0.1.0",
+    "case_id": "CTP-I01",
+    "synthetic_identifier": {
+      "system": "urn:contextsafe:synthetic",
+      "value": "CSYN-CTP-I01"
+    },
+    "concepts": {
+      "gender_identity": {
+        "status": "specified",
+        "value": "fixture-gender-1",
+        "code_system": "urn:contextsafe:fixture"
+      },
+      "recorded_sex_or_gender": [
+        {
+          "value": "X",
+          "context": "government-id",
+          "source": "synthetic-fixture"
+        }
+      ],
+      "sex_parameter_for_clinical_use": [
+        {
+          "value": "fixture-context-1",
+          "context_id": "ORDER-CSYN-I01-A",
+          "supporting_observation_ids": [
+            "SUP-CSYN-I01-A"
+          ]
+        }
+      ],
+      "name_to_use": {
+        "status": "specified",
+        "value": "CSYN-ASTER",
+        "use": "usual"
+      },
+      "pronouns": {
+        "status": "specified",
+        "value": "they/them"
+      }
+    },
+    "prohibited_inferences": [
+      "gender_identity_to_spcu",
+      "recorded_sex_or_gender_to_spcu"
+    ]
+  },
+  "rules": {
+    "schema_version": "contextsafe.rule-set/0.2.0",
+    "rules": [
+      {
+        "rule_id": "A-I01",
+        "version": "0.1.0",
+        "case_id": "CTP-I01",
+        "checkpoint": "registration",
+        "concept": "name_to_use",
+        "expected": {
+          "status": "specified",
+          "value": "CSYN-ASTER",
+          "use": "usual"
+        },
+        "required": true
+      },
+      {
+        "rule_id": "A-I02",
+        "version": "0.1.0",
+        "case_id": "CTP-I01",
+        "checkpoint": "ehr",
+        "concept": "name_to_use",
+        "expected": {
+          "status": "specified",
+          "value": "CSYN-ASTER",
+          "use": "usual"
+        },
+        "required": true,
+        "predicate": "present"
+      },
+      {
+        "rule_id": "A-I03",
+        "version": "0.1.0",
+        "case_id": "CTP-I01",
+        "checkpoint": "ehr",
+        "concept": "name_to_use",
+        "expected": {
+          "status": "specified",
+          "value": "CSYN-ASTER",
+          "use": "usual"
+        },
+        "required": true,
+        "predicate": "preserved_across",
+        "preserved_from": "registration"
+      }
+    ]
+  },
+  "observations": {
+    "schema_version": "contextsafe.observation-set/0.1.0",
+    "observations": [
+      {
+        "schema_version": "contextsafe.observation/0.1.0",
+        "observation_id": "OBS-I01-NTU-REG",
+        "case_id": "CTP-I01",
+        "checkpoint": "registration",
+        "concept": "name_to_use",
+        "value": {
+          "status": "specified",
+          "value": "CSYN-ASTER",
+          "use": "usual"
+        },
+        "evidence": {
+          "source_sha256": "9f53e5072c88b633326e09624e7a86aeac8349ad8b26b6df9a2f2496a0371779",
+          "source_pointer": "$.concepts.name_to_use"
+        },
+        "mapping": {
+          "source_concept": "name_to_use",
+          "target_concept": "name_to_use",
+          "mapping_version": "0.1.0"
+        }
+      },
+      {
+        "schema_version": "contextsafe.observation/0.1.0",
+        "observation_id": "OBS-I01-NTU-EHR",
+        "case_id": "CTP-I01",
+        "checkpoint": "ehr",
+        "concept": "name_to_use",
+        "value": {
+          "status": "absent",
+          "value": null,
+          "use": "usual"
+        },
+        "evidence": {
+          "source_sha256": "ea99117feecd6b5f415d071909f4fc59a8353248c67a83e2fb118aa63b77bc06",
+          "source_pointer": "$.concepts.name_to_use"
+        },
+        "mapping": {
+          "source_concept": "name_to_use",
+          "target_concept": "name_to_use",
+          "mapping_version": "0.1.0"
+        }
+      }
+    ]
+  }
+}

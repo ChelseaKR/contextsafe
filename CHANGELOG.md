@@ -11,6 +11,39 @@ rather than after it.
 
 ### Fixed
 
+- **The full-history secret scan has been red on `main` since B-026 landed, on
+  four false positives.** gitleaks' `generic-api-key` rule reads
+  `SOURCE_TOKEN_PATTERN, max_length=96` as a credential because the assignment
+  follows a constant whose name contains TOKEN, and reads
+  `{"token": "CSYN-9876543210"}` as one too -- that being the value in
+  `tests/test_mapping_profile.py` whose whole purpose is to prove such a value
+  is refused. A repository about synthetic identity tokens was always going to
+  meet this rule.
+
+  There is now a `.gitleaks.toml`: the default ruleset, extended, plus the
+  narrowest allowlist that makes it usable. Three entries, each a false
+  positive verified by hand, each carrying its reason. Two of them are this
+  project's own published synthetic-token grammar, which is the namespace that
+  exists so a real identifier cannot be mistaken for a fixture one.
+
+  The config is passed to all three phases explicitly rather than discovered.
+  gitleaks looks for a config beside its `--source`, and phase 2's source is a
+  temporary directory of materialized object blobs, so discovery would have
+  applied the allowlist to two phases out of three and silently not to the one
+  that exists to read what the other two cannot see. A missing config is now
+  exit 2, "I did not examine", alongside an absent scanner and an unpinned one.
+
+  An allowlist is a hole in a gate, so its boundary is pinned rather than
+  asserted in a comment: `tests/test_secret_scan_allowlist.py` checks that each
+  entry admits the shape it exists for and that no credential shape passes,
+  including a credential sitting beside an allowed token, which is what an
+  unanchored allowlist would have swallowed. Those credential shapes are joined
+  at run time from parts, because written whole they are real findings for the
+  scanner under test -- they were, on this file's first run -- and a literal
+  would be folded into the `.pyc` as well.
+
+### Fixed
+
 - **A mapping profile could write a name into an observation.** Every target
   value is held to the synthetic grammar except the one field whose purpose is
   to carry a person's name: `_target_problem` returned `None` for a name to use
@@ -529,6 +562,260 @@ rather than after it.
   no schema and no command emits it. No existing contract version moved, the
   pinned reference-receipt and canonical-import digests are unchanged, and
   no runtime dependency was added.
+
+- **B-048, the part that needs no external person: a committed answer for
+  every published seeded fault.** `tests/test_seeded_faults.py` carries a
+  36-row matrix over F-001 to F-036 from `docs/09-TEST-AND-EVALUATION.md`
+  section 4, and a dated status table under that section restates it row for
+  row; a test compares the two in both directions and another compares the
+  matrix's mutation and detector columns to the library table verbatim, so
+  neither document can drift from the other. Three new faults are exercised
+  as complete synthetic fixtures under `tests/fixtures/seeded-faults/`: F-001
+  (the name to use survives registration and reaches the EHR with status
+  `absent`: `value_not_present` and `value_changed_across_checkpoints`,
+  located at `ehr` after `registration`; removed entirely it is
+  `missing_evidence`, never pass), F-009 (the recorded sex or gender reaches
+  the EHR as X but with the boundary's own context and source in place of
+  the declared ones: `value_changed_across_checkpoints` and
+  `semantic_mismatch` at `ehr`, while the `not_coerced` rule beside them
+  passes because the value survived, so a receipt says which claim turned
+  and never reports a lost context as a rewritten value; the contract has no
+  way to carry a dropped descriptor and refuses one as `missing_field`), and
+  F-035 (the same faithful value through mapping version 0.2.0: both forms
+  pass, the trace names the version and mapping hash, and `input_sha256`,
+  `result_sha256`, and `payload_sha256` all move while `rule_set_sha256`
+  stays, so two mapping versions can never share a run identity). Every
+  exercised fault, the nine from B-028 and B-031 included, now has a
+  restated localization: the divergence section's `from_expected` and
+  `from_previous` for the fault's concept, a check that the detecting rule
+  reads the checkpoint the section locates, and a library-wide check that no
+  located boundary is ever an unobserved one. Five faults are refused before
+  evaluation and pinned under `seeded-faults/refused/` with their code and
+  structural path, in process and through the CLI (exit 2, no receipt
+  written, no value in the error object): F-015 and F-016 as a declared
+  GI-to-SPCU or RSG-to-SPCU mapping (`prohibited_spcu_mapping`), F-024 as an
+  unsupported recorded-sex-or-gender token (`invalid_rsg_value`) and, in a
+  variant, an unsupported status (`invalid_enum`), neither ever
+  nearest-matched, F-029 as a case identifier outside the synthetic
+  namespace (`invalid_synthetic_identifier`) and, in a variant, an
+  identifying field on the case or an observation (`prohibited_field`), and
+  F-032 as an observation naming another case (`case_mismatch`, reassigned
+  to neither case). F-028 and F-030 are refused by the pack validity and
+  receipt contract tests that already existed, and the matrix's pointers to
+  those tests are checked to resolve. `tests/test_receipt_schema.py` no
+  longer evaluates the `refused/` directory, since no receipt exists for a
+  refused input. What this does not do: it is not the 41-fault evaluation
+  B-048 defines. There is no hidden-fault set, no independent fault author
+  has reviewed the corpus, no independent QA has run it, and every fault was
+  written by the implementer of the mechanism that detects it, so 12 of 36
+  exercised, 7 refused, and 17 not yet exercisable is deterministic corpus
+  coverage and no population-sensitivity claim. The seventeen name what they
+  wait on from a closed vocabulary — laboratory results (B-011, B-025,
+  B-030), SPCU predicates awaiting clinical review (B-029), name contexts
+  and periods in the observation contract (B-019), the receipt verifier
+  (B-036), signatures (B-035), the review state machine (B-032), and the
+  presentation pass (B-038) — and none was stretched into an exercised row:
+  an absent SPCU is indistinguishable from an unobserved boundary under the
+  contract, a relinked support is only a changed value, and F-012 reads as
+  diverged in the divergence section without any predicate able to name the
+  order. No contract version moves, no enum widens, no source module
+  changes, and no pinned digest changes. After review: the README's B-028
+  subsection, which counted twenty-seven faults as undetectable when it was
+  written, now dates that count to its own slice and defers to the B-048
+  subsection, and a test holds the README to one current count (the
+  matrix's); the F-015 and F-016 evidence cells in the matrix and the docs/09
+  table say the refusal covers the declared mapping form only, not the
+  undeclared derivation the library's F-016 also names; the F-023 and F-035
+  evidence prose is built from the same constants their tests read; and the
+  CLI refusal test checks the stderr bytes, not only the error object, for
+  the refused fixtures' identity-shaped tokens.
+- **B-031 slice: the first observed divergence and the evidence trace
+  (A-032 to A-035), as mechanism and nothing more.** The receipt payload has a
+  `divergence` section, computed by the new `contextsafe.divergence` module
+  from the case and the observations alone: for each of the five concepts,
+  the state of every checkpoint in pathway order (`observed`, `unobserved`,
+  or `ambiguous`, with the sorted value hashes seen there), the first observed
+  checkpoint whose hashes depart from the manifest's (`from_expected`), and
+  the first observed checkpoint whose hashes depart from the previous observed
+  one (`from_previous`, which names both sides). An unobserved checkpoint is
+  never a location: a divergence found across an unobserved gap is located
+  between the two observed sides, and the closed shape has no field in which
+  the gap could be blamed. `agreed_where_observed` says only that every
+  boundary with evidence agreed; a concept with no evidence is `unobserved`;
+  a boundary that cannot be read as one state (two observations of a
+  single-valued concept, or one record captured twice) is `ambiguous` and the
+  concept is `indeterminate` from there, never agreed. Every outcome carries a
+  `trace`: the distinct source hash and source pointer of each observation
+  the predicate read, and the distinct version and hash of each mapping they
+  came through, both sorted so observation order cannot reach the payload.
+  A source pointer is now a structural path and nothing else: `parse_observations`
+  refuses an observation whose pointer has any segment outside the closed
+  vocabulary in `contextsafe.validation.STRUCTURAL_POINTER_SEGMENTS`
+  (`non_structural_pointer`), the receipt contract publishes the same
+  vocabulary as a pattern, and a property test holds that a pointer drawn
+  from the pointer alphabet at random is either refused or made only of those
+  words and integers. The rendered page has a "First observed divergence"
+  section in `en-US` and machine-translated `es-US`, with the sentence that
+  says what is never blamed rendered beside its `en-US` original.
+  `tests/fixtures/seeded-faults/` gains F-023 (a checkpoint omitted: both
+  rules that read it are `indeterminate` with `missing_evidence`, the boundary
+  is `unobserved`, and nothing passes there) and F-025 (name to use faithful
+  at registration, unobserved at the EHR, changed after: located at the
+  interface and between registration and the interface, and the EHR is named
+  nowhere). Property tests hold that reordering observations never changes
+  the section and that deleting every observation at one checkpoint never
+  names the deleted boundary, never moves the located boundary when the
+  deleted one was neither side of it, and, when the located boundary itself
+  is deleted, locates only a boundary that already differed from the observed
+  boundary behind it: the location can move forward across the gap the
+  deletion opened, never onto a boundary that agreed with the boundary
+  observed before it. The receipt contract enforces the pairings its comments
+  stated: a `diverged` or `indeterminate` entry must name `at`, a `diverged`
+  `from_previous` must name both sides, an `agreed_where_observed` or
+  `unobserved` entry names nothing, and an `unobserved` checkpoint state
+  carries no hashes while every other state carries at least one, so a
+  hand-edited document fails the contract rather than surfacing in a
+  renderer. The rendered page holds every checkpoint, concept, reason,
+  state, and status it reads from a receipt to the published set before the
+  value can become a catalog key: an unpublished value is refused as
+  `invalid_receipt_document` at its structural pointer, and the value never
+  reaches the stderr error object (the catalog's own unknown-key rejection
+  names the key it was asked for, which is why it must never be reached with
+  receipt content). What this does not do: it decides divergence of value
+  hashes, not which value was right; a record-list concept is compared as
+  its whole list, so partial capture of the declared records at a boundary
+  reads as diverged there; `expected_sha256s` is carried for all five
+  concepts whether or not a rule names them and, like every payload hash,
+  unsalted, so a small-value-space concept such as pronouns is recoverable
+  by enumeration; an outcome that stopped at an evidence gate traces only
+  the side that decided it; it is not a finding and carries no severity
+  (B-032); the trace names no oracle or pack because none exists to name;
+  A-033 is enforced only by the existing fail-closed validators, because no
+  normalizer exists yet; and no clinical, laboratory, or community review
+  has looked at any of it.
+- **B-028 slice: assertion predicates for identity, name to use, pronouns,
+  and recorded sex or gender (A-005, A-008 to A-015), as mechanism and
+  nothing more.** A rule used to be one expected value plus `required`, with
+  the single observed hash compared to the expected hash. A rule set that
+  declares `contextsafe.rule-set/0.2.0` may now name one predicate from a
+  closed set, each a pure function in `contextsafe.evaluator`: `exact` (the
+  default, unchanged); `present`, the value has status `specified` (A-008);
+  `status_preserved`, the observed status equals the expected status and the
+  value is not consulted, so declined stays declined and never becomes
+  unknown, absent, or populated (A-009); `not_coerced`, the observed value's
+  presence status and scalar are those of none of a closed `forbidden` set the
+  rule carries in fixture tokens, so X or unknown rewritten to M or F is a
+  coercion whether or not the boundary also stamped its own context or source
+  on the record (A-014);
+  `record_count`, exactly `expected_count` distinct records remain (A-013);
+  `preserved_across`, the same value hash at `preserved_from` and at the
+  rule's checkpoint (A-005, A-010, A-012); and `not_overwritten_by`, the
+  observed gender identity is not another concept's declared value (A-011).
+  Missing evidence is `indeterminate`, an ambiguous checkpoint is
+  `indeterminate`, and no predicate can pass on zero observations.
+  Every predicate has one affirmative and one failure reason, twelve new codes
+  in the closed `OutcomeReason` set and the receipt contract, so a receipt says
+  which claim was decided. The field a predicate reads is required for it and
+  an unknown field for every other; a predicate that would be vacuous for a
+  concept (`present` on recorded sex or gender, `not_overwritten_by` on
+  anything but gender identity) is refused; a forbidden set that repeats a
+  status and scalar under another context, or names the expected one, is
+  refused; and `parse_bundle` refuses a rule the case manifest contradicts (a
+  forbidden status and scalar the manifest declares under any context, a
+  `present` rule on a declined value, an `expected_count` the manifest does
+  not carry or that it carries as a repeated record, which the predicate's
+  distinct-hash count could never meet: `indistinct_declared_records`, a
+  `not_overwritten_by` expectation the manifest also declares under another
+  concept: `overwritten_expectation_conflict`). The contract is
+  `schemas/contextsafe-rule-set-v0.2.schema.json`,
+  the first published schema for the rule set, with
+  `tests/test_rule_set_schema.py` holding it to the runtime. Fixtures: a
+  second ungoverned reference pair, `rules-predicates.json` and
+  `observations-predicates.json`, exercises every predicate against CTP-I01,
+  ships the `exact` rule beside its `not_coerced` rule on the same field
+  (A-I09 beside A-I06) so a receipt says which of the two claims turned, and
+  is pinned in the three-run determinism matrix; and
+  `tests/fixtures/seeded-faults/` carries F-004, F-005, F-006, F-007, F-008,
+  F-010, and F-031 from `docs/09-TEST-AND-EVALUATION.md` section 4 as complete
+  synthetic inputs, each proved to be reported as `fail` with its own reason
+  and never as `pass`, and F-007 and F-008 additionally with the boundary's
+  own context, source, or both stamped on the coerced record. The property
+  layer generates every predicate, reaches `pass` and `fail` under each one
+  by design (one observation at every checkpoint a predicate reads, values
+  drawn from the faithful, forbidden, restamped-forbidden, status-moved, and
+  other-concept cases), holds the status algebra over all of them, and
+  carries a derandomized guard test that fails when the generator stops
+  reaching a branch. What this does not do: no clinical, laboratory, or
+  community review has approved any rule or predicate here; `not_coerced`
+  decides status and scalar only, so the faithful X under a rewritten context
+  passes it and is the `exact` rule's to report; on the recorded-sex-or-gender
+  concept only X and unknown are expressible, so "absent" in A-014 is
+  reachable only through a status-bearing concept; a checkpoint carrying two
+  records of one concept is `ambiguous_evidence` under every
+  single-observation predicate, `not_coerced` included, so a multi-record
+  case cannot be evaluated for A-014; `preserved_across` is a preservation
+  claim, not a correctness claim; and the pack contract still pins the
+  exact-only rule-set shape, so a 0.2.0 rule set is refused as a pack
+  component by name (`incompatible_component`) until that contract moves.
+
+### Changed
+
+- **The receipt contract is 0.3: `contextsafe.receipt/0.3.0`,
+  `schemas/contextsafe-receipt-v0.3.schema.json`.** The payload gains the
+  required `divergence` section and every outcome gains a required `trace`;
+  the closed `evidence_state` and `divergence_status` sets, the pinned
+  `pathway`, and the structural-pointer pattern are new definitions; nothing
+  0.2 carried changed. The 0.2 file is not kept beside it. Because the outcome
+  list now carries a trace, `result_sha256` moved for every receipt, and both
+  pinned reference digests in `tests/test_determinism.py` moved with it —
+  once, and only for that reason: `input_sha256` and `rule_set_sha256` are
+  byte-identical to 0.2, and no fixture changed. The README example receipt
+  was refreshed for the same fields. The `receipt-document` version is
+  unchanged: the envelope shape did not move.
+- **A receipt now carries source pointers, so the old rule that it carries
+  none is replaced by a stronger one.** Two tests used to assert that the
+  string `source_pointer` never appears in a receipt; since A-035 requires
+  the trace, they now assert that every pointer a receipt carries is a path
+  of closed structural segments, and `test_divergence.py` holds the same over
+  generated pointers. The value-minimisation claim is unchanged in substance:
+  a pointer is a location in a source, and no word that is not a canonical
+  field name can be in one.
+- **`parse_observations` is stricter.** A source pointer whose segments are
+  not all in the closed structural vocabulary is refused
+  (`non_structural_pointer`) where the pattern check alone used to accept any
+  word of the pointer alphabet. Every packaged fixture, seeded fault, and
+  property generator already used structural pointers, so nothing shipped
+  changed; an observation set that named a field outside the canonical
+  manifest or evidence envelope is now refused rather than carried.
+- Seventeen strings were added to both locale catalogs for the divergence
+  section. The `es-US` entries are machine translations marked `machine`,
+  like every other entry in that catalog: B-042 has not happened, and nothing
+  here claims it has.
+- **The receipt contract is 0.2: `contextsafe.receipt/0.2.0`,
+  `schemas/contextsafe-receipt-v0.2.schema.json`.** The closed outcome-reason
+  enum widened by the twelve predicate reasons, a `$comment` on
+  `observed_sha256s` says what it carries under `preserved_across` and
+  `record_count`, and nothing else changed; the
+  0.1 file is not kept beside it, so a consumer pinned to the 0.1 `$id`
+  rejects a 0.2 receipt on its `schema_version` rather than accepting a reason
+  it has never seen. Because the payload carries its own `schema_version`,
+  every receipt's `payload_sha256` moved, and the pinned reference-receipt
+  digest in `tests/test_determinism.py` moved with it — once, and only for
+  that reason: the reference `input_sha256`, `result_sha256`, and
+  `rule_set_sha256` are byte-identical to 0.1.0, and `rules.json` and
+  `observations.json` are unchanged. The README example receipt was refreshed
+  for the same two fields. The `receipt-document` version is unchanged: the
+  envelope shape did not move.
+- **The rule-set contract is accepted at two versions.** `0.1.0` is untouched:
+  no predicate field is allowed there, every existing `rules.json` parses
+  unchanged, and its canonical form and hash are what they were. `0.2.0`
+  admits the predicate fields, and its canonical form omits `exact` and every
+  field the predicate does not read, so an exact rule hashes the same under
+  either version. `contextsafe fixtures export` now writes seven files rather
+  than five.
+- Twelve `reason.*` strings were added to both locale catalogs. The `es-US`
+  entries are machine translations marked `machine`, like every other entry in
+  that catalog: B-042 has not happened, and nothing here claims it has.
 
 ## [0.1.0] - 2026-09-02
 

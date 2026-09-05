@@ -112,6 +112,14 @@
       "review": "source",
       "text": "Outcomes"
     },
+    "column.from_expected": {
+      "review": "source",
+      "text": "From the expected value"
+    },
+    "column.from_previous": {
+      "review": "source",
+      "text": "From the previous observed boundary"
+    },
     "column.reason": {
       "review": "source",
       "text": "Reason"
@@ -144,6 +152,42 @@
       "review": "source",
       "text": "Sex parameter for clinical use"
     },
+    "divergence.diverged.at": {
+      "review": "source",
+      "text": "Diverged at {checkpoint}"
+    },
+    "divergence.diverged.between": {
+      "review": "source",
+      "text": "Diverged between {after} and {at}"
+    },
+    "divergence.explainer": {
+      "review": "source",
+      "text": "A divergence is named only at a boundary where evidence was observed. A boundary with no evidence is shown as not observed: it is never blamed, and it is never counted as agreement. When the boundary between two observed ones was not observed, the divergence is located between those two. This section compares value hashes; it does not say which value was right."
+    },
+    "divergence.from_expected.agreed_where_observed": {
+      "review": "source",
+      "text": "Agreed at every observed boundary"
+    },
+    "divergence.from_expected.unobserved": {
+      "review": "source",
+      "text": "Not observed at any boundary"
+    },
+    "divergence.from_previous.agreed_where_observed": {
+      "review": "source",
+      "text": "Agreed between every pair of observed boundaries"
+    },
+    "divergence.from_previous.unobserved": {
+      "review": "source",
+      "text": "Fewer than two boundaries observed, so nothing to compare"
+    },
+    "divergence.indeterminate.at": {
+      "review": "source",
+      "text": "Indeterminate at {checkpoint}: the evidence there is ambiguous"
+    },
+    "divergence.indeterminate.between": {
+      "review": "source",
+      "text": "Indeterminate between {after} and {at}: the evidence at {at} is ambiguous"
+    },
     "envelope.claimed_generated_at.absent": {
       "review": "source",
       "text": "Not declared"
@@ -171,6 +215,18 @@
     "envelope.trusted_time.label": {
       "review": "source",
       "text": "Trusted time"
+    },
+    "evidence.ambiguous": {
+      "review": "source",
+      "text": "Ambiguous"
+    },
+    "evidence.observed": {
+      "review": "source",
+      "text": "Observed"
+    },
+    "evidence.unobserved": {
+      "review": "source",
+      "text": "Not observed"
     },
     "footer.determinism": {
       "review": "source",
@@ -252,13 +308,61 @@
       "review": "source",
       "text": "No evidence was found, so no claim is made"
     },
+    "reason.overwritten_by_other_concept": {
+      "review": "source",
+      "text": "The value was overwritten by another concept's value"
+    },
     "reason.predeclared_not_applicable": {
       "review": "source",
       "text": "The rule declared this case out of scope in advance"
     },
+    "reason.record_count_changed": {
+      "review": "source",
+      "text": "The number of distinct records changed"
+    },
+    "reason.record_count_preserved": {
+      "review": "source",
+      "text": "The number of distinct records was preserved"
+    },
     "reason.semantic_mismatch": {
       "review": "source",
       "text": "Evidence was found and it did not match the expectation"
+    },
+    "reason.status_not_preserved": {
+      "review": "source",
+      "text": "The value's status changed"
+    },
+    "reason.status_preserved": {
+      "review": "source",
+      "text": "The value's status was preserved"
+    },
+    "reason.value_changed_across_checkpoints": {
+      "review": "source",
+      "text": "The value differed between the two boundaries"
+    },
+    "reason.value_coerced": {
+      "review": "source",
+      "text": "The value was coerced into a forbidden value"
+    },
+    "reason.value_not_coerced": {
+      "review": "source",
+      "text": "The value was not coerced into a forbidden value"
+    },
+    "reason.value_not_overwritten": {
+      "review": "source",
+      "text": "The value was not another concept's value"
+    },
+    "reason.value_not_present": {
+      "review": "source",
+      "text": "The value was not present at the boundary"
+    },
+    "reason.value_present": {
+      "review": "source",
+      "text": "The value was present at the boundary"
+    },
+    "reason.value_preserved_across_checkpoints": {
+      "review": "source",
+      "text": "The value was the same at both boundaries"
     },
     "scope.clinical_oracle_approved.label": {
       "review": "source",
@@ -271,6 +375,10 @@
     "scope.synthetic_fixture_only.label": {
       "review": "source",
       "text": "Synthetic fixture only"
+    },
+    "section.divergence.heading": {
+      "review": "source",
+      "text": "First observed divergence"
     },
     "section.envelope.heading": {
       "review": "source",
@@ -323,6 +431,14 @@
     "status.pass": {
       "review": "source",
       "text": "Pass"
+    },
+    "table.divergence.first.caption": {
+      "review": "source",
+      "text": "Where each field first departed from the expected value, and from the previous observed boundary."
+    },
+    "table.divergence.observed.caption": {
+      "review": "source",
+      "text": "What was observed for each field at each boundary, in pathway order."
     },
     "table.results.caption": {
       "review": "source",

@@ -1051,6 +1051,16 @@ def _load_components(
     for reference in sorted(pack.rule_sets, key=lambda item: item.component_id):
         value = _load_component(root, reference.path)
         rule_set = parse_rule_set(value)
+        if rule_set.schema_version != RULE_SET_SCHEMA_VERSION:
+            # The pack envelope pins the exact-only 0.1.0 rule-set contract.
+            # A predicate rule set parses, but it is not a pack component
+            # until the pack contract itself says so; refuse it by name
+            # rather than let it surface as a manifest relationship error.
+            raise contract_error(
+                "incompatible_component",
+                "$.components.rule_sets",
+                "rule-set component schema is not supported by the pack contract",
+            )
         canonical_hash = sha256_json(rule_set.to_dict())
         if canonical_hash != reference.sha256:
             raise contract_error(

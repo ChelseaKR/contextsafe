@@ -1,0 +1,273 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://contextsafe.invalid/schemas/contextsafe-rule-set-v0.2.schema.json",
+  "title": "ContextSafe deterministic fixture rule set 0.2",
+  "$comment": "The rule-set shape that admits a closed predicate field (B-028). Reference-only and ungoverned: every predicate here is a mechanism for the identity, name-to-use, pronoun, and recorded-sex-or-gender assertions in docs/05-DATA-AND-EVIDENCE.md section 5, and no clinical, laboratory, or community review has approved any rule that uses one. The 0.1.0 shape (no predicate field, exact hash equality only) is still accepted by the runtime unchanged and has no separate published schema; a 0.2.0 document with no predicate field means exactly what a 0.1.0 document means. JSON Schema validates structure only: the runtime additionally requires preserved_from to differ from checkpoint, forbidden values to be unique in status and scalar and none to share the expected value's status and scalar, and, in parse_bundle, every expected value to be declared by the case manifest, no forbidden value's status and scalar to be declared by it under any context, present to expect a specified value, expected_count to equal the records the manifest declares for the concept and those records to be distinct, and a not_overwritten_by rule not to expect a scalar the manifest declares under another concept (a faithful observation would otherwise be reported as overwritten and the rule could never pass).",
+  "x-contextsafe-semantic-constraints": [
+    "preserved_from must name a checkpoint other than checkpoint",
+    "forbidden values are unique in status and scalar, and none shares the status and scalar of expected",
+    "expected is declared by the case manifest for the rule's concept",
+    "no forbidden value's status and scalar is declared by the case manifest under any context, source, or code system",
+    "present requires expected.status to be specified",
+    "expected_count equals the number of values the case manifest declares for the concept, and those values are distinct",
+    "not_overwritten_by expects a scalar that no other concept of the case manifest declares",
+    "the canonical form omits predicate when it is exact and omits every predicate field the predicate does not read, so an exact rule hashes exactly as a 0.1.0 rule does"
+  ],
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "rules"],
+  "properties": {
+    "schema_version": {"const": "contextsafe.rule-set/0.2.0"},
+    "rules": {
+      "type": "array",
+      "minItems": 1,
+      "items": {"$ref": "#/$defs/rule"}
+    }
+  },
+  "$defs": {
+    "checkpoint": {"enum": ["registration", "ehr", "interface", "lis_return"]},
+    "concept": {
+      "enum": [
+        "gender_identity",
+        "recorded_sex_or_gender",
+        "sex_parameter_for_clinical_use",
+        "name_to_use",
+        "pronouns"
+      ]
+    },
+    "predicate": {
+      "$comment": "exact: the single observed value hash equals the expected hash. present: the single observed value has status specified (A-008). status_preserved: the observed status equals the expected status and the value is ignored (A-009). not_coerced: the observed value's presence status and scalar are those of none of the forbidden values, whatever context, source, or code system the boundary attached (A-014). record_count: exactly expected_count distinct records were observed (A-013). preserved_across: the same value hash at preserved_from and at checkpoint (A-005, A-010, A-012). not_overwritten_by: the observed gender identity is not another concept's declared value (A-011).",
+      "enum": [
+        "exact",
+        "present",
+        "status_preserved",
+        "not_coerced",
+        "record_count",
+        "preserved_across",
+        "not_overwritten_by"
+      ]
+    },
+    "statusAndValue": {
+      "oneOf": [
+        {
+          "type": "object",
+          "required": ["status", "value"],
+          "properties": {
+            "status": {"const": "specified"},
+            "value": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128,
+              "pattern": "^[^\\uD800-\\uDFFF]*$"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "required": ["status", "value"],
+          "properties": {
+            "status": {"enum": ["declined", "unknown", "absent"]},
+            "value": {"type": "null"}
+          }
+        }
+      ]
+    },
+    "genderIdentity": {
+      "allOf": [
+        {"$ref": "#/$defs/statusAndValue"},
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["status", "value", "code_system"],
+          "properties": {
+            "status": {"enum": ["specified", "declined", "unknown", "absent"]},
+            "value": {"type": ["string", "null"]},
+            "code_system": {"type": "string", "pattern": "^[A-Za-z0-9:/_.-]{1,96}$"}
+          }
+        }
+      ]
+    },
+    "recordedSexOrGender": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["value", "context", "source"],
+      "properties": {
+        "value": {"enum": ["F", "M", "X", "unknown"]},
+        "context": {"type": "string", "pattern": "^[A-Za-z0-9:/_.-]{1,96}$"},
+        "source": {"type": "string", "pattern": "^[A-Za-z0-9:/_.-]{1,96}$"}
+      }
+    },
+    "spcu": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["value", "context_id", "supporting_observation_ids"],
+      "properties": {
+        "value": {"type": "string", "pattern": "^[A-Za-z0-9:/_.-]{1,96}$"},
+        "context_id": {
+          "type": "string",
+          "maxLength": 96,
+          "pattern": "^ORDER-CSYN-[A-Za-z0-9:/_.-]+$"
+        },
+        "supporting_observation_ids": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "string",
+            "maxLength": 96,
+            "pattern": "^SUP-CSYN-[A-Za-z0-9:/_.-]+$"
+          }
+        }
+      }
+    },
+    "nameToUse": {
+      "allOf": [
+        {"$ref": "#/$defs/statusAndValue"},
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["status", "value", "use"],
+          "properties": {
+            "status": {"enum": ["specified", "declined", "unknown", "absent"]},
+            "value": {"type": ["string", "null"], "pattern": "^CSYN-"},
+            "use": {"const": "usual"}
+          }
+        }
+      ]
+    },
+    "pronouns": {
+      "allOf": [
+        {"$ref": "#/$defs/statusAndValue"},
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["status", "value"],
+          "properties": {
+            "status": {"enum": ["specified", "declined", "unknown", "absent"]},
+            "value": {"type": ["string", "null"]}
+          }
+        }
+      ]
+    },
+    "rule": {
+      "$comment": "Closed at the object level; the conditionals below close it again per predicate, so a field the predicate does not read is an unknown field, and per concept, so expected and every forbidden value have the concept's own shape.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "rule_id",
+        "version",
+        "case_id",
+        "checkpoint",
+        "concept",
+        "expected",
+        "required"
+      ],
+      "properties": {
+        "rule_id": {"type": "string", "pattern": "^A-I[0-9]{2}$"},
+        "version": {
+          "type": "string",
+          "pattern": "^(?:0|[1-9][0-9]*)\\.(?:0|[1-9][0-9]*)\\.(?:0|[1-9][0-9]*)$"
+        },
+        "case_id": {"type": "string", "pattern": "^CTP-[A-Z0-9]{3,16}$"},
+        "checkpoint": {"$ref": "#/$defs/checkpoint"},
+        "concept": {"$ref": "#/$defs/concept"},
+        "expected": {"type": "object"},
+        "required": {"type": "boolean"},
+        "predicate": {"$ref": "#/$defs/predicate"},
+        "forbidden": {
+          "$comment": "not_coerced only: the closed set of typed values, in fixture tokens, whose presence status and scalar the observation must not carry. Each entry has the concept's own shape, but only its status and scalar are compared: an X recorded sex or gender rewritten to the F this set names is a coercion whether or not the boundary also rewrote the record's context or source. A different context on the faithful value is not a coercion; that is the exact predicate's claim.",
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 16,
+          "items": {"type": "object"}
+        },
+        "expected_count": {
+          "$comment": "record_count only: how many distinct records the boundary must still carry.",
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 64
+        },
+        "preserved_from": {
+          "$comment": "preserved_across only: the checkpoint whose value must reappear unchanged at checkpoint.",
+          "$ref": "#/$defs/checkpoint"
+        }
+      },
+      "allOf": [
+        {
+          "if": {"required": ["predicate"], "properties": {"predicate": {"const": "not_coerced"}}},
+          "then": {"required": ["forbidden"]},
+          "else": {"properties": {"forbidden": false}}
+        },
+        {
+          "if": {"required": ["predicate"], "properties": {"predicate": {"const": "record_count"}}},
+          "then": {"required": ["expected_count"]},
+          "else": {"properties": {"expected_count": false}}
+        },
+        {
+          "if": {"required": ["predicate"], "properties": {"predicate": {"const": "preserved_across"}}},
+          "then": {"required": ["preserved_from"]},
+          "else": {"properties": {"preserved_from": false}}
+        },
+        {
+          "if": {
+            "required": ["predicate"],
+            "properties": {"predicate": {"enum": ["present", "status_preserved"]}}
+          },
+          "then": {
+            "properties": {
+              "concept": {"enum": ["gender_identity", "name_to_use", "pronouns"]}
+            }
+          }
+        },
+        {
+          "if": {"required": ["predicate"], "properties": {"predicate": {"const": "not_overwritten_by"}}},
+          "then": {"properties": {"concept": {"const": "gender_identity"}}}
+        },
+        {
+          "if": {"properties": {"concept": {"const": "gender_identity"}}},
+          "then": {
+            "properties": {
+              "expected": {"$ref": "#/$defs/genderIdentity"},
+              "forbidden": {"items": {"$ref": "#/$defs/genderIdentity"}}
+            }
+          }
+        },
+        {
+          "if": {"properties": {"concept": {"const": "recorded_sex_or_gender"}}},
+          "then": {
+            "properties": {
+              "expected": {"$ref": "#/$defs/recordedSexOrGender"},
+              "forbidden": {"items": {"$ref": "#/$defs/recordedSexOrGender"}}
+            }
+          }
+        },
+        {
+          "if": {"properties": {"concept": {"const": "sex_parameter_for_clinical_use"}}},
+          "then": {
+            "properties": {
+              "expected": {"$ref": "#/$defs/spcu"},
+              "forbidden": {"items": {"$ref": "#/$defs/spcu"}}
+            }
+          }
+        },
+        {
+          "if": {"properties": {"concept": {"const": "name_to_use"}}},
+          "then": {
+            "properties": {
+              "expected": {"$ref": "#/$defs/nameToUse"},
+              "forbidden": {"items": {"$ref": "#/$defs/nameToUse"}}
+            }
+          }
+        },
+        {
+          "if": {"properties": {"concept": {"const": "pronouns"}}},
+          "then": {
+            "properties": {
+              "expected": {"$ref": "#/$defs/pronouns"},
+              "forbidden": {"items": {"$ref": "#/$defs/pronouns"}}
+            }
+          }
+        }
+      ]
+    }
+  }
+}

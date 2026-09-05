@@ -1,0 +1,41 @@
+# Secret-scan configuration (SEC-19).
+#
+# The default gitleaks ruleset, plus the narrowest allowlist that makes it
+# usable on a repository whose subject matter is synthetic identity tokens.
+# Every entry below is a false positive that was verified by hand, and each
+# carries the reason it is one. Nothing here suppresses a rule wholesale, and
+# nothing here is scoped by path: `tools/secret-scan-full-history.sh` phase 2
+# scans blobs written out under their object id, where no path exists, so a
+# path-scoped exemption would silently stop applying in the phase that exists
+# to catch what the other two cannot see.
+#
+# Adding an entry is a change to what this gate can see. It needs the same
+# review as changing the gate itself, and it belongs in this file rather than
+# in a `gitleaks:allow` comment beside the line, so that the whole exemption
+# set can be read in one place.
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = """
+Synthetic fixture tokens and one keyword argument, each verified by hand.
+"""
+
+regexes = [
+  # This project's published synthetic-token grammar
+  # (contextsafe.mapping_profile.SYNTHETIC_TOKEN_PATTERN). Every value in this
+  # namespace is invented fixture data by construction: the namespace exists
+  # so that a real identifier cannot be mistaken for one, and the preflight
+  # scanner refuses anything outside it. gitleaks' generic-api-key rule reads
+  # `"token": "CSYN-9876543210"` as a credential; it is the value in
+  # `tests/test_mapping_profile.py` that proves such a value is refused.
+  '''^CSYN-[A-Z0-9][A-Z0-9_.:-]{0,95}$''',
+  '''^fixture-[a-z0-9][a-z0-9-]{0,63}$''',
+
+  # `max_length=96`, matched because the assignment sits after a constant whose
+  # name contains TOKEN (`SOURCE_TOKEN_PATTERN, max_length=96`). A bound on a
+  # string length is not a credential, and this shape is narrow enough that it
+  # cannot hide one.
+  '''^max_length=[0-9]{1,4}$''',
+]

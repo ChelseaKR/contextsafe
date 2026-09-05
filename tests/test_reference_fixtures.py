@@ -36,6 +36,12 @@ NUMBER_WORDS = (
     "twelve",
     "thirteen",
     "fourteen",
+    "fifteen",
+    "sixteen",
+    "seventeen",
+    "eighteen",
+    "nineteen",
+    "twenty",
 )
 
 
