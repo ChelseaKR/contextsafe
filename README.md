@@ -1127,6 +1127,9 @@ A successful v1 allows one design partner to:
 - [ADR 0010: the signing layer, its first dependency and its trust model (proposed, decision pending)](docs/adr/0010-signing-layer-dependency-and-trust-model.md)
 - [ADR 0011: the dependency audit stays in the merge gate and says when it could not reach the advisory service](docs/adr/0011-dependency-audit-reachability-in-the-merge-gate.md)
 - [ADR 0012: a partial parse is a failure to examine, and the syntax that follows from it](docs/adr/0012-sast-partial-parse-and-the-syntax-it-forbids.md)
+- [ADR 0013: what the pattern gate closes, and what still needs a hand-written pin (proposed, decision pending)](docs/adr/0013-the-pattern-gate-is-one-layer-of-two.md)
+- [ADR 0014: what a derived column may assert about an item's state (proposed, decision pending)](docs/adr/0014-what-a-derived-status-column-may-assert.md)
+- [ADR 0015: what a narrowing costs before the first tag (proposed, decision pending)](docs/adr/0015-narrowing-a-published-contract-before-release.md)
 
 ## Working principles
 

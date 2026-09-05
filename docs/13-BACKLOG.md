@@ -1269,6 +1269,22 @@ carries each figure over what it is, and a test in
 `tests/test_seeded_faults.py` pins the whole sentence rather than its
 per-status numbers, so the arithmetic behind it cannot drift again in silence.
 
+Implementation note (2026-09-05, #109, #110, #111): three questions written
+down as decision records instead of answered by a commit. ADR 0015 covers the
+mapping-profile contract that narrowed at #66 without its version moving, and
+what the published versioning rule should say about a narrowing before the
+first tag; it counts the radius of a bump rather than estimating it. ADR 0013
+covers whether `make patterns` may be cited as closing the #58 class or is one
+layer of two, with the identity check the hand-written per-field pins do and
+the gate does not. ADR 0014 covers what the backlog's own derived `Status`
+column may assert, given that `tools/claims_gate.py` types the word `Open` and
+will refuse a truthful `Closed` the day an item earns one. All three are
+`Status: proposed`, each recommends one option and says why, and none of them
+records a decision as made — the recommendation is the argument, not the
+answer. This note deliberately names no backlog item: no item moved, so no
+derived status cell moves with it, and none of the three records claims work
+against an acceptance statement.
+
 ## Phase 6 — pilot and v1
 
 | ID | Trace | Deliverable and acceptance | Owner | Dependency | Estimate | Status |

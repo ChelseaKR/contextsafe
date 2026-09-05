@@ -966,6 +966,39 @@ rather than after it.
 
 ### Added
 
+- **Three decision records for three open questions, each proposed and none
+  decided.** #109, #110 and #111 each ask for a judgment that belongs to the
+  maintainer, and each is now a record laying out the options, what they cost,
+  and a recommendation, rather than a change that answers the question by
+  arriving:
+  [ADR 0013](docs/adr/0013-the-pattern-gate-is-one-layer-of-two.md) on what
+  `make patterns` closes and what still needs a hand-written pin,
+  [ADR 0014](docs/adr/0014-what-a-derived-status-column-may-assert.md) on what
+  a derived column may assert about an item's state, and
+  [ADR 0015](docs/adr/0015-narrowing-a-published-contract-before-release.md) on
+  what a narrowing costs before the first tag. All three carry
+  `Status: proposed`, and nothing else in the tree moved: no contract version,
+  no gate, no test, no fixture, and no status cell. Each names what it does not
+  decide, and the README's ADR list — which `make claims` re-derives — carries
+  all three as pending.
+
+  The measurements each record stands on were taken from this tree on
+  2026-09-05 rather than recalled. ADR 0015 counts the radius of a
+  mapping-profile version bump (one schema file and `$id`, three sibling
+  contracts naming it, one runtime constant and its acceptance check, five
+  packaged reference profiles, sixteen of the seventeen negative fixtures, and
+  six pinned digests in `tests/test_determinism.py`). ADR 0013 quotes the
+  pattern gate's own clean line — 51 distinct patterns in 168 places across 22
+  contracts — and the gate's boundary test, which requires a published pattern
+  swapped for an unrelated runtime grammar to pass. ADR 0014 quotes
+  `backlog_status` and the test that pins a `Closed` cell as a finding, and
+  records one further defect it deliberately does not patch: the "carries no
+  status cell" message takes the last split cell rather than the `Status`
+  column by header index, so a row that drops the column reports its Estimate
+  as its status. Both cases are findings, so nothing reports clean over
+  anything; the fix lands with whichever option is accepted, because all three
+  change or remove the column.
+
 - **What `make verify` costs, measured and recorded in
   [`docs/18-ASSURANCE-PROGRAM.md`](docs/18-ASSURANCE-PROGRAM.md) (issue #93).**
   The gate's wall time had roughly doubled over the 2026-09 wave, and the issue
