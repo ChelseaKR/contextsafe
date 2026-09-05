@@ -608,9 +608,14 @@ def _read_rows(table: LisTable, case: SyntheticCase, source_sha256: str) -> _Rea
     unobserved = 0
     results: list[LaboratoryResult] = []
     for row_index, row in enumerate(table.rows):
+        # Every cell is checked from the header/row pairs, never from a
+        # mapping of them: a mapping keyed by column name would collapse a
+        # repeated column and leave the collapsed cell unchecked, uncounted,
+        # and unscanned. A repeated column is refused before this runs, and
+        # this loop does not depend on that refusal.
         cells = dict(zip(table.columns, row, strict=True))
         result_cells = 0
-        for column, cell in cells.items():
+        for column, cell in zip(table.columns, row, strict=True):
             path = f"$.rows[{row_index}].{column}"
             _check_cell(cell, path)
             if column == LIS_PROFILE.case_column:
@@ -674,6 +679,23 @@ def _require_lis_checkpoint(checkpoint: Checkpoint) -> None:
         )
 
 
+def _require_distinct_columns(table: LisTable) -> None:
+    """Refuse a table whose header repeats a column, whoever built it.
+
+    The file readers reject a repeated header before a cell is read, and
+    ``convert_table`` is an entry point of its own: a caller that hands it a
+    table directly gets the same refusal, rather than a row whose repeated
+    column collapses into one cell and leaves the other unchecked.
+    """
+
+    if len(set(table.columns)) != len(table.columns):
+        raise import_error(
+            ImportErrorCode.COLUMN_DUPLICATE,
+            "$.header",
+            "a column appears more than once",
+        )
+
+
 def convert_table(
     table: LisTable,
     *,
@@ -685,10 +707,12 @@ def convert_table(
 ) -> ImportResult:
     """Convert one table whole, or raise and produce nothing.
 
-    Every cell is bounded, checked for a formula prefix, and boundary
-    scanned; the case column is cross-checked against the case document;
-    identity cells are typed; result cells are held to their grammars and
-    either counted or built into a laboratory result. Then one observation
+    A header that repeats a column is refused here as well as at each
+    reader, so no cell of a repeated column can go unchecked. Every cell is
+    bounded, checked for a formula prefix, and boundary scanned; the case
+    column is cross-checked against the case document; identity cells are
+    typed; result cells are held to their grammars and either counted or
+    built into a laboratory result. Then one observation
     is built per distinct value per identity column, and both documents are
     re-validated by their own contracts, so a value this module typed and a
     contract rejects (an unsupported RSG value, a bound outside the decimal
@@ -696,6 +720,7 @@ def convert_table(
     """
 
     _require_lis_checkpoint(checkpoint)
+    _require_distinct_columns(table)
     read = _read_rows(table, case, source_sha256)
     distinct = tuple(
         (column, cell, row_index)

@@ -62,6 +62,8 @@ from contextsafe.divergence import ConceptDivergence, compute_divergence
 from contextsafe.errors import ContextSafeError
 from contextsafe.evaluator import Outcome, evaluate
 from contextsafe.laboratory import (
+    AFFIRMATIVE_RESULT_REASONS,
+    REASON_STATUSES,
     ResultOutcome,
     ResultOutcomeReason,
     evaluate_results,
@@ -324,6 +326,38 @@ vocabulary; there is no receipt and therefore no divergence entry to locate,
 which is what ``exercised outside the receipt`` says.
 """
 
+LABORATORY_RULE_ASSERTIONS: dict[str, frozenset[str]] = {
+    "A-L01": frozenset({"A-025"}),
+    "A-L02": frozenset({"A-026"}),
+    "A-L03": frozenset({"A-027", "A-029"}),
+    "A-L04": frozenset({"A-028", "A-030"}),
+}
+"""Which assertions each laboratory predicate is offered as mechanism for.
+
+Restated from the B-025/B-030 implementation note in ``docs/13-BACKLOG.md``,
+which names the assertion behind each predicate. It says what a predicate is
+offered *for*, never that the assertion is proved: none of these is a
+governed assertion, because the approved bounds, the age band, and the
+effective oracle version they would need are the laboratory oracle's to
+supply (B-011).
+"""
+
+REPORTED_BY_ANOTHER_ASSERTION: tuple[str, ...] = ("F-020",)
+"""Laboratory faults no predicate for their declared assertion reports.
+
+F-020 mutates the interval bounds, and its library row names A-027. Over the
+faulted fixture ``reference_interval_present`` -- the only mechanism for
+A-027 here -- passes, because both bounds, both inclusivities, and a unit
+that fits the value are all present, which is the whole of what that
+predicate checks. What reports the fault is A-L04, the A-028/A-030 flag
+predicate, and only because the fixture left a flag the moved bounds
+contradict. Comparing returned bounds against approved ones needs the
+oracle (B-011). The set is derived from the table above and compared with
+this tuple, and every member has to be disclosed in the docs/09 corpus
+status section, so a row can never quietly count a detection the mechanism
+does not make.
+"""
+
 _LAB_MISSING = (MissingItem.LABORATORY_ORACLE, MissingItem.LABORATORY_RECEIPT)
 """What a laboratory row still waits on once its predicate exists.
 
@@ -578,7 +612,10 @@ MATRIX: tuple[FaultRow, ...] = (
 
 An exercised row may still name a missing item: F-001 is reported at the
 EHR as a value change, not at a patient-facing display (A-006); F-035
-proves the identity moves, not that a verifier would notice a claimed one.
+proves the identity moves, not that a verifier would notice a claimed one;
+and F-020 is reported by the flag predicate rather than by the assertion its
+library row names, which ``REPORTED_BY_ANOTHER_ASSERTION`` says and docs/09
+has to disclose.
 """
 
 MATRIX_DATE = "2026-09-04"
@@ -1241,6 +1278,14 @@ def _doc_lines() -> list[str]:
     return TEST_PLAN.read_text(encoding="utf-8").splitlines()
 
 
+def _corpus_status_section() -> str:
+    """The dated corpus-status section of docs/09, whitespace collapsed."""
+
+    text = TEST_PLAN.read_text(encoding="utf-8")
+    start = text.index(f"### Corpus status, {MATRIX_DATE}")
+    return " ".join(text[start : text.index("## 5.", start)].split())
+
+
 _LIBRARY_ROW = re.compile(r"^\| (F-0\d\d) \| ([^|]+) \| ([^|]+) \|$")
 _STATUS_ROW = re.compile(r"^\| (F-0\d\d) \| ([^|]+) \| ([^|]+) \| ([^|]+) \|$")
 _COUNTS = re.compile(
@@ -1372,9 +1417,7 @@ def test_the_readme_carries_one_current_count_and_older_slices_defer_to_it() -> 
 def test_the_docs_say_what_this_corpus_is_not() -> None:
     """The disclaimers B-048 requires travel with the table, not only with this file."""
 
-    text = TEST_PLAN.read_text(encoding="utf-8")
-    start = text.index(f"### Corpus status, {MATRIX_DATE}")
-    section = " ".join(text[start : text.index("## 5.", start)].split())
+    section = _corpus_status_section()
     for phrase in (
         "not the 41-fault evaluation",
         "no hidden-fault set",
@@ -1519,8 +1562,14 @@ def test_each_laboratory_fault_is_reported_by_its_predicate_and_never_as_pass(
     assert detector.status is OutcomeStatus.FAIL
     assert detector.reason is reason
     assert detector.observed_sha256s
-    assert all(
-        item.status is not OutcomeStatus.PASSED for item in outcomes if item is detector
+    # "never as pass" is a property of every outcome of the faulted fixture,
+    # not of the detector alone: no outcome may sit under a status its reason
+    # does not admit, which is what keeps a `pass` out of a finding reason and
+    # a finding out of an affirmative one, on the three rules the fault is not
+    # aimed at as much as on the one it is.
+    assert all(item.status in REASON_STATUSES[item.reason] for item in outcomes)
+    assert AFFIRMATIVE_RESULT_REASONS.isdisjoint(
+        item.reason for item in outcomes if item.rule_id == rule_id
     )
 
 
@@ -1577,6 +1626,44 @@ def test_every_laboratory_row_names_its_detector_and_reason() -> None:
         assert rule_id in evidence
         assert f"`{reason.value}`" in evidence
         assert by_fault[fault].missing == _LAB_MISSING
+
+
+def test_a_laboratory_fault_its_declared_assertion_misses_is_disclosed() -> None:
+    """A row may not count a detection its declared assertion does not make.
+
+    F-020's library row names A-027, and the only mechanism for A-027 here
+    passes over the faulted fixture: what reports the fault is the A-028/A-030
+    flag predicate, and only because the fixture left a flag the moved bounds
+    contradict. That is disclosable, not countable in silence, so the docs/09
+    corpus status section has to name the fault, the assertion its row
+    declares, the assertions that actually fire, and the predicate that
+    passes over the faulted fixture. The set is derived here rather than
+    read from the prose, so a new laboratory row of this shape fails until
+    it is disclosed too.
+    """
+
+    section = _corpus_status_section()
+    reported_elsewhere = []
+    for fault, (_mutation, assertion, rule_id, _reason) in LABORATORY_DETECTION.items():
+        declared = frozenset(assertion.split("/"))
+        if declared & LABORATORY_RULE_ASSERTIONS[rule_id]:
+            continue
+        reported_elsewhere.append(fault)
+        passing = sorted(
+            item.predicate.value
+            for item in _laboratory_outcomes(LABORATORY / f"{fault}.json")
+            if item.status is OutcomeStatus.PASSED
+            and declared & LABORATORY_RULE_ASSERTIONS[item.rule_id]
+        )
+        assert passing, fault
+        for phrase in (
+            fault,
+            *sorted(declared),
+            *sorted(LABORATORY_RULE_ASSERTIONS[rule_id]),
+            *passing,
+        ):
+            assert phrase in section, (fault, phrase)
+    assert reported_elsewhere == list(REPORTED_BY_ANOTHER_ASSERTION)
 
 
 def test_no_laboratory_fixture_carries_a_real_analyte_unit_or_range() -> None:

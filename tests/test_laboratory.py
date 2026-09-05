@@ -580,10 +580,12 @@ def test_the_family_names_no_gender_harmony_concept_anywhere() -> None:
     source = (ROOT / "src" / "contextsafe" / "laboratory.py").read_text(
         encoding="utf-8"
     )
-    result = _result()
+    # Rendered, not as a mapping: `in` over a dict reads its keys only, and
+    # a concept name would be as wrong in an analyte code or a flag as in a
+    # field name.
+    documents = canonical_json(_result_set()) + canonical_json(_rule_set())
     for concept in ConceptKind:
-        assert concept.value not in result
-        assert concept.value not in _rule()
+        assert concept.value not in documents
     assert "ConceptKind" not in source.split('"""', 2)[2]
 
 

@@ -331,7 +331,9 @@ The predicates, all ungoverned mechanism: `result_linked` (A-025 — the
 order and specimen are the ones the rule declares; the case half is a
 refusal at parse and the analyte half is A-026's),
 `analyte_value_unit_preserved` (A-026, exact, so `4.10` and `4.100` are one
-quantity and two round trips), `reference_interval_present` (A-027/A-029 — bounds,
+quantity and two round trips; three of the four things A-026 names, because
+the family carries no result status and nothing here decides whether one
+survived), `reference_interval_present` (A-027/A-029 — bounds,
 inclusivity and a unit that fits the value; a blank interval is a `fail`,
 one in an unreadable dialect is `indeterminate`, and one in another unit is
 a `fail`), and `flag_consistent_with_interval` (A-028/A-030 — the flag the
@@ -367,6 +369,15 @@ F-033 with a clean counterpart each under
 `tests/fixtures/laboratory/seeded-faults/`. The corpus matrix gains a
 fourth status, `exercised outside the receipt`, and reads 12 exercised at
 receipt level, 7 exercised outside it, 7 refused, 10 not yet exercisable.
+One of those seven, F-020, is reported by an assertion other than the one
+its library row names: `reference_interval_present` passes over the faulted
+fixture, because both bounds, both inclusivities and a fitting unit are all
+there, and what fails is the A-028/A-030 flag predicate, only because the
+fixture left a flag the moved bounds contradict. `docs/09` says so in the
+corpus status section, and a test derives the set from the corpus table so
+a later row of that shape cannot be counted without the same disclosure.
+Comparing returned bounds against approved ones is the oracle's job
+(B-011).
 
 **What remains ungoverned, and what this does not close.** Nothing here is
 clinical content. Every analyte code, unit, bound, inclusivity and flag is

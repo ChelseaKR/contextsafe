@@ -93,8 +93,9 @@ laboratory medical director still supplies the real fixture values, exactly
 as this section says, and until that happens the shipped fixtures are
 software-test data and nothing else. The age band and effective oracle
 version this section requires are not carried by the shipped family at all,
-which is one of the reasons no rule written in it can be a governed
-assertion.
+and neither is the result status A-026 names, so each predicate decides
+less than the assertion it is offered for -- which is one of the reasons no
+rule written in it can be a governed assertion.
 
 The family is a separate observation kind rather than a sixth concept: the
 five Gender Harmony concepts are unchanged, no result field is read as or
