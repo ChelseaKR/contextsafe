@@ -4,12 +4,9 @@ Every file here is a JSON Schema Draft 2020-12 contract for one ContextSafe
 document shape. They are the published half of the fail-closed boundary: the
 runtime has no dependencies and does not validate its own output at run time,
 so these files are what a consumer validates against, and
-`tests/test_contracts.py` and `tests/test_receipt_schema.py` are what keep them
-in agreement with the code. There are nineteen contracts:
-
 `tests/test_contracts.py`, `tests/test_receipt_schema.py`, and
 `tests/test_receipt_delta_schema.py` are what keep them in agreement with the
-code.
+code. There are nineteen contracts:
 
 | Contract | Shape |
 | --- | --- |
@@ -29,22 +26,18 @@ code.
 | `contextsafe-lis-export-v0.1.schema.json` | the synthetic LIS export identity profile `import --format lis-json` reads; reference-only, ungoverned, result columns recognized but not observed |
 | `contextsafe-mapping-profile-v1.schema.json` | a versioned mapping profile: one importer format's token table, from source token to canonical concept and value; reference-only, the only review status is `not_reviewed`, and no row may reach SPCU from GI or RSG |
 | `contextsafe-compiled-mapping-profile-v1.schema.json` | the unsigned compiled mapping profile `mapping validate` emits: the canonical profile and its digest, `signature_status: not_verified`, `executable: false` |
+| `contextsafe-receipt-delta-v0.1.schema.json` | the envelope-free delta between two compatible receipt documents (reference-only, ungoverned) |
+| `contextsafe-review-event-v1.schema.json` | one declared, unverified review decision about one receipt outcome; `$defs/log_record` is one line of the append-only review log |
+| `contextsafe-review-state-v1.schema.json` | the disposition per outcome that `finding list` derives from a review log |
 
-That is nineteen contracts. The LIS export profile and the mapping profile are
+That is nineteen contracts, and `make claims` fails when this file and the
+directory disagree. The LIS export profile and the mapping profile are
 *input* shapes rather than output ones: they say what `contextsafe import
 --format lis-json` and `contextsafe import --mapping` will read, and
 `tests/test_lis_export_schema.py` and `tests/test_mapping_profile_schema.py`
 keep each in agreement with the runtime's allowlists and grammars. Neither
 is a claim that any laboratory system exports this shape or that any
 interoperability reviewer has approved a mapping.
-
-| `contextsafe-receipt-delta-v0.1.schema.json` | the envelope-free delta between two compatible receipt documents (reference-only, ungoverned) |
-
-| `contextsafe-review-event-v1.schema.json` | one declared, unverified review decision about one receipt outcome; `$defs/log_record` is one line of the append-only review log |
-| `contextsafe-review-state-v1.schema.json` | the disposition per outcome that `finding list` derives from a review log |
-
-The table above is the complete set: 13 contracts, and `make claims` fails
-when this file and the directory disagree.
 
 ## Why every `$id` is under a domain that will never resolve
 
@@ -59,10 +52,6 @@ for resolving references, and the name a consumer uses to talk about the
 contract — and nothing here is dereferenced: no code in this repository fetches
 a schema over the network, and the `$ref`s inside these files are all local
 (`#/$defs/...`).
-
-This was not always consistent. Five of the eleven that existed then claimed
-
-This was not always consistent. Five of the twelve contracts previously claimed
 
 This was not always consistent. Five of the contracts that existed at the time claimed
 `$id` under `contextsafe.dev`, a domain nobody had registered. That is a real
@@ -98,6 +87,18 @@ The receipt contract went from 0.1 to 0.2 this way when the rule-set predicates
 added outcome reasons, so a consumer pinned to the 0.1 `$id` rejects a 0.2
 receipt on its `schema_version` rather than accepting a reason it has never
 seen, and from 0.2 to 0.3 when the divergence section and the outcome trace
-were added as required fields. The rule-set contract's 0.1.0 shape is the one exception to "one file per
+were added as required fields.
+
+When a published contract narrows to the grammar the runtime already enforced,
+the version does not move and the definition records the date and the issue
+instead: the file was stating something the validator refused, so no document
+that was accepted has stopped being accepted, and a consumer pinned to that
+`$id` gains nothing by being handed a document the runtime would reject at the
+door. The receipt contract's `structural_pointer` narrowed that way on
+2026-09-04 — one `maxLength`, the JSON Pointer depth, and the HL7 segment
+name — and the receipt stayed at 0.3 (#72). A narrowing that refuses something
+the runtime accepts is not this case and moves the version like a widening.
+
+The rule-set contract's 0.1.0 shape is the one exception to "one file per
 contract": it predates the published schemas, is still accepted unchanged by
 the runtime and pinned by the pack contract, and has no file here.

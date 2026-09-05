@@ -75,6 +75,80 @@ def test_the_observation_contracts_share_one_source_pointer_grammar() -> None:
     assert grammar.fullmatch("/") is None
 
 
+ANNOTATION_KEYWORDS = frozenset(
+    {"$comment", "description", "title", "examples", "deprecated"}
+)
+"""JSON Schema keywords that say something to a reader and nothing to a validator."""
+
+
+def _constraints(node: object) -> object:
+    """Return ``node`` with every annotation dropped, at every depth.
+
+    Two contracts may describe the same block in different words -- each says
+    when and why it was widened -- and must not differ in what they accept.
+    """
+
+    if isinstance(node, dict):
+        return {
+            key: _constraints(value)
+            for key, value in node.items()
+            if key not in ANNOTATION_KEYWORDS
+        }
+    if isinstance(node, list):
+        return [_constraints(item) for item in node]
+    return node
+
+
+def _mapping_block(name: str) -> object:
+    schema = json.loads((ROOT / "schemas" / name).read_text(encoding="utf-8"))
+    return schema["$defs"]["mapping"]
+
+
+def test_the_observation_contracts_share_one_mapping_block() -> None:
+    """A mapping one contract admits is a mapping the other admits.
+
+    B-026 gave the observation-set contract an optional
+    ``profile_sha256``/``profile_version`` pair and did not give it to the
+    sibling ``contextsafe-observation-v1``, which carries a ``mapping``
+    definition for the same field. Harmless while it lasted -- that contract
+    describes an unimplemented shape no emitted document satisfies -- and drift
+    all the same, on a field the two contracts share, which is the thing this
+    module exists to stop (#69).
+
+    Compared constraint for constraint rather than byte for byte: each file's
+    ``$comment`` records its own history, and neither of those decides a
+    document.
+    """
+
+    published = _mapping_block("contextsafe-observation-set-v0.1.schema.json")
+    assert _constraints(_mapping_block("contextsafe-observation-v1.schema.json")) == (
+        _constraints(published)
+    )
+
+
+def test_the_shared_mapping_block_admits_a_profile_pair_only_as_a_pair() -> None:
+    """The widening is a pair: a digest without its version is not a mapping."""
+
+    for name in (
+        "contextsafe-observation-set-v0.1.schema.json",
+        "contextsafe-observation-v1.schema.json",
+    ):
+        block = _mapping_block(name)
+        assert isinstance(block, dict)
+        validator = Draft202012Validator(block)
+        base = {
+            "source_concept": "pronouns",
+            "target_concept": "pronouns",
+            "mapping_version": "1.0.0",
+        }
+        assert validator.is_valid(base)
+        assert validator.is_valid(
+            {**base, "profile_sha256": "a" * 64, "profile_version": "0.2.0"}
+        )
+        assert not validator.is_valid({**base, "profile_sha256": "a" * 64})
+        assert not validator.is_valid({**base, "profile_version": "0.2.0"})
+
+
 def _assert_code(code: str, call: Any, value: object) -> None:
     with pytest.raises(ContextSafeError) as caught:
         call(value)

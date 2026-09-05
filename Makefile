@@ -1,8 +1,8 @@
-.PHONY: a11y a11y-full a11y-install audit claims format format-fix hygiene i18n lint mutants package publication-sweep scope secret-scan sync test typecheck verify
+.PHONY: a11y a11y-full a11y-install audit claims format format-fix hygiene i18n lint mutants package patterns publication-sweep scope secret-scan sync test typecheck verify
 
 SAFETY_MODULES := src/contextsafe/identifiers.py,src/contextsafe/models.py,src/contextsafe/validation.py,src/contextsafe/evaluator.py,src/contextsafe/receipt.py,src/contextsafe/contract_validation.py,src/contextsafe/jsonio.py,src/contextsafe/pack.py,src/contextsafe/plan.py,src/contextsafe/evidence.py,src/contextsafe/preflight.py,src/contextsafe/evidence_store.py,src/contextsafe/safe_value.py,src/contextsafe/diagnostics.py,src/contextsafe/eventlog.py,src/contextsafe/importers/__init__.py,src/contextsafe/importers/base.py,src/contextsafe/importers/canonical_json.py,src/contextsafe/importers/fhir_r4_json.py,src/contextsafe/importers/hl7v2_er7.py,src/contextsafe/importers/lis.py,src/contextsafe/importers/lis_csv.py,src/contextsafe/importers/mapping.py,src/contextsafe/mapping_profile.py,src/contextsafe/divergence.py,src/contextsafe/html_receipt.py,src/contextsafe/receipt_delta.py,src/contextsafe/review.py
 
-verify: sync lint format typecheck test audit hygiene scope publication-sweep i18n a11y claims
+verify: sync lint format typecheck test audit hygiene scope patterns publication-sweep i18n a11y claims
 
 sync:
 	# --locked fails when uv.lock has drifted from pyproject.toml.
@@ -46,6 +46,18 @@ secret-scan:
 # the editable install with PYTHONPATH.
 mutants:
 	uv run python tools/mutation_gate.py
+
+# Every `pattern` in every `.json` file under `schemas/`, at any depth, against
+# the constants the runtime compiles. The published half of a grammar and the
+# enforced half were two statements of one rule with nothing holding them
+# together, which is what #58 cost. Not a test, because a test pins the patterns
+# somebody remembered; this enumerates them and fails on one nothing is behind.
+# Recursively and by suffix: a flat glob reports clean over a contract in a
+# subdirectory, which is the same false green one level up. Stdlib plus the
+# package itself, so it costs `verify` nothing, and it exits 2 rather than 0
+# when it read no contract or found a file under `schemas/` it cannot place.
+patterns:
+	uv run python tools/pattern_gate.py
 
 # Keeps the publication-readiness sweep true as commits land, instead of true
 # as of the day somebody ran it by hand. Stdlib only, so it costs `verify`

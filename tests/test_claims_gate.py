@@ -117,8 +117,8 @@ def test_a_documented_stage_verify_does_not_run_is_a_finding(repo: Path) -> None
     _edit(
         repo,
         "README.md",
-        "hygiene scope publication-sweep",
-        "hygiene scope mystery publication-sweep",
+        "publication-sweep i18n",
+        "publication-sweep mystery i18n",
     )
     findings = gate.run_gate(repo)
     assert [f.where for f in findings] == ["README.md"]

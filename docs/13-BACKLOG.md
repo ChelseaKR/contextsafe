@@ -369,7 +369,8 @@ reference case's own value is `they/them`) is a reference-only choice no
 community reviewer has confirmed; the `mapping sign` command, a signer key,
 a trust manifest, and the enrolled ContextSafe interoperability reviewer it
 needs all wait on B-035; and the sibling `contextsafe-observation-v1`
-contract, which no runtime parser reads, carries no profile binding.
+contract, which no runtime parser reads, carried no profile binding until the
+note below.
 
 Implementation note (2026-09-04, B-026 corrections): five defects adversarial
 review of B-026 found, none of which a gate would have caught. The
@@ -425,6 +426,24 @@ field's meaning does not depend on where in the command the failure landed.
 That widened the event record's field set, so its schema version moved to
 `contextsafe.event-log/0.2.0`; no new output document was invented, and
 whether an import report is ever published stays the maintainer's decision.
+
+Implementation note (2026-09-04, #69, #72, #73): the three published contracts
+that had drifted from the runtime are pinned to it. `contextsafe-observation-v1`
+carries the same `mapping` block as `contextsafe-observation-set-v0.1`,
+including the optional `profile_sha256`/`profile_version` pair B-026 added to
+one file and not the other, and `tests/test_contracts.py` compares the two
+blocks constraint for constraint so the next widening cannot land in one file
+alone. The receipt contract's `structural_pointer` states the bounds the
+validator applies rather than a longer one of its own: 128 characters, sixteen
+RFC 6901 reference tokens, and an HL7 dialect rooted only in a vocabulary word
+shaped like a segment name. And `make patterns` (`tools/pattern_gate.py`) is a
+new stage of `make verify` that enumerates every `pattern` in every `.json`
+file under `schemas/`, at any depth, and fails on one no runtime constant is
+behind, which is the gate that would have
+caught the #58 name-target defect. None of this is a governance change: no
+contract version moved, no fixture changed, every pattern that moved narrowed
+to what the runtime already enforced, and no reviewer, approval, or status is
+claimed anywhere in it.
 
 Implementation note (2026-09-04, B-028): the identity, name-to-use, pronoun,
 and recorded-sex-or-gender predicates of A-005 and A-008 to A-015 exist as

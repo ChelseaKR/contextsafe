@@ -401,6 +401,15 @@ def _scope_unavailable(tmp_path: Path) -> int:
     return int(gate.main(["--root", str(_empty_repo(tmp_path / "scope"))]))
 
 
+def _patterns_unavailable(tmp_path: Path) -> int:
+    """No published contract to read: nothing was compared, so nothing is clean."""
+
+    gate = _load("pattern_gate")
+    root = tmp_path / "patterns"
+    root.mkdir(parents=True, exist_ok=True)
+    return int(gate.main(["--root", str(root)]))
+
+
 def _sweep_unavailable(tmp_path: Path) -> int:
     gate = _load("publication_sweep")
     repo = tmp_path / "sweep"
@@ -468,6 +477,7 @@ UNAVAILABLE_CASES: tuple[tuple[str, Callable[[Path], int]], ...] = (
     ("tools/hygiene_gate.py", _hygiene_unavailable),
     ("tools/publication_sweep.py", _sweep_unavailable),
     ("tools/scope_gate.py", _scope_unavailable),
+    ("tools/pattern_gate.py", _patterns_unavailable),
     ("tools/i18n_gate.py", _i18n_unavailable),
     ("tools/a11y_gate.py", _a11y_unavailable),
     ("tools/mutation_gate.py", _mutation_unavailable),
