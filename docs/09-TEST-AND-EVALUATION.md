@@ -86,9 +86,9 @@ F-001–F-036 are reviewed by an independent fault author before the evaluation 
 ### Corpus status, 2026-09-04
 
 The part of B-048 that needs no external person is committed:
-`tests/fixtures/seeded-faults/` and `tests/test_seeded_faults.py` hold, for
-every published fault, one of three things, and the matrix in that test
-module (`MATRIX`) says which. **Exercised** means a complete synthetic fixture
+`tests/fixtures/seeded-faults/`, `tests/fixtures/laboratory/seeded-faults/`
+and `tests/test_seeded_faults.py` hold, for every published fault, one of
+four things, and the matrix in that test module (`MATRIX`) says which. **Exercised** means a complete synthetic fixture
 (case, rule set, and observation set with exactly one fault applied) and tests
 proving the fault is reported as the assertion demands — `fail` with the
 predicate's own reason, or `indeterminate` and `unobserved` where absence is
@@ -98,13 +98,20 @@ input cannot reach evaluation: a fail-closed gate refuses it whole with a
 named code at a structural path, pinned by a fixture under
 `seeded-faults/refused/` or by a named test elsewhere; a refusal is detection
 without a receipt and is counted separately from exercised, never as
-localization. **Not yet exercisable** means nothing here can express or
-decide the fault, and the row names the missing item from a closed
-vocabulary. The mutation and detector columns are compared against the table
+localization. **Exercised outside the receipt** means the fault has a
+complete synthetic fixture and a verdict, from a family no receipt carries:
+the laboratory result predicates (B-030) report the seven laboratory faults
+with their own reasons, and because a laboratory outcome reaches no receipt
+and no divergence section there is no localization to check, so those rows
+are counted apart from the receipt-level ones rather than claiming one.
+Each also has a clean counterpart under `laboratory/seeded-faults/clean/`
+that passes every rule, so the fault and not the rule set is what turned the
+outcome. **Not yet exercisable** means nothing here can express or decide
+the fault, and the row names the missing item from a closed vocabulary. The mutation and detector columns are compared against the table
 above verbatim, and this table is compared row for row against the test data,
 so neither can drift from the other.
 
-As of 2026-09-04: 12 of 36 exercised at receipt level, 7 refused before evaluation, and 17 not yet exercisable.
+As of 2026-09-04: 12 of 36 exercised at receipt level, 7 exercised outside the receipt, 7 refused before evaluation, and 10 not yet exercisable.
 
 This is not the 41-fault evaluation B-048 defines. There is no hidden-fault
 set; no independent fault author has reviewed the corpus and no independent
@@ -116,8 +123,11 @@ exercised row may still name a missing item: F-001 is reported at the EHR as
 a value change, not at a patient-facing display (A-006), and F-035 proves the
 run identity moves with the mapping version, not that a verifier would notice
 a claimed one. Rows waiting on SPCU predicates wait on clinical review, not
-only on code; rows waiting on laboratory results wait on the laboratory lead's
-fixture (B-011) as well as the importer.
+only on code. The seven laboratory rows are decided by an ungoverned
+mechanism over invented fixture values: every analyte, unit, bound, and flag
+in them is a software-test token, no laboratory medical director has supplied
+or approved any of them (B-011), and nothing in those rows is a reference
+range or a clinical claim of any kind.
 
 | Fault | Status | Evidence | Missing item |
 |---|---|---|---|
@@ -137,12 +147,12 @@ fixture (B-011) as well as the importer.
 | F-014 | not yet exercisable | — | SPCU predicates awaiting clinical review (B-029) |
 | F-015 | refused | `refused/F-015.json`: `prohibited_spcu_mapping` at `$.observations[0].mapping` (declared form only; undeclared derivation needs A-020/A-021, B-029) | SPCU predicates awaiting clinical review (B-029) |
 | F-016 | refused | `refused/F-016.json`: `prohibited_spcu_mapping` at `$.observations[0].mapping` (declared form only; undeclared derivation needs A-020/A-021, B-029) | SPCU predicates awaiting clinical review (B-029) |
-| F-017 | not yet exercisable | — | laboratory results (B-011, B-025, B-030) |
-| F-018 | not yet exercisable | — | laboratory results (B-011, B-025, B-030) |
-| F-019 | not yet exercisable | — | laboratory results (B-011, B-025, B-030) |
-| F-020 | not yet exercisable | — | laboratory results (B-011, B-025, B-030) |
-| F-021 | not yet exercisable | — | laboratory results (B-011, B-025, B-030) |
-| F-022 | not yet exercisable | — | laboratory results (B-011, B-025, B-030) |
+| F-017 | exercised outside the receipt | `laboratory/F-017.json`: A-L01 `result_not_linked` at `lis_return` | the laboratory oracle's approved fixture values (B-011); a receipt section for laboratory outcomes (B-030) |
+| F-018 | exercised outside the receipt | `laboratory/F-018.json`: A-L02 `analyte_value_unit_changed` at `lis_return` | the laboratory oracle's approved fixture values (B-011); a receipt section for laboratory outcomes (B-030) |
+| F-019 | exercised outside the receipt | `laboratory/F-019.json`: A-L03 `reference_interval_absent` at `lis_return` | the laboratory oracle's approved fixture values (B-011); a receipt section for laboratory outcomes (B-030) |
+| F-020 | exercised outside the receipt | `laboratory/F-020.json`: A-L04 `flag_inconsistent_with_interval` at `lis_return` | the laboratory oracle's approved fixture values (B-011); a receipt section for laboratory outcomes (B-030) |
+| F-021 | exercised outside the receipt | `laboratory/F-021.json`: A-L04 `flag_missing_out_of_range` at `lis_return` | the laboratory oracle's approved fixture values (B-011); a receipt section for laboratory outcomes (B-030) |
+| F-022 | exercised outside the receipt | `laboratory/F-022.json`: A-L04 `flag_inconsistent_with_interval` at `lis_return` | the laboratory oracle's approved fixture values (B-011); a receipt section for laboratory outcomes (B-030) |
 | F-023 | exercised | `F-023.json`: A-I02 and A-I03 `missing_evidence`; `lis_return` unobserved | — |
 | F-024 | refused | `refused/F-024.json`: `invalid_rsg_value` at `$.observations[0].value.value` | normalizer and adapters (B-022 to B-026) |
 | F-025 | exercised | `F-025.json`: A-I02 `value_changed_across_checkpoints` at `interface`; `ehr` never named | — |
@@ -153,7 +163,7 @@ fixture (B-011) as well as the importer.
 | F-030 | refused | `tests/test_receipt_schema.py::test_stripped_or_padded_limitations_fail_the_contract` | — |
 | F-031 | exercised | `F-031.json`: A-I01 `status_not_preserved` at `ehr` | — |
 | F-032 | refused | `refused/F-032.json`: `case_mismatch` at `$.observations` | authored assertions with validity (B-010) |
-| F-033 | not yet exercisable | — | laboratory results (B-011, B-025, B-030) |
+| F-033 | exercised outside the receipt | `laboratory/F-033.json`: A-L03 `reference_interval_unit_mismatch` at `lis_return` | the laboratory oracle's approved fixture values (B-011); a receipt section for laboratory outcomes (B-030) |
 | F-034 | not yet exercisable | — | signatures and role thresholds (B-035) |
 | F-035 | exercised | `F-035.json`: trace names mapping `0.2.0`; `payload_sha256` moves | receipt verifier (B-036) |
 | F-036 | not yet exercisable | — | review and disposition state machine (B-032) |
@@ -169,11 +179,12 @@ refused as `invalid_support` before evaluation rather than reported, and a
 relinked support is only a changed value, which says nothing about
 traceability; F-002 and F-003 need a legal-name context and a name period, and
 `legal_name` is a prohibited key by design; F-026 would be a hash comparison
-the verifier has to make, and no verifier exists; F-027 needs a result-facing
-display observation and the B-038 presentation pass; and the seven laboratory
-rows have no analyte, interval, unit, or flag in any contract. Stretching any
-of them into an exercised row would count a detection the mechanism does not
-make.
+the verifier has to make, and no verifier exists; and F-027 needs a
+result-facing display observation and the B-038 presentation pass. Stretching
+any of them into an exercised row would count a detection the mechanism does
+not make -- which is also why the seven laboratory rows, whose analyte,
+interval, unit, and flag now exist in a contract of their own, are counted as
+exercised outside the receipt rather than as exercised.
 
 ## 5. Positive and boundary fixtures
 
