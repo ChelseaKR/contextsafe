@@ -93,6 +93,18 @@ Checks
     The README's status line against the iterations the README documents. It
     stopped at four while the file described five.
 
+``measured-cost``
+    The denominators in "What the gate costs, measured" in
+    `docs/18-ASSURANCE-PROGRAM.md`: every stage `verify` runs against the stages
+    that section prices, and the modules in `tests/` against the module table
+    that splits the pytest stage between five named modules and a residual row.
+    That section states shares of two populations, and it stated the second one
+    wrong in two directions at once -- a residual row covering "the other
+    forty-eight modules" of fifty-one, and prose calling the same population
+    fifty. A section whose value is that a later reader can check the arithmetic
+    is the last place a denominator should be typed rather than derived. The
+    seconds are not checkable here and are named in ``UNCOVERED``.
+
 ``backlog-status``
     The `Status` cell of every phase-table row in `docs/13-BACKLOG.md` against
     the implementation notes in the same file. The notes are chronological and
@@ -234,6 +246,14 @@ UNCOVERED: tuple[Uncovered, ...] = (
         "for that run; re-running the command is the only thing that answers them",
     ),
     Uncovered(
+        "the seconds in docs/18-ASSURANCE-PROGRAM.md's measurement section",
+        "they are one machine's timings at the commit that section names, correct "
+        "for that run, and re-running the commands is the only thing that answers "
+        "them. measured-cost re-derives what they are shares of - the stages "
+        "`verify` runs and the modules in tests/ - and no check here re-derives a "
+        "duration",
+    ),
+    Uncovered(
         "whether a backlog item's derived status reflects its actual progress",
         "backlog-status derives that an implementation note names the item and when "
         "it was last written, which is a fact about the file. Whether the work that "
@@ -344,6 +364,42 @@ def a11y_default_locales(root: Path) -> tuple[str, ...]:
     if match is None:
         raise GateUnavailable("tools/a11y_gate.py declares no DEFAULT_LOCALES")
     return tuple(re.findall(r'"([^"]+)"', match.group(1)))
+
+
+ASSURANCE = "docs/18-ASSURANCE-PROGRAM.md"
+
+MEASURED_HEADING = "## What the gate costs, measured"
+
+
+def measured_section(root: Path) -> str:
+    """The measurement section of the assurance program, and nothing around it."""
+
+    text = read(root, ASSURANCE)
+    start = text.find(MEASURED_HEADING)
+    if start < 0:
+        raise GateUnavailable(
+            f"{ASSURANCE} no longer carries {MEASURED_HEADING!r}, so the "
+            "denominators this gate re-derives have nowhere to be stated"
+        )
+    end = text.find("\n## ", start + len(MEASURED_HEADING))
+    return text[start:] if end < 0 else text[start:end]
+
+
+def test_modules(root: Path) -> tuple[str, ...]:
+    """Every test module in `tests/`, at any depth, as bare filenames.
+
+    Recursive on purpose: a suite that grew a subdirectory would otherwise
+    shrink this denominator without anything saying so, which is the same false
+    green one level up.
+    """
+
+    tests = root / "tests"
+    if not tests.is_dir():
+        raise GateUnavailable("tests is not a directory, so no module can be counted")
+    found = tuple(sorted(path.name for path in tests.rglob("test_*.py")))
+    if not found:
+        raise GateUnavailable("tests holds no test module to count")
+    return found
 
 
 BACKLOG = "docs/13-BACKLOG.md"
@@ -684,6 +740,125 @@ def check_a11y_locale_coverage(root: Path) -> list[Finding]:
     )
 
 
+_COST_ROW = re.compile(r"^\| `(?P<stage>[a-z][a-z0-9-]*)` \|", re.MULTILINE)
+"""A stage priced on its own row of the section's first table."""
+
+_STAGE_TIMING = re.compile(r"`(?P<stage>[a-z][a-z0-9-]*)` [0-9.]+ s")
+"""A stage priced in the sentence that enumerates the rest of them.
+
+Matched by name *and* duration rather than by name alone: the section names
+`make verify` and `make mutants` in prose, and a check that read every backticked
+target out of it would report those as stages the Makefile does not run.
+"""
+
+_OTHER_STAGES_ROW = re.compile(
+    r"^\| the other (?P<count>[a-z]+) stages together \|", re.MULTILINE
+)
+
+_NAMED_MODULE_ROW = re.compile(
+    r"^\| `tests/(?P<module>test_[a-z0-9_]+\.py)` \|", re.MULTILINE
+)
+
+_OTHER_MODULES_ROW = re.compile(
+    r"^\| the other (?P<count>[0-9]+) modules \|", re.MULTILINE
+)
+
+_MODULE_TOTAL = re.compile(r"the (?P<count>[0-9]+) modules `tests/` holds")
+
+
+def check_measured_stages(root: Path) -> list[Finding]:
+    """Every stage `make verify` runs must be priced where the gate is priced."""
+
+    section = measured_section(root)
+    stages = set(verify_stages(root))
+    tabled = {match.group("stage") for match in _COST_ROW.finditer(section)}
+    flat = " ".join(section.split())
+    priced = tabled | {match.group("stage") for match in _STAGE_TIMING.finditer(flat)}
+    findings = _difference("measured-cost", ASSURANCE, priced, stages)
+
+    row = _OTHER_STAGES_ROW.search(section)
+    if row is None:
+        findings.append(
+            Finding(
+                "measured-cost",
+                ASSURANCE,
+                "the cost table no longer says how many stages its residual row "
+                "covers, so the split between the priced stages and the rest is "
+                "unstated",
+            )
+        )
+    elif row.group("count").lower() != NUMBER_WORDS.get(len(stages) - len(tabled)):
+        findings.append(
+            Finding(
+                "measured-cost",
+                ASSURANCE,
+                f"puts {row.group('count')} stage(s) in the residual row of the "
+                f"cost table; `verify` runs {len(stages)}, of which {len(tabled)} "
+                "are priced on their own row",
+            )
+        )
+    return findings
+
+
+def check_measured_modules(root: Path) -> list[Finding]:
+    """The module denominator the pytest stage is split over, against `tests/`."""
+
+    section = measured_section(root)
+    on_disk = test_modules(root)
+    named = {match.group("module") for match in _NAMED_MODULE_ROW.finditer(section)}
+    findings: list[Finding] = [
+        Finding(
+            "measured-cost",
+            ASSURANCE,
+            f"prices `tests/{module}`, which is not in tests/",
+        )
+        for module in sorted(named - set(on_disk))
+    ]
+
+    stated = _MODULE_TOTAL.search(" ".join(section.split()))
+    if stated is None:
+        findings.append(
+            Finding(
+                "measured-cost",
+                ASSURANCE,
+                "no longer states how many modules `tests/` holds, so the "
+                "denominator its shares are taken over is unstated",
+            )
+        )
+    elif int(stated.group("count")) != len(on_disk):
+        findings.append(
+            Finding(
+                "measured-cost",
+                ASSURANCE,
+                f"states {stated.group('count')} modules in tests/, which holds "
+                f"{len(on_disk)}",
+            )
+        )
+
+    residual = _OTHER_MODULES_ROW.search(section)
+    if residual is None:
+        findings.append(
+            Finding(
+                "measured-cost",
+                ASSURANCE,
+                "the module table has no residual row stating how many modules it "
+                "covers, so the named rows are a share of nothing stated",
+            )
+        )
+    elif len(named) + int(residual.group("count")) != len(on_disk):
+        findings.append(
+            Finding(
+                "measured-cost",
+                ASSURANCE,
+                f"names {len(named)} module(s) and puts {residual.group('count')} "
+                f"in the residual row, against the {len(on_disk)} in tests/; "
+                "re-derive the row, or say that the measurement predates a module "
+                "added since",
+            )
+        )
+    return findings
+
+
 REQUIRED_NOTES: tuple[tuple[str, str, str], ...] = (
     (
         "docs/PUBLICATION-READINESS.md",
@@ -691,6 +866,16 @@ REQUIRED_NOTES: tuple[tuple[str, str, str], ...] = (
         "this document prints commit names that are unreachable from any branch and "
         "that GitHub still serves by id, which keeps section 6's exposure open. The "
         "dated note saying so has to stay with them",
+    ),
+    (
+        "docs/adr/0009-mutation-evidence-over-declared-safety-modules.md",
+        "Correction, 2026-09-05",
+        "this ADR keeps `make mutants` outside `make verify` on the grounds that it "
+        "costs two minutes against roughly a second for everything else, and "
+        "docs/18-ASSURANCE-PROGRAM.md measured everything else at about four "
+        "minutes. The premise is wrong by two orders of magnitude and no gate "
+        "re-derives it, so the dated correction is what keeps a reader from "
+        "inheriting the old ratio",
     ),
 )
 
@@ -763,6 +948,8 @@ def check_backlog_status(root: Path) -> list[Finding]:
 
 CHECKS: tuple[Callable[[Path], list[Finding]], ...] = (
     check_verify_stages,
+    check_measured_stages,
+    check_measured_modules,
     check_adr_index,
     check_coverage_floors,
     check_standard_not_applicable,

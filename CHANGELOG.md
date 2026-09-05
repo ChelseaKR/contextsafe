@@ -919,20 +919,44 @@ rather than after it.
   fresh interpreters. Measured, it is not the cost: `tests/test_determinism.py`
   is 7.2% of the pytest stage by CPU and 6.7% by wall, fourteen seconds of a
   four-minute gate. The pytest stage is about 90% of `make verify` — 197 s CPU
-  and 218 s wall, against 25 s for the other twelve stages together — and inside
-  it the cost is diffuse: `tests/test_a11y_gate.py` is the largest module at
-  29.5%, and forty-eight modules share another 36.5% between them. Coverage
-  instrumentation costs 39% on top of the suite rather than the doubling that a
-  wall-clock comparison across a shared machine suggests, which is why the
-  figures that carry a comparison are CPU seconds.
+  and 218 s wall, against 25 s wall for the other twelve stages together — and
+  inside it the cost is diffuse: `tests/test_a11y_gate.py` is the largest module
+  at 29.5%, and the other 46 of the 51 modules in `tests/` share another 36.5%
+  between them. Coverage instrumentation costs 39% on top of the suite rather
+  than the doubling that a wall-clock comparison across a shared machine
+  suggests, which is why the figures that carry a comparison are CPU seconds.
 
   The three options the issue lists are recorded against those numbers, with
   what each buys and what it spends, and a fourth found while measuring —
   coverage.py's `sys.monitoring` tracer, which would need no dependency — is
-  recorded so that it is not found again. No option is taken and nothing is
-  closed: which one to take, and whether four minutes is a cost worth a
+  recorded so that it is not found again. No option is taken and none is
+  eliminated: option 2 is priced as a second CI job whose shape decides whether
+  `ci.yml` still runs `make verify` itself, rather than as a constraint it must
+  spend, and option 3 is priced at 6% of the gate against the local half of the
+  RG-15 evidence. Which one to take, and whether four minutes is a cost worth a
   dependency inside the merge gate, is the maintainer's decision, and the
   section says so.
+
+  Two of the section's own denominators are now derived rather than typed.
+  `make claims` grew a `measured-cost` check that holds every stage the
+  `Makefile`'s `verify` target runs against the stages the section prices, and
+  the modules in `tests/` against the module table that splits the pytest stage
+  between five named rows and a residual row. The first draft of the section
+  said "the other forty-eight modules" and, four paragraphs later, "fifty
+  modules", over a tree that holds 51; a section whose value is that a reader
+  can check the arithmetic is the last place a denominator should be typed. The
+  seconds are not checkable and are printed in the gate's own list of what it
+  cannot see.
+
+  The measurement also falsifies a comparison two other documents rest on.
+  [ADR 0009](docs/adr/0009-mutation-evidence-over-declared-safety-modules.md)
+  keeps `make mutants` outside the merge gate on the grounds that it "takes
+  about two minutes against roughly a second for everything else in `verify`",
+  and `CONTRIBUTING.md` said the same in fewer words. Everything else in
+  `verify` is about four minutes. Both now carry a dated correction pointing at
+  the measurement, `make claims` requires ADR 0009's to stay with the text it
+  corrects, and neither re-decides where `make mutants` runs: the corrected
+  ratio is recorded as open, alongside the options.
 
   One finding sits underneath all four. The coverage total the floor is applied
   to is not reproducible. Six runs of the identical serial command on the same
@@ -944,7 +968,10 @@ rather than after it.
   coverage totals cannot be the equivalence test for a change to how the suite
   runs, which is exactly the evidence a parallel gate would need, and the 98%
   does not repeat to the statement. The floors are wide enough that no verdict
-  has moved. Nothing here fixes it, and it is not claimed as fixed.
+  has moved. Nothing here fixes it, and it is not claimed as fixed. Nothing
+  indexes it either — no backlog item, no issue — and the section says so, so
+  that the gap is visible rather than resting on somebody rereading the
+  paragraph.
 
   `make verify` itself is unchanged: the same target `ci.yml` runs, the same
   stages in the same order, no gate made optional, no test moved out of it, and

@@ -27,6 +27,9 @@ import pytest
 REPO_ROOT = Path(__file__).resolve().parents[1]
 GATE_PATH = REPO_ROOT / "tools" / "claims_gate.py"
 
+ASSURANCE = "docs/18-ASSURANCE-PROGRAM.md"
+ADR = "docs/adr/0009-mutation-evidence-over-declared-safety-modules.md"
+
 # Copied verbatim; the gate reads their prose.
 DOCUMENTS = (
     "Makefile",
@@ -36,6 +39,8 @@ DOCUMENTS = (
     "schemas/README.md",
     "docs/PUBLICATION-READINESS.md",
     "docs/13-BACKLOG.md",
+    ASSURANCE,
+    ADR,
     "tools/a11y_gate.py",
 )
 
@@ -44,6 +49,7 @@ BY_NAME = (
     ("docs/adr", ".md"),
     ("schemas", ".json"),
     ("src/contextsafe/locales", ".json"),
+    ("tests", ".py"),
 )
 
 
@@ -71,7 +77,11 @@ def repo(tmp_path: Path) -> Path:
         target = tmp_path / directory
         target.mkdir(parents=True, exist_ok=True)
         for path in (REPO_ROOT / directory).glob(f"*{suffix}"):
-            (target / path.name).write_text("{}\n", encoding="utf-8")
+            stand_in = target / path.name
+            # A document copied above is read rather than counted, and a
+            # stand-in written over it would delete the prose under test.
+            if not stand_in.exists():
+                stand_in.write_text("{}\n", encoding="utf-8")
     return tmp_path
 
 
@@ -109,9 +119,15 @@ def test_the_scaffold_reproduces_that(repo: Path) -> None:
 def test_a_stage_added_to_verify_and_left_undocumented_is_a_finding(repo: Path) -> None:
     _edit(repo, "Makefile", "publication-sweep i18n", "publication-sweep newgate i18n")
     findings = gate.run_gate(repo)
-    assert _checks(findings) == {"verify-stages"}
-    assert {f.where for f in findings} == {"README.md", "CONTRIBUTING.md"}
-    assert all("newgate" in f.detail for f in findings)
+    assert _checks(findings) == {"verify-stages", "measured-cost"}
+    assert {f.where for f in findings if "newgate" in f.detail} == {
+        "README.md",
+        "CONTRIBUTING.md",
+        ASSURANCE,
+    }
+    # The cost section stops adding up as well: thirteen stages are now priced
+    # elsewhere than the one row, against a residual row that still says twelve.
+    assert any("twelve stage(s)" in f.detail for f in findings)
 
 
 def test_a_documented_stage_verify_does_not_run_is_a_finding(repo: Path) -> None:
@@ -447,6 +463,110 @@ def test_an_empty_catalog_directory_cannot_be_examined(repo: Path) -> None:
         gate.run_gate(repo)
 
 
+# --- measured-cost ----------------------------------------------------------
+
+
+def test_a_stage_the_measurement_section_does_not_price_is_a_finding(
+    repo: Path,
+) -> None:
+    """A stage `verify` runs and the cost section skips is an unpriced wait."""
+
+    _edit(repo, ASSURANCE, "`claims` 0.4 s", "the claims stage 0.4 s")
+    findings = gate.run_gate(repo)
+    assert _checks(findings) == {"measured-cost"}
+    assert all("claims" in f.detail for f in findings)
+
+
+def test_a_priced_stage_verify_does_not_run_is_a_finding(repo: Path) -> None:
+    _edit(repo, "Makefile", "verify: sync lint", "verify: lint")
+    findings = gate.run_gate(repo)
+    assert "measured-cost" in _checks(findings)
+    assert any(
+        f.where == ASSURANCE and "'sync'" in f.detail and "not here" in f.detail
+        for f in findings
+    )
+
+
+def test_a_stage_count_the_cost_table_states_wrong_is_a_finding(repo: Path) -> None:
+    _edit(
+        repo,
+        ASSURANCE,
+        "| the other twelve stages together |",
+        "| the other eleven stages together |",
+    )
+    findings = gate.run_gate(repo)
+    assert _checks(findings) == {"measured-cost"}
+    assert all("eleven stage(s)" in f.detail for f in findings)
+
+
+def test_a_cost_table_that_stops_counting_the_rest_is_a_finding(repo: Path) -> None:
+    _edit(
+        repo,
+        ASSURANCE,
+        "| the other twelve stages together |",
+        "| the rest of them together |",
+    )
+    findings = gate.run_gate(repo)
+    assert _checks(findings) == {"measured-cost"}
+    assert all("how many stages" in f.detail for f in findings)
+
+
+def test_a_test_module_added_and_left_out_of_the_denominator_is_a_finding(
+    repo: Path,
+) -> None:
+    """The finding this check was written for: five named plus 46 stopped adding up."""
+
+    (repo / "tests" / "test_added_since.py").write_text("{}\n", encoding="utf-8")
+    findings = gate.run_gate(repo)
+    assert _checks(findings) == {"measured-cost"}
+    assert any("which holds 52" in f.detail for f in findings)
+    assert any("against the 52 in tests/" in f.detail for f in findings)
+
+
+def test_a_module_priced_by_name_that_left_tests_is_a_finding(repo: Path) -> None:
+    (repo / "tests" / "test_determinism.py").unlink()
+    findings = gate.run_gate(repo)
+    assert _checks(findings) == {"measured-cost"}
+    assert any("test_determinism.py" in f.detail for f in findings)
+
+
+def test_a_residual_row_that_stops_stating_its_count_is_a_finding(repo: Path) -> None:
+    _edit(repo, ASSURANCE, "| the other 46 modules |", "| the other modules |")
+    findings = gate.run_gate(repo)
+    assert _checks(findings) == {"measured-cost"}
+    assert all("no residual row" in f.detail for f in findings)
+
+
+def test_a_section_that_stops_stating_the_module_total_is_a_finding(
+    repo: Path,
+) -> None:
+    _edit(repo, ASSURANCE, "the 51 modules `tests/` holds", "the modules in `tests/`")
+    findings = gate.run_gate(repo)
+    assert _checks(findings) == {"measured-cost"}
+    assert all("how many modules" in f.detail for f in findings)
+
+
+def test_a_measurement_section_that_is_gone_cannot_be_examined(repo: Path) -> None:
+    _edit(repo, ASSURANCE, "## What the gate costs, measured", "## What it costs")
+    with pytest.raises(gate.GateUnavailable, match="no longer carries"):
+        gate.run_gate(repo)
+
+
+def test_a_tests_directory_with_no_module_cannot_be_examined(repo: Path) -> None:
+    for path in (repo / "tests").glob("*.py"):
+        path.unlink()
+    with pytest.raises(gate.GateUnavailable, match="no test module"):
+        gate.run_gate(repo)
+
+
+def test_a_missing_tests_directory_cannot_be_examined(repo: Path) -> None:
+    for path in (repo / "tests").glob("*.py"):
+        path.unlink()
+    (repo / "tests").rmdir()
+    with pytest.raises(gate.GateUnavailable, match="tests is not a directory"):
+        gate.run_gate(repo)
+
+
 # --- required-note ----------------------------------------------------------
 
 
@@ -454,6 +574,18 @@ def test_removing_the_dated_correction_is_a_finding(repo: Path) -> None:
     _edit(repo, "docs/PUBLICATION-READINESS.md", "Update, 2026-08-29", "Note")
     findings = gate.run_gate(repo)
     assert _checks(findings) == {"required-note"}
+
+
+def test_removing_the_adr_runtime_correction_is_a_finding(repo: Path) -> None:
+    """ADR 0009 prices `make mutants` against a `verify` that has since moved."""
+
+    path = repo / ADR
+    text = path.read_text(encoding="utf-8")
+    assert "Correction, 2026-09-05" in text, "the test is stale"
+    path.write_text(text.replace("Correction, 2026-09-05", "Note"), encoding="utf-8")
+    findings = gate.run_gate(repo)
+    assert _checks(findings) == {"required-note"}
+    assert {f.where for f in findings} == {ADR}
 
 
 # --- iteration-status -------------------------------------------------------

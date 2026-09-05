@@ -86,6 +86,15 @@ minutes against roughly a second for everything else in `verify`, so it is its
 own target the way `make secret-scan` and `make a11y-full` are. It needs no tool
 a clean clone lacks.
 
+Correction, 2026-09-05: "roughly a second for everything else in `verify`" was
+written on 2026-08-27 and is no longer true of the tree. `make verify` was
+measured at about four minutes on 2026-09-05, about 90% of it the pytest stage;
+the figures and the method are in "What the gate costs, measured" in
+[docs/18-ASSURANCE-PROGRAM.md](../18-ASSURANCE-PROGRAM.md). The comparison this
+paragraph rests on is two minutes against about four, not two against one. The
+decision recorded here is left as it was taken; what the corrected ratio implies
+for it is open, and it belongs with the options that section prices.
+
 ## Consequences
 
 - The first honest run reported **nine survivors of 35**, and all nine were real
@@ -165,3 +174,9 @@ a clean clone lacks.
 - **Putting it in `make verify`.** Two minutes on every push, against one second
   today, for a signal that changes slowly. `make secret-scan` and
   `make a11y-full` already set the precedent for a gate that runs elsewhere.
+  (Correction, 2026-09-05: "one second today" is the figure this ADR was written
+  against. Measured nine days later, `make verify` is about four minutes, so
+  this rejected option would add two minutes to four rather than to one.
+  Whether the option is still rejected at that ratio is not decided here; see
+  the correction above, and "What the gate costs, measured" in
+  [docs/18-ASSURANCE-PROGRAM.md](../18-ASSURANCE-PROGRAM.md).)

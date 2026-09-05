@@ -385,15 +385,19 @@ that splitting it wrongly would be worse than leaving it, so the suite was
 measured before anything was split. The suspect is not the cost, and what
 follows is the measurement rather than a decision taken on it.
 
-**Method, and what it is worth.** Measured on 2026-09-05 against this tree,
-Python 3.12, a ten-core macOS workstation, 3,256 tests. Wall time on a developer
-machine is not a stable number: the identical pytest command over the identical
-tree measured 218 seconds and 1,769 seconds twenty minutes apart, because other
-work shared the machine. So the figures below are CPU seconds — the process plus
-every subprocess it waited on — wherever a comparison depends on them, and wall
-seconds appear only where the runs being compared were taken back to back. None
-of them is a CI number: that is a different machine and a different operating
-system, and nothing here was measured there.
+**Method, and what it is worth.** Measured on 2026-09-05 at commit `8a23096`,
+Python 3.12, a ten-core macOS workstation, 3,258 tests as
+`pytest --collect-only -q` counts them, across the 51 modules `tests/` holds:
+five of those are named in the module table below and the other 46 are its
+residual row, which is the denominator every share in this section is taken
+over. Wall time on a developer machine is not a stable number: the identical
+pytest command over the identical tree measured 218 seconds and 1,769 seconds
+twenty minutes apart, because other work shared the machine. So the figures
+below are CPU seconds — the process plus every subprocess it waited on —
+wherever a comparison depends on them, and wall seconds appear only where the
+runs being compared were taken back to back. None of them is a CI number: that
+is a different machine and a different operating system, and nothing here was
+measured there.
 
 | Part of `make verify` | Cost |
 |---|---|
@@ -417,30 +421,51 @@ individual tests:
 | `tests/test_import_hl7v2_er7.py` | 17.2 s | 8.9% |
 | `tests/test_mutation_gate.py` | 13.9 s | 7.2% |
 | `tests/test_determinism.py` | 13.8 s | 7.2% |
-| the other forty-eight modules | 70.0 s | 36.5% |
+| the other 46 modules | 70.0 s | 36.5% |
 
 Two things fall out of that table. The determinism suite is 7.2% of the stage by
 CPU and 6.7% by wall — fourteen seconds of a four-minute gate — so the
 hypothesis the issue was written on does not survive being measured. And the
 cost is diffuse: the largest module is under a third, and more than a third of
-the stage is spread across forty-eight modules that are individually small.
+the stage is spread across 46 modules that are individually small.
 
 The largest module is not slow by accident either. `tests/test_a11y_gate.py` is
 142 tests, and nearly every one damages the rendered receipt in a different way
-and audits it. Rendering both shipped pages costs 7 ms of CPU; one `audit()`
-over them costs 713 ms. The cost is the checking rather than the setup, so it is
-not shareable between tests that are checking different damage.
+and audits it. Rendering both shipped pages costs about 5 ms of CPU; one
+`audit()` over one page costs about 240 ms and over the pair about 570 ms.
+Nearly every one of the 142 damages and audits a single page, so 240 ms is the
+per-test figure that reconciles with the table: 142 single-page audits is about
+34 s, and the rest of the module's 56.6 s is the coverage instrumentation over
+that plus the few tests that audit the pair. Reading the pair figure as the
+per-test one gives 101 s, which is nearly twice what the module costs. (Those
+three figures were timed on their own on 2026-09-05; an earlier timing on this
+machine put the pair at 713 ms and the rendering at 7 ms, which is the
+run-to-run spread the method paragraph warns about.) The cost is the checking
+rather than the setup, so it is not shareable between tests that are checking
+different damage.
 
 Coverage instrumentation costs 55 s CPU, 39% on top of the 141 s the same suite
 takes without it. That is worth stating because the naive comparison — a run
 with coverage against a run without it, taken hours apart on a shared machine —
 suggests it more than doubles the suite, and it does not.
 
+**What this supersedes.** Two places in the repository compare a gate that sits
+outside the merge gate against what the merge gate itself costs, and both were
+written when that cost was seconds: ADR 0009, which says `make mutants` "takes
+about two minutes against roughly a second for everything else in `verify`" and
+rejects putting it inside on "two minutes on every push, against one second
+today", and the gate table in `CONTRIBUTING.md`, which said the same in fewer
+words. Measured, the comparison is two minutes against about four minutes, not
+two minutes against one. Both places now carry a dated correction pointing here.
+What the corrected ratio implies for where `make mutants` runs is not settled
+here: it is the same kind of judgment as the options below, and it belongs with
+them.
+
 ### The options in issue #93, against that measurement
 
 1. **Parallel pytest.** The only one of the three that matches the measured
-   shape, because the cost is spread across fifty modules rather than sitting in
-   one. With `pytest-xdist` installed for the experiment and not committed,
+   shape, because the cost is spread across all 51 modules rather than sitting
+   in one. With `pytest-xdist` installed for the experiment and not committed,
    `-n auto` on ten cores ran the whole suite green four times out of four, in
    91, 82, 87 and 151 wall seconds against 218 serial, and
    `tests/test_determinism.py` alone passed five runs out of five under it.
@@ -450,14 +475,23 @@ suggests it more than doubles the suite, and it does not.
    two new dev dependencies — `pytest-xdist` pulls `execnet` — and the
    obligation below.
 2. **Split the CI job so the fast stages report first.** Buys nothing for the
-   local wait, which is where the issue locates the pain, and spends the
-   constraint the issue names first: `ci.yml` would stop running the one target
-   a contributor runs, and `tests/test_ci_workflows.py` exists because that
-   equivalence is load-bearing.
+   local wait, which is where the issue locates the pain: the same 218 seconds
+   are still spent on the contributor's machine. What it costs depends on a
+   shape the issue does not fix. A second job that runs the fast stages ahead of
+   the job that still runs `make verify` duplicates a few seconds of work and
+   leaves the equivalence intact — `ci.yml` already carries three jobs, and what
+   `tests/test_ci_workflows.py` asserts is that `ci.yml` runs `make verify` at
+   all.
+   Decomposing `verify` into per-stage jobs instead would be the first time CI
+   and a contributor ran different gates, and the equivalence that
+   `tests/test_ci_workflows.py` exists to hold is exactly what that spends.
+   Which of the two is meant is the maintainer's to say; the first is cheap and
+   the second is not, and neither is chosen here.
 3. **Move the three-run determinism suite into its own job.** Buys 6.7% of the
    pytest stage, which is 6% of the gate, and costs the local half of the
-   evidence for RG-15 and invariant 10. Measured, this is the option with the
-   worst ratio of the three.
+   evidence for RG-15 and invariant 10 — the determinism proof would then exist
+   only where CI runs it, not on the machine the change was written on. That is
+   the measured price; whether 6% is worth it is not a measurement.
 
 A fourth was found while measuring and is recorded so that it is not found
 again. Coverage.py can trace through `sys.monitoring` (`COVERAGE_CORE=sysmon`)
@@ -488,14 +522,22 @@ that is why option 1 and the fourth option are recorded here rather than taken.
 And a reader who treats the 98% as a reproducible figure is taking more from it
 than it carries — the floors are 90% and 95%, the headroom is wide, and no
 verdict has moved, but the number drifts by about four statements. Fixing that
-is not this issue, and nothing here changes it.
+is not this issue, and nothing here changes it. Nothing indexes it either: no
+backlog item covers it and no issue is open on it, so it needs one before the
+derived `backlog-status` column can carry it, and until then this paragraph is
+the only place it exists.
 
-**Nothing is decided here.** The measurement says which option is worth what;
-which one to take, and whether four minutes is a cost worth a dependency inside
-the merge gate, is the maintainer's call. What the measurement does settle is
-that option 3 is the wrong lever, that option 2 spends a constraint it cannot
-repay locally, and that a parallel gate needs a way to prove it measures the
-same thing before it can be trusted to.
+**Nothing is decided here.** The measurement says what each option buys and
+what it spends; which one to take, and whether four minutes is a cost worth a
+dependency inside the merge gate, is the maintainer's call. What the measurement
+settles is narrower than a choice. The determinism suite is not where the time
+goes, so option 3 buys 6% of the gate rather than the bulk of it. Option 2 buys
+nothing locally, and its price is a second CI job whose shape decides whether CI
+still runs the target a contributor runs. Option 1 is the only one whose shape
+matches a diffuse cost, and it needs a way to prove it measures the same thing —
+which, by the finding above, comparing coverage totals cannot give it. Ranking
+those against each other is a judgment about what the wait is worth, and this
+section does not make it.
 
 ## What would make this program wrong
 

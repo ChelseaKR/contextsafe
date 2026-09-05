@@ -82,8 +82,10 @@ honored exemption is printed on every run so the mechanism stays countable. See
 [ADR 0005](docs/adr/0005-hygiene-marker-exemptions.md).
 
 Three gates sit outside `make verify`. Two need a tool a clean clone does not
-have, and `make verify` must stay exactly what CI runs; the third costs
-minutes rather than a second:
+have, and `make verify` must stay exactly what CI runs; the third costs minutes
+of its own on top of a merge gate that was measured at about four of them on
+2026-09-05 (see "What the gate costs, measured" in
+[docs/18-ASSURANCE-PROGRAM.md](docs/18-ASSURANCE-PROGRAM.md)):
 
 | Gate | Command | What it checks |
 | --- | --- | --- |
