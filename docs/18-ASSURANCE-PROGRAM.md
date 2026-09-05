@@ -387,11 +387,15 @@ follows is the measurement rather than a decision taken on it.
 
 **Method, and what it is worth.** Measured on 2026-09-05 at commit `8a23096`,
 Python 3.12, a ten-core macOS workstation, 3,258 tests as
-`pytest --collect-only -q` counts them, across the 51 modules `tests/` holds:
-five of those are named in the module table below and the other 46 are its
-residual row, which is the denominator every share in this section is taken
-over. Wall time on a developer machine is not a stable number: the identical
-pytest command over the identical tree measured 218 seconds and 1,769 seconds
+`pytest --collect-only -q` counted them at that commit, across the 52 modules
+`tests/` holds today: five of those are named in the module table below and the
+other 47 are its residual row, which is the denominator every share in this
+section is taken over. One of the 47, `tests/test_sast_gate.py`, landed with the
+SAST gate after the measurement was taken, so it is inside the denominator and
+none of the seconds below are its; the measured run saw 51 modules and 3,258
+tests, and re-measuring is what would put the 52nd module's cost on the record.
+Wall time on a developer machine is not a stable number: the identical pytest
+command over the identical tree measured 218 seconds and 1,769 seconds
 twenty minutes apart, because other work shared the machine. So the figures
 below are CPU seconds — the process plus every subprocess it waited on —
 wherever a comparison depends on them, and wall seconds appear only where the
@@ -421,13 +425,14 @@ individual tests:
 | `tests/test_import_hl7v2_er7.py` | 17.2 s | 8.9% |
 | `tests/test_mutation_gate.py` | 13.9 s | 7.2% |
 | `tests/test_determinism.py` | 13.8 s | 7.2% |
-| the other 46 modules | 70.0 s | 36.5% |
+| the other 47 modules | 70.0 s | 36.5% |
 
 Two things fall out of that table. The determinism suite is 7.2% of the stage by
 CPU and 6.7% by wall — fourteen seconds of a four-minute gate — so the
 hypothesis the issue was written on does not survive being measured. And the
 cost is diffuse: the largest module is under a third, and more than a third of
-the stage is spread across 46 modules that are individually small.
+the stage is spread across the 46 measured modules of that row, which are
+individually small.
 
 The largest module is not slow by accident either. `tests/test_a11y_gate.py` is
 142 tests, and nearly every one damages the rendered receipt in a different way
@@ -464,7 +469,7 @@ them.
 ### The options in issue #93, against that measurement
 
 1. **Parallel pytest.** The only one of the three that matches the measured
-   shape, because the cost is spread across all 51 modules rather than sitting
+   shape, because the cost is spread across all the measured modules rather than sitting
    in one. With `pytest-xdist` installed for the experiment and not committed,
    `-n auto` on ten cores ran the whole suite green four times out of four, in
    91, 82, 87 and 151 wall seconds against 218 serial, and

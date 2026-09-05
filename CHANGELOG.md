@@ -921,8 +921,9 @@ rather than after it.
   four-minute gate. The pytest stage is about 90% of `make verify` — 197 s CPU
   and 218 s wall, against 25 s wall for the other twelve stages together — and
   inside it the cost is diffuse: `tests/test_a11y_gate.py` is the largest module
-  at 29.5%, and the other 46 of the 51 modules in `tests/` share another 36.5%
-  between them. Coverage instrumentation costs 39% on top of the suite rather
+  at 29.5%, and the other 46 of the 51 modules `tests/` held at that commit
+  share another 36.5% between them; `tests/` holds 52 today, and the section
+  says which one landed after the measurement. Coverage instrumentation costs 39% on top of the suite rather
   than the doubling that a wall-clock comparison across a shared machine
   suggests, which is why the figures that carry a comparison are CPU seconds.
 
