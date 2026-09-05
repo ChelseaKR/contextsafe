@@ -30,6 +30,11 @@ rather than after it.
   carrying findings about an artifact nobody received. Which of the two the
   reader is looking at therefore does not depend on where in the command the
   failure happened.
+  The published list carries `result_observations_not_written` alongside
+  `result_columns_not_observed`: the laboratory readers emit both, and the log
+  writes its list out rather than importing the importers', so a code the
+  readers can raise and the log does not publish is a command the log refuses
+  to record at all. `tests/test_diagnostics.py` pins the two sets equal.
 
 - **The receipt contract is 0.3: `contextsafe.receipt/0.3.0`,
   `schemas/contextsafe-receipt-v0.3.schema.json`.** The payload gains the
