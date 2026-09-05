@@ -1088,6 +1088,31 @@ def test_a_symbolic_link_is_never_followed(
     assert target.read_bytes() == b""
 
 
+def test_a_created_log_is_reachable_only_by_its_owner(
+    tmp_path: Path, finding_receipt: dict[str, Any], review_event: EventBuilder
+) -> None:
+    """The mode `_open_log` creates the file with, which nothing asserted.
+
+    `make mutants` moved that `0o600` to `0o601` -- an execute bit for everyone
+    on the machine -- and the whole suite stayed green: every test here reads
+    what the log says and none reads what the filesystem says about who may
+    read it. A review log carries decision hashes, signer roles and the chain
+    that makes tampering visible, so the permissions it lands with are part of
+    what the module promises rather than an incidental of the umask.
+
+    The assertion is on the group and other bits rather than on the literal
+    mode, because a umask can only take permissions away: `0o600` under a
+    stricter umask is still a file nobody else can reach, and that is the
+    property worth pinning.
+    """
+
+    log = tmp_path / "review.jsonl"
+    append_review_event(log, review_event("confirmed"), finding_receipt)
+    mode = os.stat(log).st_mode & 0o777
+    assert mode & 0o077 == 0, f"the review log is reachable outside its owner: {mode:o}"
+    assert mode & 0o400, "the owner cannot read the log they just wrote"
+
+
 def test_a_directory_is_not_a_log(
     tmp_path: Path, finding_receipt: dict[str, Any], review_event: EventBuilder
 ) -> None:

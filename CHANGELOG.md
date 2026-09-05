@@ -1427,6 +1427,17 @@ rather than after it.
   the 2026-09 wave added still have no mutation evidence; widening it is a
   runtime decision ADR 0009 leaves open and this change does not take.
 
+  Running the gate before wiring it up found one survivor, which is the argument
+  for the job stated as a defect: **nothing asserted the permissions the review
+  log is created with.** `_open_log` passes `0o600` to `os.open`, the mutant
+  moved it to `0o601` -- an execute bit for every account on the machine -- and
+  all 2915 tests stayed green, because every one of them reads what the log says
+  and none reads what the filesystem says about who may read it. A review log
+  carries decision hashes, signer roles and the chain that makes tampering
+  visible. `tests/test_review.py` now pins that no group or other bit is set,
+  which is the property a umask can only strengthen. 123 mutants over 590
+  covered lines, all killed.
+
 ## [0.1.0] - 2026-09-02
 
 ### Fixed
