@@ -1103,6 +1103,18 @@ summary says what ran and what was refused, never what a run found; findings
 live in a receipt, and dispositions in the B-032 review log, which is a
 different file with a different contract.
 
+Adversarial review of that reader found two things and both are fixed here. The
+reader's strictest check was on a value the writer cannot guarantee: a record's
+`sequence` is the count of lines the writer saw before appending, derived
+without a lock, so commands run at once against one shared `--log-dir` all
+write the same number. Requiring it to equal the line's position refused the
+whole log, permanently, for logs this tool had written correctly — the operator
+in issue #97, exactly. The reader now enforces the one-sided invariant an
+append-only file does hold, that no writer counted more records than precede
+its line, which still catches the removed line that check existed for. And
+`--output` naming the log `--log-dir` writes to truncated that log and exited
+0, for every command, since B-046; it is refused now, before the command runs.
+
 Implementation note (2026-09-04, B-048): the part of the seeded-fault
 corpus that needs no external person is committed. For every one of F-001 to
 F-036 in [Test and evaluation §4](09-TEST-AND-EVALUATION.md),

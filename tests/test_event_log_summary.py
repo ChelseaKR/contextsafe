@@ -19,6 +19,7 @@ import argparse
 import hashlib
 import json
 import os
+import threading
 from pathlib import Path
 from typing import Any
 
@@ -180,6 +181,70 @@ def test_the_reader_accepts_everything_the_writer_writes(
     assert summary["record_count"] == 1
 
 
+def test_a_log_four_commands_appended_to_at_once_still_summarises(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The writer takes no lock, so the reader may not assume it does.
+
+    ``append_event`` counts the file's lines and only then appends: nothing
+    holds the file between the two, so commands run at once against one shared
+    ``--log-dir`` all see the same count and all write it. Every record in this
+    log was written by this tool. A reader that required a sequence to equal
+    its position refused all four of them, as a whole log, permanently and with
+    no way to relax it -- which is precisely the operator issue #97 describes,
+    holding a week of runs and asking how many failed closed. The barrier makes
+    the race certain rather than likely, so this is a test and not a coin toss.
+    """
+
+    log_dir = tmp_path / "logs"
+    writers = 4
+    barrier = threading.Barrier(writers)
+    counted = eventlog._next_sequence
+
+    def count_then_wait(path: Path) -> int:
+        sequence = counted(path)
+        barrier.wait(timeout=30)
+        return sequence
+
+    monkeypatch.setattr(eventlog, "_next_sequence", count_then_wait)
+    failures: list[Exception] = []
+
+    def append() -> None:
+        try:
+            append_event(log_dir, command="evaluate", outcome=Outcome.ACCEPTED)
+        except Exception as exc:
+            failures.append(exc)
+
+    threads = [threading.Thread(target=append) for _ in range(writers)]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join(timeout=30)
+
+    assert failures == []
+    raw = (log_dir / LOG_FILE_NAME).read_bytes()
+    assert raw.count(b'"sequence":0') == writers
+    summary = summarize_log(log_dir).to_dict()
+    assert summary["record_count"] == writers
+    counts = summary["counts_by_command"]
+    assert isinstance(counts, dict)
+    assert counts["evaluate"] == writers
+
+
+def test_a_repeated_sequence_is_read_as_the_concurrency_it_is() -> None:
+    """The bytes those writers leave, pinned as a literal log rather than a race."""
+
+    raw = _log(_record(sequence=0), _record(sequence=0), _record(sequence=1))
+    assert summarize_bytes(raw).record_count == 3
+
+
+def test_a_sequence_behind_its_position_is_read_too() -> None:
+    """A writer delayed between counting and appending writes one of these."""
+
+    raw = _log(_record(sequence=0), _record(sequence=1), _record(sequence=0))
+    assert summarize_bytes(raw).record_count == 3
+
+
 # --- refusals ---------------------------------------------------------------
 
 
@@ -221,6 +286,9 @@ def test_a_line_that_is_not_a_record_refuses_the_whole_log(
             "$.log[0].schema_version",
         ),
         ({"sequence": 4}, "log_sequence_mismatch", "$.log[0].sequence"),
+        ({"sequence": -1}, "log_sequence_mismatch", "$.log[0].sequence"),
+        ({"sequence": True}, "invalid_integer", "$.log[0].sequence"),
+        ({"sequence": "0"}, "invalid_integer", "$.log[0].sequence"),
         ({"note": "by hand"}, "unknown_field", "$.log[0]"),
     ],
 )
@@ -467,6 +535,74 @@ def test_the_command_refuses_an_output_that_names_the_log(
     assert error["code"] == "output_path_unsafe"
     assert str(populated_log) not in error["message"]
     assert (populated_log / LOG_FILE_NAME).read_bytes() == before
+
+
+def test_the_command_refuses_an_output_that_names_the_log_it_writes_to(
+    tmp_path: Path, populated_log: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """The other half of the same guard: ``--log-dir``'s log, not ``--directory``'s.
+
+    ``--output`` is a truncating write and it happens before the record is
+    appended, so an ``--output`` naming the log ``--log-dir`` writes to
+    replaced every record in it with a summary of a different log and then
+    appended one record to what was left. It exited 0, and the log it emptied
+    could never be summarised again, because the reader refuses a whole log
+    over one line it cannot parse.
+    """
+
+    written = tmp_path / "written"
+    append_event(written, command="evaluate", outcome=Outcome.ACCEPTED)
+    before = (written / LOG_FILE_NAME).read_bytes()
+    assert (
+        main(
+            [
+                "events",
+                "summarize",
+                "--directory",
+                str(populated_log),
+                "--log-dir",
+                str(written),
+                "--output",
+                str(written / LOG_FILE_NAME),
+            ]
+        )
+        == EXIT_CONTRACT_ERROR
+    )
+    error = json.loads(capsys.readouterr().err)["error"]
+    assert error["code"] == "output_path_unsafe"
+    assert str(written) not in error["message"]
+    raw = (written / LOG_FILE_NAME).read_bytes()
+    assert raw.startswith(before)
+    summary = summarize_log(written).to_dict()
+    assert summary["record_count"] == 2
+    assert summary["counts_by_error_code"] == {"output_path_unsafe": 1}
+
+
+def test_every_command_refuses_an_output_that_names_the_event_log(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """The guard is on ``--log-dir``, so it covers the commands that only write."""
+
+    log_dir = tmp_path / "logs"
+    append_event(log_dir, command="evaluate", outcome=Outcome.ACCEPTED)
+    before = (log_dir / LOG_FILE_NAME).read_bytes()
+    assert (
+        main(
+            [
+                "diagnostics",
+                "--log-dir",
+                str(log_dir),
+                "--output",
+                str(log_dir / LOG_FILE_NAME),
+            ]
+        )
+        == EXIT_CONTRACT_ERROR
+    )
+    assert json.loads(capsys.readouterr().err)["error"]["code"] == "output_path_unsafe"
+    assert (log_dir / LOG_FILE_NAME).read_bytes().startswith(before)
+    summary = summarize_log(log_dir).to_dict()
+    assert summary["record_count"] == 2
+    assert summary["counts_by_error_code"] == {"output_path_unsafe": 1}
 
 
 def test_a_refused_log_exits_two_with_one_error_object(
