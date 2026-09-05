@@ -17,9 +17,19 @@ rather than after it.
   carries `warnings`, a sorted list of closed warning codes that may not
   repeat a code and is empty for every command that carries none. That is a
   widened field set on a published record shape, so the version moved with
-  it, the way the receipt contract's versions move. A warning code is a
-  closed identifier held to the same shape rule as an error code — no message
-  field appeared, and nothing from a source can reach the log through it.
+  it, the way the receipt contract's versions move. A warning code is drawn
+  from a list the log publishes and is checked against it the way the
+  command is, so a word that merely looks like a code is refused — no
+  message field appeared, and nothing from a source can reach the log
+  through it.
+  A record whose outcome is `rejected` carries no warnings at all, including
+  a command rejected after its conversion had already succeeded (writing
+  `--output` over a directory is the reachable case): the codes describe a
+  conversion the command delivered, so where the record says the command
+  produced nothing, it reports the error code and stops rather than also
+  carrying findings about an artifact nobody received. Which of the two the
+  reader is looking at therefore does not depend on where in the command the
+  failure happened.
 
 ### Fixed
 
@@ -46,11 +56,29 @@ rather than after it.
   concept, where the sex-parameter extension URL is deliberately absent. The
   key is gone, a test pins the table against the carriers a conversion actually
   emits a token under, and the published contract's canonical-json carrier enum
-  lost the same value. That narrows a closed set rather than widening one, and
-  no profile that was valid before is invalid now — a row naming that carrier
-  was refused downstream then and is refused as
-  `mapping_profile_carrier_unknown` now — so the mapping-profile contract's
-  version is unchanged.
+  lost the same value.
+
+  That narrowing removes documents the contract used to accept, which is a
+  real break and is stated here as one. A canonical-json profile whose one
+  row read a `sex_parameter_for_clinical_use` carrier as that concept and
+  bound it to a synthetic sex-parameter value passed
+  `mapping validate` at exit 0 and compiled to a profile declaring
+  `contextsafe.mapping-profile/1.0.0` and `valid_for_signing: true`; the same
+  file is now refused as `mapping_profile_carrier_unknown` at
+  `$.rows[0].source.carrier`. What such a row could never do is bind
+  anything — this importer emits no token under that carrier, so the row
+  matched no observation and an import behaved as though it were not there.
+  Inert is not the same as invalid, and a test now stands on the refusal so
+  the class of document this removes is written down rather than remembered.
+
+  The `schema_version` is still `contextsafe.mapping-profile/1.0.0`, and that
+  says what this change did, not that the break costs nothing. The versioning
+  rule this repository publishes (`schemas/README.md`) is about a closed set
+  that *widens*; no ContextSafe version has been tagged, so every document of
+  the removed class was written against an untagged working tree; and whether
+  a narrowing moves a contract, and to what, is a maintainer's decision this
+  change does not make on their behalf. It is recorded as open in
+  `docs/13-BACKLOG.md`.
 
 - **"Refused first and by name" was true only among the target checks.** The
   module docstring, the B-026 changelog entry, and the README all say a row

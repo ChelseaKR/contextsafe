@@ -521,9 +521,11 @@ one target reject (both stay distinct observations, which evaluate as
 ambiguous), a target outside the synthetic grammar rejects, and a
 sex-parameter row binds the value token only — never an order context or a
 supporting observation. A token with no row stays verbatim and the result
-says so, and with `--log-dir` the event record says so too, so a profile that
-binds nothing is visible while it can still be fixed. The reference profiles are synthetic bindings for the reference
-fixtures, not the mapping of any real system; no interoperability,
+says so, and with `--log-dir` the event record says so too — one unbound
+token is enough to raise it, and a profile that binds nothing is the
+loudest case rather than the condition — so the profile is visible while it
+can still be fixed. The reference profiles are synthetic bindings for the
+reference fixtures, not the mapping of any real system; no interoperability,
 clinical, laboratory, or community reviewer has seen one; HL7 null flavors
 and an LIS's empty cell are still not bound to presence states; and the
 recording context a profile binds (a `PID-8` value to the `government-id`
