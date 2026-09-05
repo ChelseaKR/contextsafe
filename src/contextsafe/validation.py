@@ -3,7 +3,7 @@
 import re
 from collections.abc import Callable
 from enum import StrEnum
-from typing import cast
+from typing import TypeVar, cast
 
 from contextsafe.errors import ContextSafeError
 from contextsafe.models import (
@@ -318,13 +318,26 @@ def _nullable_string(value: object, path: str) -> str | None:
     return _string(value, path)
 
 
+_EnumT = TypeVar("_EnumT", bound=StrEnum)
+"""The enum a parsed value is narrowed to.
+
+Written as a ``TypeVar`` rather than in PEP 695 form. The SAST gate's parser
+does not read ``def _enum[T: StrEnum](...)``: it stops at that line and reports
+the rest of this module as "partially analyzed", so the scanner was passing
+over a safety module it had not finished reading. A gate that reports clean
+over content it did not examine is the defect class docs/18-ASSURANCE-PROGRAM.md
+exists to name, so the syntax gives way to the scanner rather than the other
+way round.
+"""
+
+
 def _boolean(value: object, path: str) -> bool:
     if not isinstance(value, bool):
         raise _error("invalid_type", path, "expected a boolean")
     return value
 
 
-def _enum[T: StrEnum](enum_type: type[T], value: object, path: str) -> T:
+def _enum(enum_type: type[_EnumT], value: object, path: str) -> _EnumT:
     if not isinstance(value, str):
         raise _error("invalid_enum", path, "expected a supported string value")
     try:

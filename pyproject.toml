@@ -47,7 +47,13 @@ target-version = "py312"
 
 [tool.ruff.lint]
 select = ["E", "W", "F", "I", "UP", "B", "SIM", "S", "C90", "RUF"]
-ignore = ["E501"]
+# UP047 asks for PEP 695 type parameters on a generic function. The SAST gate's
+# parser cannot read that form: it stops at the line and reports the rest of the
+# module as partially analyzed, so the scanner passes over code it has not
+# finished reading. `_enum` in the validation module is the one generic function
+# here, and it is written with a TypeVar for that reason. The PEP 695 `type`
+# alias form is unaffected and is still used.
+ignore = ["E501", "UP047"]
 
 [tool.ruff.lint.per-file-ignores]
 "tests/**" = ["S101", "S603"]
