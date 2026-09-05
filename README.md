@@ -7,7 +7,7 @@ receipt that states its own limits. The clinically and community-governed
 service that would run it against a real health system is a plan, not a
 product.**
 
-The tool is here now. Fourteen subcommands, no network access, committed
+The tool is here now. Fifteen subcommands, no network access, committed
 synthetic fixtures that ship inside the package. With
 [`uv`](https://docs.astral.sh/uv/) installed, this returns a full receipt:
 
