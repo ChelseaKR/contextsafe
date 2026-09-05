@@ -148,6 +148,23 @@ def test_the_assurance_ledger_claims_configuration_not_execution() -> None:
     assert found is None, f"the ledger dates a run it cannot see: {found}"
 
 
+def test_the_sast_scan_is_judged_by_the_gate_and_not_by_its_exit_code() -> None:
+    """#114: a partial parse left the SAST job green over a safety module.
+
+    The scanner reports a file its parser could not finish as a warning and
+    still exits 0, so `--error --strict` decided the job by whichever code the
+    run happened to produce. `tools/sast_gate.py` reads the scan's JSON instead.
+    A workflow that went back to reading the exit code would restore the hole,
+    so the check is both directions: the gate runs, and the flags that used to
+    stand in for it are gone. See ADR 0012.
+    """
+
+    body = _uncommented(_text("security.yml"))
+    assert "tools/sast_gate.py" in body, "the SAST job no longer runs the gate"
+    assert "--error" not in body
+    assert "--strict" not in body
+
+
 def test_no_workflow_softens_a_gate_it_runs() -> None:
     """A run that could not happen is not a pass, and neither is one ignored."""
 

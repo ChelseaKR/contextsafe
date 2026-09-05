@@ -52,7 +52,11 @@ select = ["E", "W", "F", "I", "UP", "B", "SIM", "S", "C90", "RUF"]
 # module as partially analyzed, so the scanner passes over code it has not
 # finished reading. `_enum` in the validation module is the one generic function
 # here, and it is written with a TypeVar for that reason. The PEP 695 `type`
-# alias form is unaffected and is still used.
+# alias form is unaffected and is still used. The constraint is recorded in
+# docs/adr/0012-sast-partial-parse-and-the-syntax-it-forbids.md and asserted by
+# tests/test_sast_gate.py: a limit on how this codebase may be written does not
+# belong only in a comment beside a lint ignore, and `make sast` is what catches
+# the next construct this parser cannot read.
 ignore = ["E501", "UP047"]
 
 [tool.ruff.lint.per-file-ignores]

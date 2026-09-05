@@ -11,6 +11,53 @@ rather than after it.
 
 ### Changed
 
+- **The SAST gate reads the scan instead of the scanner's exit code, and a file
+  its parser could not finish now fails the security workflow by design.**
+  Semgrep had been partially analyzing `src/contextsafe/validation.py` — a
+  safety module, one of the twenty-eight the 95% coverage floor covers — and
+  exiting 0, because a partial parse is reported at level `warn`. `--strict`,
+  chosen in ADR 0004 so that "a scan that cannot run can no longer report
+  success", did not convert it: the job was green on `main` for as long as the
+  PEP 695 generic function sat in that module and went red only on a branch
+  whose larger file set pushed the same warning into a different exit code. A
+  verdict that depends on how many files a run happened to include is not a
+  gate, and a green SAST check over a module read in part is this repository's
+  named defect class (`docs/18-ASSURANCE-PROGRAM.md`).
+  `tools/sast_gate.py` runs the same scan, writes its JSON and judges it in the
+  three states of ADR 0008: exit 1 on any finding, which is ADR 0004's `--error`
+  posture moved into the program unchanged, and exit 2 on a partial parse, on
+  any other analysis error, on a tracked `.py` under `src` or `tools` that is
+  absent from the scanner's own list of scanned files, and on every way of not
+  getting a scan at all — scanner absent, scan incomplete, no report written, a
+  report that cannot be read, or a report in a shape the gate does not
+  understand. A run carrying both a parse error and a real finding is exit 2:
+  the finding list is incomplete and nothing in it says so. The report is read
+  fail-closed, so a missing key is a refusal rather than an empty list.
+  The scan runs with `--timeout 0`: a rule abandoned on a file has not examined
+  that file, and whether that happens depends on how loaded the machine is, so
+  the state is removed rather than excused. Measured against the registry `auto`
+  configuration over this repository on 2026-09-05: 16 timeout errors across 6
+  files with the default per-rule limit, 0 with none, and the same wall time,
+  since the run is dominated by fetching the rules.
+  `make sast` is the maintainer's entry point and `.github/workflows/security.yml`
+  runs the same program, so the argv lives in one place; like `make secret-scan`
+  it is deliberately outside `make verify`, which stays runnable on a clean
+  clone. `tests/test_sast_gate.py` drives every state with recorded report
+  shapes and a stand-in scanner, and therefore runs with no semgrep installed;
+  `tests/test_gate_exit_contract.py` now drives this gate into "examined
+  nothing" alongside the other ten. ADR 0008 had recorded Semgrep as out of that
+  contract's reach, which was right about the exit code and wrong about the
+  gate. Refs #114, ADR 0012.
+- **The rule that this codebase may not use PEP 695 type parameters on a
+  function or class is recorded and asserted, not left in a lint comment.**
+  It lived only beside the `UP047` ignore in `pyproject.toml`. ADR 0012 states
+  it, bounds it to its cause — a fact about the pinned scanner's parser, not
+  about the syntax — and `tests/test_sast_gate.py` checks it over the tracked
+  tree offline, inside `make verify`. The PEP 695 `type` alias form is
+  unaffected and is still used. `UP046`, the same rule for a generic class, is
+  not ignored today because no class here is generic; a future one takes the
+  ignore for this same recorded reason. Refs #114.
+
 - **The local event log's record carries the command's warning codes, and its
   schema version moves to `contextsafe.event-log/0.2.0`.** A record was
   command, outcome, error code, schema version, and sequence; it now also

@@ -81,12 +81,13 @@ the case that exists — is exempted with `hygiene: allow` on the same line,
 honored exemption is printed on every run so the mechanism stays countable. See
 [ADR 0005](docs/adr/0005-hygiene-marker-exemptions.md).
 
-Two gates sit outside `make verify`. One needs a tool a clean clone does not
-have, and `make verify` must stay exactly what CI runs; the other costs
+Three gates sit outside `make verify`. Two need a tool a clean clone does not
+have, and `make verify` must stay exactly what CI runs; the third costs
 minutes rather than a second:
 
 | Gate | Command | What it checks |
 | --- | --- | --- |
+| SAST | `make sast` | Semgrep over the tree, with the verdict read from the scan's JSON rather than from its exit code. Exit 1 on any finding; exit 2 on a file the parser could not finish, on a tracked `.py` under `src` or `tools` that is absent from the scanner's own list of scanned files, and on every way of not getting a scan at all — scanner absent, scan incomplete, no report, or a report in a shape the gate does not understand. A partial parse used to be a warning the job stayed green over, which left a safety module scanned in part and reported clean. The scan runs with no per-rule timeout, so a rule that gave up on a file cannot be mistaken for one that read it, and the verdict does not track how loaded the machine is. Needs semgrep on `PATH` and the network, since `--config auto` resolves the registry ruleset; `.github/workflows/security.yml` runs the same program on every pull request. Its states are covered by `tests/test_sast_gate.py`, which drives them with recorded report shapes and a stand-in scanner and therefore runs without semgrep installed. See [ADR 0012](docs/adr/0012-sast-partial-parse-and-the-syntax-it-forbids.md), which also records the one syntax this constraint forbids: no PEP 695 type parameters on a function or class while this scanner is the gate. |
 | Mutation evidence | `make mutants` | changes one operator or constant in a declared safety module and requires the suite to fail. Branch coverage says a line ran; this says a change to it would be noticed. Stdlib only, writes nothing into the working tree, and takes about two minutes, which is why it is not in `verify`. Exit 1 on a survivor, exit 2 when it produced no evidence. `.github/workflows/mutation.yml` runs it weekly and on any pull request touching the package, the suite or the gate, so it is no longer evidence that exists only when somebody remembers to produce it. See [ADR 0009](docs/adr/0009-mutation-evidence-over-declared-safety-modules.md). |
 | Full-history secret scan | `make secret-scan` | gitleaks over every ref, every object in the object database (including unreachable ones and every commit message), and the working tree. Needs gitleaks 8.30.1 on `PATH` (`brew install gitleaks`); CI and the release pipeline run this same target. Exit 1 on a finding; exit 2 when gitleaks is absent, is not the pinned version, cannot read an object it enumerated, or enumerated zero blobs. Its three states are covered by `tests/test_gate_exit_contract.py`, which drives it with a stand-in scanner and therefore runs without gitleaks installed. |
 

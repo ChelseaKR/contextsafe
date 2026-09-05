@@ -1,4 +1,4 @@
-.PHONY: a11y a11y-full a11y-install audit claims format format-fix hygiene i18n lint mutants package patterns publication-sweep scope secret-scan sync test typecheck verify
+.PHONY: a11y a11y-full a11y-install audit claims format format-fix hygiene i18n lint mutants package patterns publication-sweep sast scope secret-scan sync test typecheck verify
 
 SAFETY_MODULES := src/contextsafe/identifiers.py,src/contextsafe/models.py,src/contextsafe/validation.py,src/contextsafe/evaluator.py,src/contextsafe/laboratory.py,src/contextsafe/receipt.py,src/contextsafe/contract_validation.py,src/contextsafe/jsonio.py,src/contextsafe/pack.py,src/contextsafe/plan.py,src/contextsafe/evidence.py,src/contextsafe/preflight.py,src/contextsafe/evidence_store.py,src/contextsafe/safe_value.py,src/contextsafe/diagnostics.py,src/contextsafe/eventlog.py,src/contextsafe/importers/__init__.py,src/contextsafe/importers/base.py,src/contextsafe/importers/canonical_json.py,src/contextsafe/importers/fhir_r4_json.py,src/contextsafe/importers/hl7v2_er7.py,src/contextsafe/importers/lis.py,src/contextsafe/importers/lis_csv.py,src/contextsafe/importers/mapping.py,src/contextsafe/mapping_profile.py,src/contextsafe/divergence.py,src/contextsafe/html_receipt.py,src/contextsafe/receipt_delta.py,src/contextsafe/review.py
 
@@ -45,6 +45,20 @@ audit:
 # target directly, so CI and a maintainer run the identical scan.
 secret-scan:
 	./tools/secret-scan-full-history.sh
+
+# The SAST scan, and the half of it the scanner's exit code never carried. A
+# partial parse is a warning that leaves the scan at exit 0, so the gate had
+# been reporting clean over the unread remainder of a safety module; whether it
+# went red depended on how many files the run happened to include. This target
+# runs the scan and then reads its JSON: a finding is exit 1, and a file the
+# parser could not finish, a source that was never opened, or a scan that did
+# not happen at all is exit 2. Deliberately not part of `verify`, exactly as
+# `secret-scan` is not: semgrep is not in uv.lock, a clean clone does not have
+# it, and `--config auto` is a network call. `.github/workflows/security.yml`
+# runs this same program, so CI and a maintainer judge the same scan. See
+# ADR 0012.
+sast:
+	uv run python tools/sast_gate.py
 
 # Evidence that the suite would notice a change, not just execute the line.
 # Deliberately not part of `verify`: every mutant is a separate test run, so

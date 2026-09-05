@@ -485,6 +485,23 @@ def _secret_scan_unavailable(tmp_path: Path) -> int:
     return _scan(repo, GITLEAKS_BIN=str(repo / "absent")).returncode
 
 
+def _sast_unavailable(tmp_path: Path) -> int:
+    """No scanner report to read: nothing was scanned, so nothing is clean.
+
+    The gate ADR 0008 said was out of this contract's reach, because semgrep's
+    own exit codes are a property of a tool that is not in `uv.lock`. It is in
+    reach now because the verdict is no longer the scanner's exit code: the gate
+    reads the scanner's JSON, and the absence of that report is drivable here
+    with no semgrep installed, exactly as the stand-in gitleaks drives the shell
+    script above. See ADR 0012.
+    """
+
+    gate = _load("sast_gate")
+    root = tmp_path / "sast"
+    root.mkdir(parents=True, exist_ok=True)
+    return int(gate.main(["--root", str(root), "--report", str(root / "absent.json")]))
+
+
 UNAVAILABLE_CASES: tuple[tuple[str, Callable[[Path], int]], ...] = (
     ("tools/hygiene_gate.py", _hygiene_unavailable),
     ("tools/publication_sweep.py", _sweep_unavailable),
@@ -493,6 +510,7 @@ UNAVAILABLE_CASES: tuple[tuple[str, Callable[[Path], int]], ...] = (
     ("tools/i18n_gate.py", _i18n_unavailable),
     ("tools/a11y_gate.py", _a11y_unavailable),
     ("tools/mutation_gate.py", _mutation_unavailable),
+    ("tools/sast_gate.py", _sast_unavailable),
     ("tools/claims_gate.py", _claims_unavailable),
     ("tools/audit_gate.py", _audit_unavailable),
     ("tools/fresh_install_gate.py", _fresh_install_unavailable),

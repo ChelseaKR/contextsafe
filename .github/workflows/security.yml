@@ -37,6 +37,14 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+      # The job runs in a container as a different user than the one that
+      # checked the tree out, and both semgrep's target selection and the gate's
+      # own `git ls-files` read the repository through git. Without this, git
+      # refuses the checkout as dubiously owned: semgrep would silently widen to
+      # every file on disk and the gate would exit 2 rather than scan. Marking
+      # the workspace safe is the narrowest fix, and it is one path, not `*`.
+      - name: Let git read the checkout this container did not create
+        run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
       # `semgrep scan`, not `semgrep ci`. On a pull_request event `semgrep ci`
       # resolves a diff baseline and shells out to
       # `git fetch origin --force --depth=1 <head-sha>`. This repository is
@@ -46,10 +54,32 @@ jobs:
       # `--suppress-errors` turned the aborted run into exit 0. Every pull request
       # therefore got a green SAST check over zero scanned files, while the same
       # config on a push to main ran the full scan and went red. `semgrep scan`
-      # needs no baseline and no credential, so both events now run the identical
-      # full scan. `--error` fails on findings; `--strict` fails on an analysis
-      # error, so a scan that cannot run can no longer report success.
-      - run: semgrep scan --config auto --error --strict
+      # needs no baseline and no credential, so both events run the identical
+      # full scan. That decision is ADR 0004 and it is unchanged; what moved is
+      # who reads the result.
+      #
+      # This step used to be `semgrep scan --config auto --error --strict`, and
+      # the flags were the whole verdict. `--error` fails on a finding, which is
+      # right and is what the gate below does. `--strict` was supposed to cover
+      # the other half, and did not: semgrep reports a file its parser could not
+      # finish as a `warn`-level error and still exits 0, so the scan stayed
+      # green over the unread remainder of `src/contextsafe/validation.py` for as
+      # long as a PEP 695 generic function sat in it, and turned red only on a
+      # branch whose larger file set pushed the same warning into exit 3 (#114).
+      # A verdict that depends on how many files the run was given is not a gate.
+      #
+      # So the exit code is no longer the verdict. `tools/sast_gate.py` runs the
+      # same scan, writes its JSON, and reads it: exit 1 on any finding, exit 2
+      # on a file the parser could not finish, on a tracked source under `src` or
+      # `tools` the scanner never opened, and on every way of not getting a scan
+      # at all. That is the three-state contract of ADR 0008, which ADR 0004's
+      # invocation could not express, and ADR 0012 records the change. The gate
+      # program holds the scanner's argv, so this job cannot drift into scanning
+      # something other than what `make sast` scans; it is run as `python3` here
+      # rather than through `make` because this container ships semgrep and its
+      # Python, not the repository's toolchain, and the gate is stdlib-only for
+      # exactly that reason.
+      - run: python3 tools/sast_gate.py
 
   secret-scan:
     name: secret scanning (gitleaks, full history + object database)

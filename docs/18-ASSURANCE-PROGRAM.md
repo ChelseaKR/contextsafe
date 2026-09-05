@@ -220,6 +220,28 @@ every other job's green, and it needs its own design. The stand-in gitleaks
 inside `make verify` gives the same evidence in a place CI already runs, so the
 proof exists and the workflow does not.
 
+**The third of those three gates joined the contract on 2026-09-05**, and the
+reason it had not is worth keeping. ADR 0008 excluded Semgrep on the grounds
+that whether the scanner distinguishes a finding from an analysis error is a
+property of a tool this repository cannot verify offline. That was right about
+the exit code and wrong about the gate: #114 found the scanner had been
+partially parsing `src/contextsafe/validation.py` — a safety module — and
+exiting 0, so the SAST check was green over a module it had read in part, and
+went red only when a branch's larger file set turned the same warning into a
+different exit code. The scan's `--json` report carries the parse errors and the
+list of files actually scanned, so `tools/sast_gate.py` reads that instead and
+answers in the three states, with the report shapes and a stand-in scanner
+covering them inside `make verify`. See
+[ADR 0012](adr/0012-sast-partial-parse-and-the-syntax-it-forbids.md). This is
+the program's own defect class found in the gate ADR 0004 had already been
+written about once, which is the argument for phase 6 rather than against it:
+each of these was found by the person who wrote the thing.
+
+What is proved today is proved by `make sast` locally and by the tests inside
+`make verify`. The security workflow's first run of the new step is what will
+show that the CI container carries what the gate needs; nothing in a checkout
+can see a workflow run, and this document does not date one.
+
 ### Phase 5 — Evidence that the suite can detect a regression
 
 **Status: built,** over a declared subset of three of the twenty-eight modules
@@ -320,14 +342,14 @@ cannot, and saying so is part of the plan rather than an omission from it.
 | 5 | yes, bounded to a declared module set | judgement on where the bound sits |
 | 6 | **no** | a named independent reviewer, funded per B-040, and a release dossier that does not exist yet |
 
-Built, as of 2026-09-04:
+Built, as of 2026-09-05:
 
 | Phase | State | Where it landed |
 |---|---|---|
 | 1 | built | ADR 0005; `make hygiene` covers `tools`, the sweep names unread sources, the coverage floor measures the gates |
 | 2 | built | ADR 0006; provenance grammars and the boundary scan on `parse_evidence_metadata`, closing issue #35 |
 | 3 | built | ADR 0007; `make scope` |
-| 4 | built, with one substitution | ADR 0008; the three-state contract, proved locally rather than by a CI job nobody has watched run |
+| 4 | built, with one substitution, and widened to the SAST gate on 2026-09-05 | ADR 0008 and ADR 0012; the three-state contract, proved locally rather than by a CI job nobody has watched run, now including the scan whose partial parse used to leave a safety module read in part and reported clean (#114) |
 | 5 | built over three of twenty-eight safety modules | ADR 0009; `make mutants`, wired into `.github/workflows/mutation.yml` on 2026-09-04, first run not yet observed |
 | 6 | **blocked on people and money** | nothing, deliberately |
 
