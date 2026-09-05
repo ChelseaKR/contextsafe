@@ -915,6 +915,97 @@ rather than after it.
   secret scan, `make verify` at the tag and the CHANGELOG heading, and there is
   still no publish step. Nothing here has fired: no tag exists.
 
+- **B-038 and B-041, audited on 2026-09-04 and completed where they fell
+  short.** The audit found the pseudolocale expanding text by 30 percent
+  against the 35 the accessibility document requires, with nothing measuring
+  it; `hardcoded-string` and `undisclosed-machine-translation` with no negative
+  control despite `docs/I18N.md` saying every rule had one; a print block with
+  no repeated-header or keep-together rule and a gate that checked only
+  `display: none`; a renderer that trusted the document's own `payload_sha256`
+  and rendered around any field it did not know; and nothing proving the page
+  carries only what it needs (A-036, F-027). Now:
+  - `qps-ploc` grows every message by at least `PSEUDO_MINIMUM_EXPANSION`
+    (35 percent), and `make i18n` gains `pseudolocale-fidelity`: the floor,
+    no accentable letter outside a placeholder left plain, and placeholder
+    parity, measured on the generated catalog rather than assumed of the
+    transform. A Hypothesis property pins the same three facts for arbitrary
+    source text, and a negative control accents one letter per message, the
+    transform that "some diacritic somewhere" could not tell from a real one.
+    The floor is measured on the body with the two brackets set aside, the
+    measure the transform pads to and the property uses: counted, the
+    brackets alone were 40 percent of a four-letter status word, so a
+    transform that stopped padding passed on exactly the short labels where
+    expansion matters, and a control now names every label of five
+    characters or fewer under that transform. An empty source message is
+    `message-quality`'s finding and is no longer divided by. The pseudolocale
+    is still never shipped to a reader. `hardcoded-string`'s parser pops the
+    language stack by tag name, so a stray end tag can no longer shift the
+    runs after it into the accepting source-locale bucket.
+  - `hardcoded-string` now judges each visible run under the `lang` in force
+    for it: source-locale wording is accepted only where the page marks it as
+    a source-locale original, so an unmarked copy of a catalog sentence is a
+    finding, reported by position and length rather than quoted. Both it and
+    `undisclosed-machine-translation` have negative controls that were watched
+    to fail.
+  - The print stylesheet declares `thead` a repeating header group, keeps a
+    result row, a limitation with its source original, the translation notice
+    and a source-text block on one page, and keeps headings and captions with
+    what follows them. `make a11y`'s `print` check fails when any of those
+    declarations is absent, when a table has no `<thead>`, when any print
+    rule on any selector sets a break property (`break-inside`,
+    `page-break-inside`, `break-after`, `page-break-after`) or a `thead`
+    display to anything else, or when any print rule but the skip link's
+    hides by any of the techniques `HIDING_TECHNIQUES` names: `display`,
+    `visibility: hidden` or `collapse`, zero opacity, a font below a pixel, a
+    clip, a collapsed box with its overflow cut off, a positioned box pushed
+    off the sheet, `content-visibility: hidden`, a transform that scales to
+    nothing or translates off the sheet, or a negative indent or margin past
+    the edge, each with a negative control. The hiding rule is an allowlist
+    of what may be hidden rather than a list of selectors to protect, because
+    a protected list let `li { display: none; }` through, and that hides
+    every limitation. Review of the first form of this check found three
+    more ways past it, each now a control: it read one block spelled exactly
+    `@media print {` and filed a second print block, `print{`, `print and
+    (...)` or `screen, print` under screen, where nothing looked (every
+    `@media` block whose query reaches the printer is print now, brace-
+    balanced, and a block the gate cannot classify is a finding); it
+    compared declarations verbatim, so `DISPLAY: NONE`, `display: none
+    !important` and `visibility: HIDDEN` produced nothing (names and values
+    are lower-cased and `!important` set aside now); and it counted only an
+    `absolute` or `fixed` box as positioned and compared `-50em` as the
+    number 50 against 100 pixels (any `position` but `static` counts, and
+    lengths are measured in their unit). `position: relative; left:
+    -9999px`, which the first form's accepting test pinned as hiding
+    nothing, is a catching row.
+  - `render_receipt_page` recomputes the payload hash and refuses a document
+    whose `payload_sha256` does not cover its payload
+    (`receipt_payload_hash_mismatch`), and refuses any object carrying a field
+    the receipt contract does not publish (`invalid_receipt_document`, naming
+    the location and never the field or its value). A result's expected,
+    observed and evidence hashes and its rule version stay in the JSON and off
+    the page, and a test pins that against the schema's closed objects.
+  - `make a11y` gains `minimization`: every visible run of text, the text of
+    a `title`, `aria-label` or `alt` attribute included, is catalog text
+    or one of the receipt values the page is allowed to present, named by
+    pointer; a catalog message with a placeholder counts only when the
+    placeholder holds one of those values or a locale tag, so no message is a
+    prefix that free text can hide behind. Anything else is a finding that
+    reports position and length, never content. The gate derives the hash
+    each page must carry from the payload rather than reading the document's
+    field, so a tampered document cannot be audited by agreeing with itself;
+    the negative control forges the field and a page that carries it, so it
+    fails under a gate that reads the field and passes only under one that
+    recomputes. `src/contextsafe/html_receipt.py` joins the Makefile's
+    `SAFETY_MODULES` now that it validates a document rather than only
+    rendering one.
+
+  Existing tests that edit a payload after it is built now re-seal it first.
+  Neither item is closed: the print checks are computed from the stylesheet
+  and the markup, not from a browser that printed the page, so the
+  print-preview task in Accessibility §7 stays with B-044; no locale was
+  added and es-US remains an unreviewed machine translation (B-042). No
+  contract version moved and the pinned reference-receipt digest is unchanged.
+
 ## [0.1.0] - 2026-09-02
 
 ### Fixed

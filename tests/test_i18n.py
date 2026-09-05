@@ -17,11 +17,15 @@ from types import ModuleType
 from typing import Any
 
 import pytest
+from hypothesis import given, settings
+from hypothesis import strategies as st
 
 from contextsafe.canonical import canonical_json
 from contextsafe.errors import ContextSafeError
 from contextsafe.i18n import (
+    PSEUDO_ACCENTABLE,
     PSEUDO_LOCALE,
+    PSEUDO_MINIMUM_EXPANSION,
     SOURCE_LOCALE,
     Catalog,
     Message,
@@ -189,6 +193,145 @@ def test_pseudolocale_transforms_text_and_preserves_placeholders() -> None:
     catalog = load_catalog(PSEUDO_LOCALE)
     assert catalog.keys() == source_catalog().keys()
     assert catalog.is_machine_translated
+
+
+_PSEUDO_SOURCE_TEXT = st.text(
+    alphabet=st.characters(
+        codec="ascii", categories=("L", "N", "P", "Zs"), exclude_characters="{}"
+    ),
+    min_size=1,
+    max_size=200,
+).filter(str.strip)
+
+
+_ACCENTED = {char: pseudolocalize(char)[1] for char in PSEUDO_ACCENTABLE}
+"""Each accentable letter and the form the transform gives it."""
+
+
+def _one_diacritic_per_message(text: str) -> str:
+    """Pseudolocalize, then put back every accented letter after the first.
+
+    The transform the earlier "some diacritic somewhere" rule could not tell
+    from a real one: it expands, keeps placeholders, and leaves the sentence
+    legible English from the second letter on.
+    """
+
+    plain = {accented: char for char, accented in _ACCENTED.items()}
+    kept = False
+    out: list[str] = []
+    for char in pseudolocalize(text):
+        if char in plain and kept:
+            out.append(plain[char])
+        else:
+            kept = kept or char in plain
+            out.append(char)
+    return "".join(out)
+
+
+@given(text=_PSEUDO_SOURCE_TEXT, placeholder=st.sampled_from(["", " {count}"]))
+@settings(max_examples=200)
+def test_pseudolocalization_expands_accents_and_keeps_placeholders(
+    text: str, placeholder: str
+) -> None:
+    """B-041, as a property: the floor holds for any source string.
+
+    At least ``PSEUDO_MINIMUM_EXPANSION`` growth measured on the body alone,
+    without the two brackets the gate does count, so this is the stricter of
+    the two measures; every accentable letter outside the placeholder
+    accented, not merely some diacritic somewhere; and the placeholder set
+    unchanged.
+    """
+
+    source = text + placeholder
+    rendered = pseudolocalize(source)
+    assert rendered.startswith("⟦") and rendered.endswith("⟧")
+    body = rendered[1:-1]
+    assert len(body) - len(source) >= PSEUDO_MINIMUM_EXPANSION * len(source)
+    literals = body.replace("{count}", "")
+    assert not PSEUDO_ACCENTABLE & set(literals)
+    for char in PSEUDO_ACCENTABLE & set(text):
+        assert literals.count(_ACCENTED[char]) >= text.count(char)
+    assert ("{count}" in rendered) == bool(placeholder)
+    assert rendered.count("{") == source.count("{")
+
+
+def test_the_shipped_pseudolocale_holds_its_floor() -> None:
+    """Every generated message, measured, not just one example."""
+
+    assert PSEUDO_MINIMUM_EXPANSION >= 0.35
+    assert list(gate.check_pseudolocale(load_catalog(PSEUDO_LOCALE))) == []
+
+
+def _weakened_pseudolocale(transform: Any) -> Catalog:
+    """A pseudolocale built with a transform that has lost a property."""
+
+    source = source_catalog()
+    return Catalog(
+        locale=PSEUDO_LOCALE,
+        source_locale=SOURCE_LOCALE,
+        review=load_catalog(PSEUDO_LOCALE).review,
+        messages={
+            key: Message(
+                key=key,
+                text=transform(message.text),
+                review=ReviewStatus.MACHINE,
+                locale=PSEUDO_LOCALE,
+            )
+            for key, message in source.messages.items()
+        },
+    )
+
+
+@pytest.mark.parametrize(
+    ("transform", "needle"),
+    [
+        (
+            lambda text: "⟦" + text.translate(str.maketrans("aeiou", "áéíóú")) + "⟧",
+            "below",
+        ),
+        (lambda text: "⟦" + text + "‧" * len(text) + "⟧", "accentable letter"),
+        (_one_diacritic_per_message, "accentable letter"),
+        (
+            lambda text: (
+                "⟦"
+                + text.translate({ord(c): None for c in PSEUDO_ACCENTABLE})
+                + "‧" * (2 * len(text))
+                + "⟧"
+            ),
+            "no diacritic",
+        ),
+        (lambda text: pseudolocalize(text).replace("{", "{x_"), "placeholders"),
+    ],
+    ids=["expansion", "diacritics", "partial-diacritics", "no-letters", "placeholders"],
+)
+def test_the_gate_catches_a_pseudolocale_that_lost_a_property(
+    transform: Any, needle: str
+) -> None:
+    """Negative controls for ``pseudolocale-fidelity``, at least one per property.
+
+    ``partial-diacritics`` is the one the first form of the rule missed: a
+    transform that accents one letter per message and leaves the rest plain
+    satisfied "some diacritic somewhere" with zero findings.
+    """
+
+    findings = list(gate.check_pseudolocale(_weakened_pseudolocale(transform)))
+    assert findings
+    assert {finding.rule for finding in findings} == {"pseudolocale-fidelity"}
+    assert any(needle in finding.detail for finding in findings)
+
+
+def test_the_gate_catches_a_pseudolocale_missing_a_key() -> None:
+    """A key the pseudolocale lacks is a string the hardcoded check cannot see."""
+
+    catalog = _weakened_pseudolocale(pseudolocalize)
+    thinned = Catalog(
+        locale=catalog.locale,
+        source_locale=catalog.source_locale,
+        review=catalog.review,
+        messages={k: v for k, v in catalog.messages.items() if k != "page.title"},
+    )
+    findings = list(gate.check_pseudolocale(thinned))
+    assert [finding.detail for finding in findings] == ["missing key page.title"]
 
 
 def test_available_locales_lists_what_can_be_rendered() -> None:
@@ -447,3 +590,217 @@ def test_the_gate_cli_reports_clean_and_dirty(
     )
     assert gate.main(["--locale", "es-US"]) == 1
     assert "1 finding(s)" in capsys.readouterr().out
+
+
+def _rendering(monkeypatch: pytest.MonkeyPatch, edit: Any) -> None:
+    """Point the gate at a renderer whose output ``edit`` has changed."""
+
+    real = gate.render_receipt_page
+    monkeypatch.setattr(
+        gate, "render_receipt_page", lambda *a, **k: edit(real(*a, **k))
+    )
+
+
+@pytest.mark.parametrize(
+    "injected",
+    [
+        "<p>Rendered by hand</p>",
+        "<p>Skip to the receipt</p>",
+        '<p lang="es-US">Skip to the receipt</p>',
+    ],
+    ids=["free-text", "unmarked-catalog-copy", "wrongly-marked-catalog-copy"],
+)
+def test_the_gate_catches_a_hardcoded_string(
+    monkeypatch: pytest.MonkeyPatch, injected: str
+) -> None:
+    """Negative control for ``hardcoded-string``.
+
+    A literal nobody externalized, and a literal copy of a catalog sentence
+    that is not marked as a source-locale original: the second is the one
+    a pattern-only check would have waved through.
+    """
+
+    _rendering(monkeypatch, lambda page: page.replace("</main>", injected + "</main>"))
+    findings = list(gate.check_hardcoded_strings(gate.reference_document()))
+    assert [finding.rule for finding in findings] == ["hardcoded-string"]
+
+
+def test_a_marked_source_original_is_not_a_hardcoded_string(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The accepting half: an original marked as such is how the page works."""
+
+    _rendering(
+        monkeypatch,
+        lambda page: page.replace(
+            "</main>", '<p lang="en-US">Skip to the receipt</p></main>'
+        ),
+    )
+    assert list(gate.check_hardcoded_strings(gate.reference_document())) == []
+
+
+def test_the_gate_catches_an_undisclosed_machine_translation(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Negative control for ``undisclosed-machine-translation``, both ways."""
+
+    document = gate.reference_document()
+    _rendering(
+        monkeypatch,
+        lambda page: page.replace('data-cs-notice="machine-translation"', ""),
+    )
+    findings = list(gate.check_disclosure(load_catalog("es-US"), document))
+    assert [finding.rule for finding in findings] == ["undisclosed-machine-translation"]
+    assert "without the notice" in findings[0].detail
+
+    monkeypatch.undo()
+    _rendering(
+        monkeypatch,
+        lambda page: page.replace(
+            "<main", '<aside data-cs-notice="machine-translation"></aside><main'
+        ),
+    )
+    findings = list(gate.check_disclosure(_reviewed_catalog(), document))
+    assert [finding.rule for finding in findings] == ["undisclosed-machine-translation"]
+    assert "reviewed catalog" in findings[0].detail
+
+
+def test_visible_text_carries_the_language_in_force() -> None:
+    """The lang a run is judged under is inherited, the way a browser does it."""
+
+    runs = gate.visible_text(
+        '</stray><html lang="qps-ploc"><head><title>t</title><style>x</style>'
+        '</head><body><p>a<span lang="en-US">b<br></br>c</span></span>d</p>'
+        '<p lang="es-US">e</p></body></html>'
+    )
+    assert [(run.text, run.lang) for run in runs] == [
+        ("a", "qps-ploc"),
+        ("b", "en-US"),
+        ("c", "en-US"),
+        ("d", "qps-ploc"),
+        ("e", "es-US"),
+    ]
+
+
+def test_a_stray_end_tag_moves_no_language() -> None:
+    """An end tag that closes nothing must not shift what follows into en-US.
+
+    The first form popped whatever was on top of the stack on any end tag,
+    so ``</stray>`` inside an ``en-US`` span put the rest of the span under
+    the page language, and an end tag that closed the page's ``<p>`` early
+    put the rest of the page under the accepting source-locale bucket. Pop by
+    name: a stray tag closes nothing, and an end tag closes what it names
+    along with anything left open inside it.
+    """
+
+    runs = gate.visible_text(
+        '<html lang="qps-ploc"><body><p><span lang="en-US">b</stray>c</span>d</p>'
+        '<p lang="es-US"><span lang="en-US">e</p>f'
+        "<style>g</stray>h</style>i</body></html>"
+    )
+    assert [(run.text, run.lang) for run in runs] == [
+        ("b", "en-US"),
+        ("c", "en-US"),
+        ("d", "qps-ploc"),
+        ("e", "en-US"),
+        ("f", "qps-ploc"),
+        ("i", "qps-ploc"),
+    ]
+    parser = gate._VisibleText()
+    parser.feed("<p>a</b>b</p></p>")
+    assert parser.stray == ["b", "p"]
+    assert [run.text for run in parser.runs] == ["a", "b"]
+
+
+def test_the_expansion_floor_is_measured_without_the_brackets() -> None:
+    """A transform that only brackets a label is short of the floor on it.
+
+    Counted, the two brackets were a 50 percent expansion of ``Pass`` and a
+    100 percent expansion of ``No``, so a pseudolocale that stopped padding
+    passed the gate on exactly the short column headers and status words
+    where expansion matters; the property test measured the body and the
+    gate did not. Every message of five characters or fewer must now be
+    named by the gate under that transform.
+    """
+
+    accented = str.maketrans("aeiou", "áéíóú")
+    findings = list(
+        gate.check_pseudolocale(
+            _weakened_pseudolocale(lambda text: "⟦" + text.translate(accented) + "⟧")
+        )
+    )
+    named = {
+        finding.detail.partition(":")[0]
+        for finding in findings
+        if "below" in finding.detail
+    }
+    short = {
+        key
+        for key, message in source_catalog().messages.items()
+        if len(message.text) <= 5
+    }
+    assert short, "the source catalog has no short label to measure"
+    assert short <= named, sorted(short - named)
+
+
+def test_a_placeholder_permitted_no_value_matches_nothing() -> None:
+    """The empty allowlist is a placeholder no run may have filled."""
+
+    from contextsafe import i18n
+
+    catalog = source_catalog()
+    key, message = next(
+        (key, message)
+        for key, message in sorted(catalog.messages.items())
+        if "{" in message.text
+    )
+    filled = message.text.format_map(_AnyValue())
+    assert catalog.accounts_for(filled)
+    assert catalog.accounts_for(filled, {"CSYN-FIXTURE-VALUE"})
+    assert not catalog.accounts_for(filled, set())
+    assert not catalog.accounts_for(filled, {"CSYN-OTHER"})
+    assert i18n._message_pattern(message.text, ()).fullmatch(filled) is None, key
+
+
+class _AnyValue(dict[str, str]):
+    """Format map that fills every placeholder with one synthetic token."""
+
+    def __missing__(self, key: str) -> str:
+        return "CSYN-FIXTURE-VALUE"
+
+
+def test_pseudolocalization_keeps_a_conversion_and_a_format_spec() -> None:
+    """``{count!r:>4}`` survives the transform with both halves intact."""
+
+    rendered = pseudolocalize("n {count!r:>4} m")
+    assert "{count!r:>4}" in rendered
+    assert rendered.count("{") == 1
+
+
+def test_a_review_status_that_is_not_text_is_rejected() -> None:
+    """A review status is a closed enum member, never a number or a flag."""
+
+    from contextsafe import i18n
+
+    payload = json.loads(
+        (REPO_ROOT / "src" / "contextsafe" / "locales" / "en-US.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    key = sorted(payload["messages"])[0]
+    payload["messages"][key]["review"] = True
+    with pytest.raises(ContextSafeError) as excinfo:
+        i18n._parse_catalog(payload, locale="en-US")
+    assert excinfo.value.code == "invalid_catalog"
+    assert excinfo.value.path == f"$.messages.{key}.review"
+
+
+def test_shipped_catalogs_iterate_source_locale_first() -> None:
+    """The source catalog leads, so parity has something to compare against."""
+
+    from contextsafe import i18n
+
+    locales = [catalog.locale for catalog in i18n.iter_shipped_catalogs()]
+    assert locales[0] == SOURCE_LOCALE
+    assert PSEUDO_LOCALE not in locales
+    assert set(locales) == set(available_locales()) - {PSEUDO_LOCALE}

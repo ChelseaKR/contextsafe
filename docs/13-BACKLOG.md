@@ -633,6 +633,70 @@ audit, so coverage of the surfaces in
 gate is a substitute for B-044, and the Spanish page is auditable but its
 wording is still unreviewed (B-042).
 
+Implementation note (2026-09-04, B-038 and B-041): audited first, then
+completed only where the audit found a gap. Already there: the generated
+`qps-ploc` pseudolocale with diacritics and bracketing (`i18n.pseudolocalize`),
+placeholder parity for shipped locales (`placeholder-parity`), a
+`hardcoded-string` rule over the pseudolocalized page, a print block that never
+hides a disclosure (`check_print`), and a gate that checks the page's
+`data-cs-payload-sha256` against the receipt (`assert_subject`). Not there:
+expansion was 30 percent against the 35 in
+[Accessibility §6](08-ACCESSIBILITY-I18N.md) with nothing measuring it;
+`hardcoded-string` and `undisclosed-machine-translation` had no negative
+control although `docs/I18N.md` said every rule did; the print block had no
+repeated-header or keep-together rule and the gate checked only `display:
+none`; the renderer read `payload_sha256` from the document instead of
+recomputing it and rendered around unknown fields; and nothing enforced that
+the page carries only what substantiates an outcome (A-036, F-027).
+
+Now `PSEUDO_MINIMUM_EXPANSION` is 0.35 and `tools/i18n_gate.py` measures the
+generated catalog (`pseudolocale-fidelity`: expansion, no accentable letter
+left plain outside a placeholder, placeholder parity;
+`test_the_gate_catches_a_pseudolocale_that_lost_a_property`, whose controls
+include a transform that accents one letter per message, and a Hypothesis
+property in `tests/test_i18n.py`); `hardcoded-string` judges each
+run under the `lang` in force so an unmarked copy of a catalog sentence is a
+finding (`test_the_gate_catches_a_hardcoded_string`); the print stylesheet
+declares `thead` a repeating header group, keeps `tr`, `li`, `.notice` and
+`.source-text` on one page and headings with what follows, and
+`tools/a11y_gate.py`'s `print` check fails without each of those
+(`test_a_print_layout_that_could_orphan_a_finding_is_caught`) and on any
+print rule but the skip link's that hides by any technique `HIDING_TECHNIQUES`
+names, not only `display` and `visibility` and not only under five named
+selectors, since `li { display: none; }` had walked past those
+(`test_hiding_a_disclosure_in_print_is_caught`). Review of that check found
+three more ways past it, fixed the same day with a control each: it read one
+block spelled exactly `@media print {` and filed every other print block under
+screen (`test_a_print_block_spelled_another_way_is_still_read`; every block
+whose query reaches the printer is print now, and one the gate cannot classify
+is a finding); it compared declarations verbatim, so `DISPLAY: NONE` and
+`display: none !important` were not findings and `visibility: collapse` was
+not `hidden`; and it counted only `absolute` and `fixed` as positioned and
+`-50em` as the number 50, so `position: relative; left: -9999px` sat in the
+accepting test. It also now refuses any print rule that sets a break property
+or a `thead` display to another value on any selector
+(`test_a_print_rule_that_undoes_a_keep_together_rule_is_caught`), reads
+`title`, `aria-label` and `alt` as text for `minimization`, and `make i18n`
+measures expansion on the body without the brackets, which a four-letter label
+had met on its brackets alone
+(`test_the_expansion_floor_is_measured_without_the_brackets`);
+`html_receipt.render_receipt_page` recomputes the payload hash
+(`receipt_payload_hash_mismatch`) and refuses unknown fields at every level
+(`test_a_field_the_contract_does_not_publish_is_refused`, pinned against the
+schema's closed objects); and the a11y gate's new `minimization` check allows
+only pointer-named receipt values beside catalog text, lets a catalog
+placeholder hold nothing but one of those values, and recomputes the hash it
+expects (`test_a_receipt_value_the_page_does_not_need_is_caught`, and
+`test_the_expected_hash_is_recomputed_not_read`, which forges the field and a
+page carrying it so that a gate reading the field would audit the page and
+the recomputing gate refuses it). `html_receipt.py` is now a declared safety
+module in the Makefile because it validates a document. B-038 is not closed: the
+print protections are computed from the stylesheet and the markup, no browser
+has printed the page under test, and the print-preview row of
+[Accessibility §7](08-ACCESSIBILITY-I18N.md) is B-044's manual task. B-041 is
+not closed: no locale was added, the pseudolocale is gate-only, and es-US is
+still an unreviewed machine translation until B-042 happens.
+
 Implementation note (2026-08-15, B-046): `contextsafe diagnostics`, `contextsafe
 cleanup`, `contextsafe support-bundle`, and an opt-in local event log
 (`--log-dir` on every command). B-018 and B-020, the dependencies, are both in

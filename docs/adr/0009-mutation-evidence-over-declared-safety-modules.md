@@ -6,7 +6,7 @@ Decision owners: technical owner
 
 ## Context
 
-`make test` holds 90% branch coverage overall and 95% across the fifteen modules
+`make test` holds 90% branch coverage overall and 95% across the sixteen modules
 named in the Makefile's `SAFETY_MODULES`. Those numbers say a line ran. They say
 nothing about whether anything would have failed had the line been wrong.
 
@@ -128,7 +128,7 @@ a clean clone lacks.
 - **It is not a proof of correctness.** R-14 is recorded as irreducible: a
   finite test pack cannot prove safety. A killed mutant says one specific wrong
   program would have been caught.
-- **It does not cover thirteen of the fifteen safety modules.** That is the
+- **It does not cover fourteen of the sixteen safety modules.** That is the
   declared subset, visible in `DECLARED_TARGETS`, and widening it is a runtime
   decision rather than a design one.
 

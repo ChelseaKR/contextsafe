@@ -20,6 +20,20 @@ Constraints this renderer holds, each of which has a gate behind it:
   is rendered from the payload's own statuses and checkpoint names: the page
   never infers a boundary the payload did not name, and an unobserved
   boundary is shown as unobserved, not blamed and not agreed.
+  this receipt rather than some other page. The hash is recomputed from the
+  payload before anything renders, and a document whose ``payload_sha256``
+  does not equal it is refused: a page must never carry a hash that does not
+  cover the content beneath it (A-036).
+* **Nothing the reader does not need.** Every object in the document is a
+  closed set of fields, and a field the receipt contract does not publish is a
+  refusal rather than something to skip past. Of the fields a result carries,
+  the page shows the rule, boundary, field, status, and reason; the expected,
+  observed, and evidence hashes and the rule version stay in the JSON, which
+  is where a verifier reads them (A-036, F-027).
+* **It prints.** Table headers repeat on every printed page, a result row
+  stays with its reason, a limitation stays with its source-locale original,
+  headings stay with what they introduce, and no print rule hides a mandated
+  disclosure (B-038).
 * **Never colour alone.** Every status carries its word and a distinct symbol.
   Removing every colour from this page loses no information, which is what
   makes it survive black-and-white print, forced-colours mode, and the several
@@ -36,7 +50,7 @@ from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from html import escape
 
-from contextsafe.canonical import JsonValue
+from contextsafe.canonical import JsonValue, sha256_json
 from contextsafe.errors import ContextSafeError
 from contextsafe.i18n import (
     SOURCE_LOCALE,
@@ -69,6 +83,51 @@ _STATUS_SYMBOLS = {
 _BOOLEAN_SYMBOLS = {True: "✔", False: "✖"}
 
 _HASH_ORDER = ("input_sha256", "result_sha256", "rule_set_sha256")
+
+_DOCUMENT_FIELDS = frozenset(
+    {"envelope", "payload", "payload_sha256", "schema_version"}
+)
+_ENVELOPE_FIELDS = frozenset(
+    {"claimed_generated_at", "signature_status", "trusted_time"}
+)
+_PAYLOAD_FIELDS = frozenset(
+    {
+        "case_id",
+        "divergence",
+        "hashes",
+        "limitations",
+        "results",
+        "runner_version",
+        "schema_version",
+        "scope",
+        "summary",
+    }
+)
+_SCOPE_FIELDS = frozenset(
+    {"clinical_oracle_approved", "patient_data_allowed", "synthetic_fixture_only"}
+)
+_RESULT_FIELDS = frozenset(
+    {
+        "case_id",
+        "checkpoint",
+        "concept",
+        "evidence_sha256s",
+        "expected_sha256",
+        "observed_sha256s",
+        "reason",
+        "rule_id",
+        "rule_version",
+        "status",
+        "trace",
+    }
+)
+"""The closed field sets of the receipt contract, mirrored here on purpose.
+
+The renderer reads a document, not a validated model, so it holds its own copy
+of what the contract publishes. ``tests/test_html_receipt.py`` pins these
+against ``schemas/contextsafe-receipt-v0.1.schema.json`` so the two cannot
+drift.
+"""
 
 _STYLE = """
 :root { color-scheme: light; }
@@ -151,7 +210,9 @@ footer p { background-color: #ffffff; color: #3d3d3d; }
   .notice h2, .notice p { background-color: #ffffff; color: #000000; }
   .source-text, .source-label { background-color: #ffffff; color: #000000; }
   th { background-color: #ffffff; color: #000000; }
-  section, table, tr { break-inside: avoid; }
+  thead { display: table-header-group; }
+  h1, h2, h3, caption { break-after: avoid; }
+  section, table, tr, li, .notice, .source-text { break-inside: avoid; }
 }
 """
 
@@ -190,6 +251,27 @@ def _mapping(value: JsonValue | None, pointer: str) -> Mapping[str, JsonValue]:
             "invalid_receipt_document", pointer, "expected a JSON object"
         )
     return value
+
+
+def _closed(
+    value: JsonValue | None, pointer: str, fields: frozenset[str]
+) -> Mapping[str, JsonValue]:
+    """Return ``value`` as an object carrying exactly ``fields``.
+
+    A field the contract does not publish is refused, never skipped: a page
+    that quietly rendered around an unknown field would be the strip-and-accept
+    behaviour this repository forbids everywhere else, and a field the page
+    does not show is still a claim the document makes.
+    """
+
+    mapping = _mapping(value, pointer)
+    if set(mapping) != fields:
+        raise ContextSafeError(
+            "invalid_receipt_document",
+            pointer,
+            "object does not carry exactly the fields the receipt contract publishes",
+        )
+    return mapping
 
 
 def _text(value: JsonValue | None, pointer: str) -> str:
@@ -383,7 +465,7 @@ def _status_cell(surface: Surface, status: str, pointer: str) -> tuple[str, str]
 def _rows(surface: Surface, results: Sequence[JsonValue]) -> tuple[_Row, ...]:
     rows: list[_Row] = []
     for index, raw in enumerate(results):
-        result = _mapping(raw, f"$.payload.results[{index}]")
+        result = _closed(raw, f"$.payload.results[{index}]", _RESULT_FIELDS)
         status = _text(result.get("status"), f"$.payload.results[{index}].status")
         _, status_text = _status_cell(
             surface, status, f"$.payload.results[{index}].status"
@@ -447,6 +529,12 @@ def _results_table(surface: Surface, rows: Iterable[_Row]) -> str:
 
 
 def _summary_table(surface: Surface, summary: Mapping[str, JsonValue]) -> str:
+    if set(summary) != set(_STATUS_SYMBOLS):
+        raise ContextSafeError(
+            "invalid_receipt_document",
+            "$.payload.summary",
+            "summary must carry one count for each published status",
+        )
     caption = surface.message("table.summary.caption")
     status_header = surface.message("column.status")
     count_header = surface.message("column.count")
@@ -738,9 +826,10 @@ def render_receipt_page(
             "catalog does not match the locale requested",
         )
     surface = Surface(name="receipt-html", catalog=catalog)
-    payload = _mapping(document.get("payload"), "$.payload")
-    envelope = _mapping(document.get("envelope"), "$.envelope")
-    payload_sha256 = _text(document.get("payload_sha256"), "$.payload_sha256")
+    _closed(dict(document), "$", _DOCUMENT_FIELDS)
+    payload = _closed(document.get("payload"), "$.payload", _PAYLOAD_FIELDS)
+    envelope = _closed(document.get("envelope"), "$.envelope", _ENVELOPE_FIELDS)
+    payload_sha256 = _verified_payload_sha256(document, payload)
     case_id = _text(payload.get("case_id"), "$.payload.case_id")
     body = _body(surface, document, payload, envelope, payload_sha256, case_id)
     title = surface.message("page.title")
@@ -756,6 +845,27 @@ def render_receipt_page(
         f"{body}\n"
         "</html>\n"
     )
+
+
+def _verified_payload_sha256(
+    document: Mapping[str, JsonValue], payload: Mapping[str, JsonValue]
+) -> str:
+    """Return ``payload_sha256`` only once it provably covers ``payload``.
+
+    The page names this hash as the thing a verifier can check the receipt
+    against. A document whose hash does not equal the hash of its own payload
+    is either damaged or edited after the fact, and a page rendered from it
+    would present a hash that vouches for nothing on the page.
+    """
+
+    declared = _text(document.get("payload_sha256"), "$.payload_sha256")
+    if declared != sha256_json(dict(payload)):
+        raise ContextSafeError(
+            "receipt_payload_hash_mismatch",
+            "$.payload_sha256",
+            "payload_sha256 is not the hash of the canonical payload",
+        )
+    return declared
 
 
 def _body(
@@ -778,7 +888,10 @@ def _body(
                 "section.scope.heading",
                 "scope",
                 "<dl>"
-                + _scope(surface, _mapping(payload.get("scope"), "$.payload.scope"))
+                + _scope(
+                    surface,
+                    _closed(payload.get("scope"), "$.payload.scope", _SCOPE_FIELDS),
+                )
                 + "</dl>",
             ),
             _section(
@@ -824,7 +937,11 @@ def _body(
                 "<dl>"
                 + _hashes(
                     surface,
-                    _mapping(payload.get("hashes"), "$.payload.hashes"),
+                    _closed(
+                        payload.get("hashes"),
+                        "$.payload.hashes",
+                        frozenset(_HASH_ORDER),
+                    ),
                     payload_sha256,
                 )
                 + "</dl>",
