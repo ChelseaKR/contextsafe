@@ -912,6 +912,46 @@ rather than after it.
 
 ### Added
 
+- **What `make verify` costs, measured and recorded in
+  [`docs/18-ASSURANCE-PROGRAM.md`](docs/18-ASSURANCE-PROGRAM.md) (issue #93).**
+  The gate's wall time had roughly doubled over the 2026-09 wave, and the issue
+  named the three-run determinism suite as the obvious suspect because it spawns
+  fresh interpreters. Measured, it is not the cost: `tests/test_determinism.py`
+  is 7.2% of the pytest stage by CPU and 6.7% by wall, fourteen seconds of a
+  four-minute gate. The pytest stage is about 90% of `make verify` — 197 s CPU
+  and 218 s wall, against 25 s for the other twelve stages together — and inside
+  it the cost is diffuse: `tests/test_a11y_gate.py` is the largest module at
+  29.5%, and forty-eight modules share another 36.5% between them. Coverage
+  instrumentation costs 39% on top of the suite rather than the doubling that a
+  wall-clock comparison across a shared machine suggests, which is why the
+  figures that carry a comparison are CPU seconds.
+
+  The three options the issue lists are recorded against those numbers, with
+  what each buys and what it spends, and a fourth found while measuring —
+  coverage.py's `sys.monitoring` tracer, which would need no dependency — is
+  recorded so that it is not found again. No option is taken and nothing is
+  closed: which one to take, and whether four minutes is a cost worth a
+  dependency inside the merge gate, is the maintainer's decision, and the
+  section says so.
+
+  One finding sits underneath all four. The coverage total the floor is applied
+  to is not reproducible. Six runs of the identical serial command on the same
+  tree reported 147 or 149 missing statements; four ten-worker runs reported 147
+  or 149, and a four-worker run reported 145. Every difference is in
+  `src/contextsafe/evidence_store.py`, in the arms of `_ensure_store` and its
+  hierarchy walk that run only when another writer got there first, which
+  `tests/test_evidence_store.py` reaches with real threads. So comparing
+  coverage totals cannot be the equivalence test for a change to how the suite
+  runs, which is exactly the evidence a parallel gate would need, and the 98%
+  does not repeat to the statement. The floors are wide enough that no verdict
+  has moved. Nothing here fixes it, and it is not claimed as fixed.
+
+  `make verify` itself is unchanged: the same target `ci.yml` runs, the same
+  stages in the same order, no gate made optional, no test moved out of it, and
+  no dependency added. `pytest-xdist` was installed into a scratch environment
+  to measure the parallel option and is in neither `pyproject.toml` nor
+  `uv.lock`.
+
 - **`contextsafe events summarize --directory DIR`, the reader the event log
   never had (issue #97).** Every command has accepted `--log-dir` since B-046
   and appended one closed-vocabulary record to a local append-only log, and

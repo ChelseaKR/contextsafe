@@ -374,6 +374,129 @@ to milestones this repository does not control the funding for, so their
 placement is an ordering claim and not a schedule. The roadmap's own decision
 gates move if capacity does; so do these.
 
+## What the gate costs, measured
+
+A gate people wait on is a gate people find ways around, so what `make verify`
+costs is a property of the apparatus rather than a detail of somebody's
+afternoon. Issue #93 recorded that the cost had roughly doubled over the 2026-09
+wave, named the three-run determinism suite as the obvious suspect because it
+spawns fresh interpreters, and listed three ways to split the gate. It also said
+that splitting it wrongly would be worse than leaving it, so the suite was
+measured before anything was split. The suspect is not the cost, and what
+follows is the measurement rather than a decision taken on it.
+
+**Method, and what it is worth.** Measured on 2026-09-05 against this tree,
+Python 3.12, a ten-core macOS workstation, 3,256 tests. Wall time on a developer
+machine is not a stable number: the identical pytest command over the identical
+tree measured 218 seconds and 1,769 seconds twenty minutes apart, because other
+work shared the machine. So the figures below are CPU seconds — the process plus
+every subprocess it waited on — wherever a comparison depends on them, and wall
+seconds appear only where the runs being compared were taken back to back. None
+of them is a CI number: that is a different machine and a different operating
+system, and nothing here was measured there.
+
+| Part of `make verify` | Cost |
+|---|---|
+| `test` | 197 s CPU, 218 s wall |
+| the other twelve stages together | 25 s wall |
+
+The twelve are `sync` 0.2 s, `lint` 0.1 s, `format` 0.1 s, `typecheck` 1.7 s,
+`audit` 6.4 s, `hygiene` 0.4 s, `scope` 0.3 s, `patterns` 1.1 s,
+`publication-sweep` 6.6 s, `i18n` 1.6 s, `a11y` 6.2 s, `claims` 0.4 s. The
+pytest stage is about 90% of the gate; of the remaining tenth, one stage waits
+on the network (`audit`) and two read the whole tree (`publication-sweep` and
+`a11y`).
+
+Inside the pytest stage, by CPU, with 192 s of the 197 s attributable to
+individual tests:
+
+| Test module | CPU | Share of the stage |
+|---|---|---|
+| `tests/test_a11y_gate.py` | 56.6 s | 29.5% |
+| `tests/test_property_invariants.py` | 20.5 s | 10.7% |
+| `tests/test_import_hl7v2_er7.py` | 17.2 s | 8.9% |
+| `tests/test_mutation_gate.py` | 13.9 s | 7.2% |
+| `tests/test_determinism.py` | 13.8 s | 7.2% |
+| the other forty-eight modules | 70.0 s | 36.5% |
+
+Two things fall out of that table. The determinism suite is 7.2% of the stage by
+CPU and 6.7% by wall — fourteen seconds of a four-minute gate — so the
+hypothesis the issue was written on does not survive being measured. And the
+cost is diffuse: the largest module is under a third, and more than a third of
+the stage is spread across forty-eight modules that are individually small.
+
+The largest module is not slow by accident either. `tests/test_a11y_gate.py` is
+142 tests, and nearly every one damages the rendered receipt in a different way
+and audits it. Rendering both shipped pages costs 7 ms of CPU; one `audit()`
+over them costs 713 ms. The cost is the checking rather than the setup, so it is
+not shareable between tests that are checking different damage.
+
+Coverage instrumentation costs 55 s CPU, 39% on top of the 141 s the same suite
+takes without it. That is worth stating because the naive comparison — a run
+with coverage against a run without it, taken hours apart on a shared machine —
+suggests it more than doubles the suite, and it does not.
+
+### The options in issue #93, against that measurement
+
+1. **Parallel pytest.** The only one of the three that matches the measured
+   shape, because the cost is spread across fifty modules rather than sitting in
+   one. With `pytest-xdist` installed for the experiment and not committed,
+   `-n auto` on ten cores ran the whole suite green four times out of four, in
+   91, 82, 87 and 151 wall seconds against 218 serial, and
+   `tests/test_determinism.py` alone passed five runs out of five under it.
+   Total CPU rose from 197 s to 231 s, which is worker startup and combining. A
+   four-worker run took 160 s here, but the machine was not idle, so that is not
+   the shape of a four-core runner and should not be read as one. The costs are
+   two new dev dependencies — `pytest-xdist` pulls `execnet` — and the
+   obligation below.
+2. **Split the CI job so the fast stages report first.** Buys nothing for the
+   local wait, which is where the issue locates the pain, and spends the
+   constraint the issue names first: `ci.yml` would stop running the one target
+   a contributor runs, and `tests/test_ci_workflows.py` exists because that
+   equivalence is load-bearing.
+3. **Move the three-run determinism suite into its own job.** Buys 6.7% of the
+   pytest stage, which is 6% of the gate, and costs the local half of the
+   evidence for RG-15 and invariant 10. Measured, this is the option with the
+   worst ratio of the three.
+
+A fourth was found while measuring and is recorded so that it is not found
+again. Coverage.py can trace through `sys.monitoring` (`COVERAGE_CORE=sysmon`)
+rather than through its C tracer. That needs no dependency and changes nothing
+about what is checked, which makes it the most attractive of the four on paper.
+It is not adopted, because the one check it has to pass — that it measures the
+same thing — could not be completed, for the reason in the next paragraph.
+
+### What could not be established: the coverage number is not reproducible
+
+The measured coverage that the floor is applied to is not the same number twice.
+Across six runs of the identical serial command on this tree, the reported
+missing-statement total was 147 three times and 149 three times; four ten-worker
+runs reported 147 once and 149 three times, and a single four-worker run
+reported 145. Every difference is in one module,
+`src/contextsafe/evidence_store.py`, and in the arms of `_ensure_store` and its
+hierarchy walk that run only when another writer got there first — two lines
+across the serial runs, and two more in the four-worker run.
+`tests/test_evidence_store.py` reaches those arms with real threads: a two-way
+`Barrier`, and a six-thread pool over identical imports. Which arm a thread
+takes is a scheduling outcome, so which of those lines executes moves from run
+to run.
+
+Two consequences, both narrow. Comparing coverage totals cannot be the
+equivalence test for a change to how the suite runs, which is exactly the
+evidence a parallel gate or a re-tracered gate would need in this repository;
+that is why option 1 and the fourth option are recorded here rather than taken.
+And a reader who treats the 98% as a reproducible figure is taking more from it
+than it carries — the floors are 90% and 95%, the headroom is wide, and no
+verdict has moved, but the number drifts by about four statements. Fixing that
+is not this issue, and nothing here changes it.
+
+**Nothing is decided here.** The measurement says which option is worth what;
+which one to take, and whether four minutes is a cost worth a dependency inside
+the merge gate, is the maintainer's call. What the measurement does settle is
+that option 3 is the wrong lever, that option 2 spends a constraint it cannot
+repay locally, and that a parallel gate needs a way to prove it measures the
+same thing before it can be trusted to.
+
 ## What would make this program wrong
 
 Recorded so a later reader can check it rather than inherit it:
