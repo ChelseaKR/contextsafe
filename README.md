@@ -386,7 +386,22 @@ The same iteration adds the operator surface (the B-046 slice):
 - every command accepts `--log-dir`, which appends one closed-vocabulary record
   (command, outcome, error code, and the closed warning codes the command
   carried) to a local append-only log. Off unless asked, never enabled from the
-  environment, no message field, and no clock reading.
+  environment, no message field, and no clock reading;
+- `contextsafe events summarize --directory DIR` reads that log back, and is
+  the supported way to do it — the log shipped without a reader, so the only
+  way to ask how many runs failed closed and with which codes was to parse the
+  file by hand. It prints the record count, the count of each command, of each
+  outcome, and of each error code, and the SHA-256 of the bytes it read
+  ([contract](schemas/contextsafe-event-log-summary-v0.1.schema.json)). It
+  writes nothing to the log, refuses an `--output` that names it, and carries
+  no timestamp, path, or free text — there is nothing in the record shape for
+  one to have come from. A line that is not one canonical record refuses the
+  whole summary, naming the line and the field and neither value: a count
+  derived from the lines that happened to parse would understate exactly the
+  runs an operator is counting. Like the other descriptor-anchored commands it
+  fails closed with `input_path_unsupported` where the platform lacks
+  `O_NOFOLLOW`. What it cannot see is a record removed from the end of a log,
+  which is why the digest is in the document.
 
 Iteration 6 adds the source readers, the assertion predicates, the divergence
 section, the unsigned review log, and the packaging evidence (the B-022 to

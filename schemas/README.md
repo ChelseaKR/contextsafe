@@ -3,10 +3,10 @@
 Every file here is a JSON Schema Draft 2020-12 contract for one ContextSafe
 document shape. They are the published half of the fail-closed boundary: the
 runtime has no dependencies and does not validate its own output at run time,
-so these files are what a consumer validates against, and
-`tests/test_contracts.py`, `tests/test_receipt_schema.py`, and
-`tests/test_receipt_delta_schema.py` are what keep them in agreement with the
-code. There are twenty-one contracts:
+so these files are what a consumer validates against, and `tests/test_contracts.py`,
+`tests/test_receipt_schema.py`, `tests/test_receipt_delta_schema.py`,
+`tests/test_review_schema.py`, and `tests/test_event_log_summary_schema.py` are
+what keep them in agreement with the code. There are twenty-two contracts:
 
 | Contract | Shape |
 | --- | --- |
@@ -31,8 +31,9 @@ code. There are twenty-one contracts:
 | `contextsafe-review-state-v1.schema.json` | the disposition per outcome that `finding list` derives from a review log |
 | `contextsafe-result-set-v0.1.schema.json` | a set of laboratory result observations for one synthetic case: analyte code, value, unit, order, specimen, and a reference interval and abnormal flag that are each present, absent, or in a dialect the reader could not type. Reference-only and ungoverned; every analyte, unit, bound, and flag admitted here is an invented fixture token and none is a clinical reference range |
 | `contextsafe-result-rule-set-v0.1.schema.json` | pure rules over those results, each naming one of the four closed laboratory predicates. Reference-only and ungoverned mechanisms for A-025 to A-030, not the assertions, and deliberately separate from the identity rule set so widening one can never widen the other |
+| `contextsafe-event-log-summary-v0.1.schema.json` | what `events summarize` derives from one local event log: counts by command, outcome, and error code, the record count, and the digest of the bytes read |
 
-That is twenty-one contracts, and `make claims` fails when this file and the
+That is twenty-two contracts, and `make claims` fails when this file and the
 directory disagree, both ways: a filename here that `schemas/` does not carry,
 and a contract in `schemas/` that this file does not name.
 
@@ -43,6 +44,12 @@ output ones: they say what `contextsafe import --format lis-json` and
 keep each in agreement with the runtime's allowlists and grammars. Neither
 is a claim that any laboratory system exports this shape or that any
 interoperability reviewer has approved a mapping.
+
+Three document shapes the runtime emits are deliberately absent: what
+`diagnostics`, `cleanup`, and `support-bundle` print says what one installation
+can do or holds right now, and nothing consumes it later. The event log summary
+is the operator document that is published, because it is the one a partner may
+keep beside a release decision.
 
 ## Why every `$id` is under a domain that will never resolve
 

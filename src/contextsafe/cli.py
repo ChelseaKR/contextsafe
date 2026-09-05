@@ -16,7 +16,12 @@ from contextsafe.diagnostics import (
 )
 from contextsafe.errors import ContextSafeError
 from contextsafe.evaluator import evaluate
-from contextsafe.eventlog import Outcome, append_event
+from contextsafe.eventlog import (
+    LOG_FILE_NAME,
+    Outcome,
+    append_event,
+    summarize_log,
+)
 from contextsafe.evidence import build_evidence_scope
 from contextsafe.html_receipt import render_receipt_page
 from contextsafe.i18n import SOURCE_LOCALE, Surface, available_locales, source_catalog
@@ -375,6 +380,37 @@ def _parser() -> argparse.ArgumentParser:
         help="required alongside --remove; without it nothing is deleted",
     )
     cleanup_parser.add_argument("--output", type=Path)
+    events_parser = subparsers.add_parser(
+        "events",
+        help="Read the local event log back; counts and a digest, nothing else.",
+    )
+    events_subparsers = events_parser.add_subparsers(
+        dest="events_command", required=True
+    )
+    events_summarize_help = (
+        "summarise one local event log: how many records it holds, how many "
+        "of each command, of each outcome, and of each error code, and the "
+        "sha256 of the bytes read. The log is not changed, a line that is not "
+        "the closed record shape is refused rather than skipped, and the "
+        "summary carries no timestamp, path, or free text"
+    )
+    events_summarize = events_subparsers.add_parser(
+        "summarize",
+        parents=[modes],
+        help=events_summarize_help,
+        description=events_summarize_help,
+    )
+    events_summarize.add_argument(
+        "--directory",
+        required=True,
+        type=Path,
+        help=(
+            "the directory holding the log to read, which is the directory "
+            f"--log-dir wrote it to; the file is always {LOG_FILE_NAME}. A "
+            "directory with no log there is a rejection, not an empty summary"
+        ),
+    )
+    events_summarize.add_argument("--output", type=Path)
     bundle_parser = subparsers.add_parser(
         "support-bundle",
         parents=[modes],
@@ -433,7 +469,31 @@ def _operator_command(args: argparse.Namespace) -> str | None:
         return f"{canonical_json(export_reference_fixtures(args.directory))}\n"
     if args.command == "finding":
         return _finding_command(args)
+    if args.command == "events":
+        return _events_command(args)
     return None
+
+
+def _events_command(args: argparse.Namespace) -> str:
+    """Summarise one local event log without writing to it.
+
+    ``--output`` naming the log is refused for the reason ``finding`` refuses
+    it: the write that follows this function truncates, and it would replace
+    an append-only log with a summary of what the log used to hold.
+
+    Summarising a log that ``--log-dir`` also names is allowed and means what
+    it says. The record for this run is appended after the summary was
+    derived, so it is not in the counts and not under the digest; the next
+    summary shows it.
+    """
+
+    if args.events_command != "summarize":
+        raise ContextSafeError(
+            "unsupported_command", "$", "events command is unsupported"
+        )
+    directory: Path = args.directory
+    refuse_output_over_log(args.output, directory / LOG_FILE_NAME, what="the event log")
+    return f"{canonical_json(summarize_log(directory).to_dict())}\n"
 
 
 def _import_command(args: argparse.Namespace) -> str:

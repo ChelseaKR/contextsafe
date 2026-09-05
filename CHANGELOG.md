@@ -534,6 +534,19 @@ rather than after it.
 
 ### Fixed
 
+- **`fixtures export --log-dir DIR` logged nothing and said so on stderr.**
+  `fixtures` was never added to the event log's command vocabulary, so the
+  record was refused as `unloggable_command`, the error object was printed to
+  stderr, and the command still exited 0 — a run that happened and left no
+  trace in the file whose purpose is to record what ran. Found while building
+  the reader above, and fixed here rather than later because the new summary
+  contract names every command in that vocabulary, so a command added to it
+  after this lands moves a published contract's version.
+  `tests/test_event_log_summary.py` now derives the check from the argument
+  parser: every command the CLI publishes is loggable, and every entry in the
+  vocabulary is a command the CLI publishes, so neither side can gain a member
+  alone.
+
 - **The receipt contract and the runtime disagreed about how long a source
   pointer may be (#72).** The published `structural_pointer` carried
   `maxLength: 160` while the validator stopped at 128, so a 129-character path
@@ -792,6 +805,69 @@ rather than after it.
   repository; it does not rewrite history.
 
 ### Added
+
+- **`contextsafe events summarize --directory DIR`, the reader the event log
+  never had (issue #97).** Every command has accepted `--log-dir` since B-046
+  and appended one closed-vocabulary record to a local append-only log, and
+  nothing read it. An operator with a week of runs had a JSON-lines file and
+  no supported way to ask how many evaluations failed closed and with which
+  codes, which matters for a pilot where the event log is the only record of
+  what was actually run.
+
+  The summary is a document, not a listing: the record count, the count of
+  each command, of each outcome, and of each error code, and the SHA-256 of
+  the bytes read. Every key is drawn from the vocabularies the writer draws
+  from, so there is no field a timestamp, a path, or a sentence could occupy;
+  the counts are of records, never of anything a logged command read. A
+  command with no record is a zero rather than an absent key, so the shape
+  does not change with the log's contents. The digest is of the bytes, which
+  is what lets one summary be told from another without naming the file — it
+  is not a chain, and a log cut back to an earlier line summarises as a valid
+  shorter log.
+
+  It refuses rather than skips. A line that is not one canonical record — bad
+  JSON, an unknown or missing field, a command or outcome outside the closed
+  set, an error code that is a message, a version that is not the published
+  one, a sequence number that does not match its position, or a line whose
+  fields are all valid but whose bytes are not the canonical form — refuses
+  the whole summary at `$.log[N]` and the field, carrying neither the value
+  nor the path of the log. A summary derived from the lines that happened to
+  parse would understate exactly the runs an operator is counting, and would
+  do it silently. The log is opened once, no-follow, and required to be a
+  regular file within the size limit the writer already enforces; it is never
+  written to, an `--output` naming it is refused as `output_path_unsafe` the
+  way `finding` refuses one over the review log, and a directory with no log
+  in it is a rejection rather than an empty summary, because absence must not
+  read as "nothing failed". Like the other descriptor-anchored commands it
+  fails closed with `input_path_unsupported` where the platform lacks
+  `O_NOFOLLOW`.
+
+  Two contract notes. The log's closed command vocabulary gains `events` and
+  `fixtures`, and that does not move the record's schema version, as adding
+  `receipt`,
+  `mapping`, and `finding` did not: a record is not one of the published
+  contracts in `schemas/`, every log an earlier vocabulary wrote stays exactly
+  as readable, and bumping the version would instead make an operator's
+  existing log unreadable by the reader that exists to read it. (What did move
+  it, in the entry above, is a widened field set: `contextsafe.event-log/0.2.0`
+  carries `warnings`, and the reader here reads that record.) The residual is
+  that a record does not say which command vocabulary was in force when it was
+  written. What is published is the summary:
+  `schemas/contextsafe-event-log-summary-v0.1.schema.json`, the twenty-second
+  contract in `schemas/README.md`, with `tests/test_event_log_summary_schema.py` holding
+  it against the runtime — including that it names every command the log
+  publishes, so the next command added to that vocabulary moves *this*
+  contract's version. Separately, an error code is now held to one grammar
+  (`^[a-z][a-z0-9_]{2,63}$`) at both ends instead of an `isalnum` check at the
+  writer, so the writer cannot produce a line its own reader would refuse;
+  every one of the 162 codes this package raises already matched it.
+
+  What this does not do: it reads one log, and correlating its records with
+  anything else still needs a timestamp captured outside the tool, because
+  neither the log nor the summary reads a clock. It is not an audit trail, it
+  proves nothing about which run came first, and it says nothing about what
+  any run found — a receipt is where findings live. `docs/13-BACKLOG.md`
+  B-046 stays open for the reasons it already lists.
 
 - **`make patterns`: every published pattern now has to have a runtime constant
   behind it (#73).** The name-target defect fixed in #58 had one root cause

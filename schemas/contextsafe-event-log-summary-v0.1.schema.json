@@ -1,0 +1,83 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://contextsafe.invalid/schemas/contextsafe-event-log-summary-v0.1.schema.json",
+  "title": "ContextSafe event log summary 0.1",
+  "$comment": "What `contextsafe events summarize` derives from one local event log: the number of records, the number of each command, of each outcome, and of each error code, and the SHA-256 of the bytes read. It is derived, deterministic, and unsigned. It carries counts, closed values, and one digest only: no timestamp, no path, no free text, and nothing from any input a logged command read. `counts_by_command` names every command the log's record vocabulary publishes, so a command added to that vocabulary moves this contract's version.",
+  "x-contextsafe-semantic-constraints": [
+    "every key of counts_by_command is present, including the commands the log holds no record of, so the shape does not change with the log's contents",
+    "counts_by_error_code holds only codes the log actually carries, because the set of error codes is open where the set of commands is closed",
+    "record_count is the number of records read and equals the sum of counts_by_command and the sum of counts_by_outcome",
+    "log_sha256 is the SHA-256 of the exact bytes read, which is the empty-string digest for a log holding no record; it is not a chain, and a log cut back to an earlier line summarises as a valid shorter log",
+    "a log line that is not one canonical record refuses the whole summary; a summary is never derived from the lines that happened to parse"
+  ],
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "counts_by_command",
+    "counts_by_error_code",
+    "counts_by_outcome",
+    "log_sha256",
+    "record_count",
+    "schema_version"
+  ],
+  "properties": {
+    "counts_by_command": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "cleanup",
+        "diagnostics",
+        "evaluate",
+        "events",
+        "evidence",
+        "finding",
+        "fixtures",
+        "import",
+        "mapping",
+        "pack",
+        "plan",
+        "receipt",
+        "render",
+        "support-bundle",
+        "validate"
+      ],
+      "properties": {
+        "cleanup": {"$ref": "#/$defs/count"},
+        "diagnostics": {"$ref": "#/$defs/count"},
+        "evaluate": {"$ref": "#/$defs/count"},
+        "events": {"$ref": "#/$defs/count"},
+        "evidence": {"$ref": "#/$defs/count"},
+        "finding": {"$ref": "#/$defs/count"},
+        "fixtures": {"$ref": "#/$defs/count"},
+        "import": {"$ref": "#/$defs/count"},
+        "mapping": {"$ref": "#/$defs/count"},
+        "pack": {"$ref": "#/$defs/count"},
+        "plan": {"$ref": "#/$defs/count"},
+        "receipt": {"$ref": "#/$defs/count"},
+        "render": {"$ref": "#/$defs/count"},
+        "support-bundle": {"$ref": "#/$defs/count"},
+        "validate": {"$ref": "#/$defs/count"}
+      }
+    },
+    "counts_by_error_code": {
+      "type": "object",
+      "propertyNames": {"pattern": "^[a-z][a-z0-9_]{2,63}$"},
+      "additionalProperties": {"type": "integer", "minimum": 1}
+    },
+    "counts_by_outcome": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["accepted", "rejected"],
+      "properties": {
+        "accepted": {"$ref": "#/$defs/count"},
+        "rejected": {"$ref": "#/$defs/count"}
+      }
+    },
+    "log_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "record_count": {"$ref": "#/$defs/count"},
+    "schema_version": {"const": "contextsafe.event-log-summary/0.1.0"}
+  },
+  "$defs": {
+    "count": {"type": "integer", "minimum": 0}
+  }
+}

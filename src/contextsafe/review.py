@@ -1004,8 +1004,10 @@ def _read_log(descriptor: int) -> bytes:
     )
 
 
-def refuse_output_over_log(output: Path | None, log: Path) -> None:
-    """Refuse an ``--output`` that names the review log, however it is spelled.
+def refuse_output_over_log(
+    output: Path | None, log: Path, *, what: str = "the review log"
+) -> None:
+    """Refuse an ``--output`` that names a log file, however it is spelled.
 
     ``contextsafe.cli.main`` writes ``--output`` with a plain truncating write
     after the command has run. For every other command that is harmless; for
@@ -1031,17 +1033,22 @@ def refuse_output_over_log(output: Path | None, log: Path) -> None:
     resolve, such as a platform short name, is still refused before the
     write; a refusal there has recorded the event and not written the state.
     The two paths are named by category only; the rejection carries neither.
+
+    ``what`` names the category in the message, and is the only thing that
+    differs between the append-only logs this guards: ``events summarize``
+    reads the local event log, which the same truncating write would replace
+    with a summary of what it used to hold.
     """
 
     if output is None:
         return
-    if _names_the_review_log(Path(output), Path(log)):
+    if _names_the_log(Path(output), Path(log)):
         raise ContextSafeError(
-            "output_path_unsafe", "$", "output must not name the review log"
+            "output_path_unsafe", "$", f"output must not name {what}"
         )
 
 
-def _names_the_review_log(output: Path, log: Path) -> bool:
+def _names_the_log(output: Path, log: Path) -> bool:
     return _same_existing_file(output, log) or (
         _same_existing_file(_parent(output), _parent(log))
         and _folded(output.name) == _folded(log.name)
