@@ -91,6 +91,21 @@ still means what it meant. The withdrawal changes nothing about the technical
 findings below, all of which stand as the audit wrote them. It closes the
 default view of the repository; it does not rewrite history.
 
+**Update, 2026-09-05 — §6's docs finding is now answerable on demand, and it
+still answers "served".** §6 carried a bold line calling itself closed, four
+hundred lines below the update above that says it is not; that line is
+corrected in place and says what it used to say, because a correction that hides
+the sentence it corrects teaches nobody. The question behind it no longer
+depends on anyone remembering how to ask: `tools/publication-exposure-check.sh`
+probes the three surfaces that serve the content, carries a positive control on
+each so that a 404 from a private, renamed or rate-limited repository cannot be
+read as absence, and prints a dated record. Run on 2026-09-05 against the ref
+and path §6 names, it returned `STILL SERVED`. **The decision remains the
+maintainer's and remains unmade:** [ADR 0016](adr/0016-removed-document-still-served.md)
+lays out the two options, what each costs, what neither reaches, and a
+recommendation. Nobody has been contacted, no purge has been requested, and no
+history has been rewritten.
+
 One thing §7 is not: a running total. Every figure in it is a measurement of one
 `make verify` run at the commit that section names, correct for that run and
 stale by construction thereafter. Re-run the command rather than reading the
@@ -504,9 +519,22 @@ also simply inconsistent. Two clean options, both the maintainer's: register the
 domain, or move all eleven to `.invalid`. Not fixed here, because a `$id` is
 published contract identity and `schemas/` is a code-owner-reviewed path.
 
-**Docs — MAINTAINER'S CALL. Closed since: see the 2026-08-29 update at the top.
-The commit names and the `git show` below do not resolve on the published
-repository, and the file is in none of its refs.** `bba81c8` ("docs: move
+**Docs — MAINTAINER'S CALL, open.** This line read "Closed since: see the
+2026-08-29 update at the top" until 2026-09-05, and that was wrong in the
+direction that matters: the `git show` below and the file's absence from every
+ref are facts about a clone, not about the host, and the 2026-08-29 update at
+the top is what corrected them. The finding below stands as the audit wrote it.
+**Re-measured 2026-09-05 against the live repository with
+`tools/publication-exposure-check.sh`, given the ref and path from the `git
+show` below: `verdict: STILL SERVED`** — the contents API, the web blob view and
+the raw host each answered 200 at that ref, each answered a positive control in
+the same run, and the run read one fork where the recommendation at the end of
+this subsection was written for none. Run it again rather than reading that
+verdict; it was true for that minute. The choice it puts to the maintainer — ask
+the host to purge, or accept the content as public — is
+[ADR 0016](adr/0016-removed-document-still-served.md), and it is unmade.
+
+`bba81c8` ("docs: move
 working notes to the private archive") deleted `docs/11-GTM-BUSINESS-MODEL.md`
 and scrubbed dollar figures from five other documents. The content was never
 removed from history:

@@ -225,7 +225,9 @@ UNCOVERED: tuple[Uncovered, ...] = (
         "on 2026-08-29 every name in docs/PUBLICATION-READINESS.md was unreachable "
         "from any branch and every one of them still resolved over the API and the "
         "web, unauthenticated. Answering it needs a network call this gate does not "
-        "make; required-note pins the dated finding instead",
+        "make; required-note pins the dated finding instead, and "
+        "tools/publication-exposure-check.sh asks the host on demand and dates the "
+        "answer",
     ),
     Uncovered(
         "whether a review or a declaration is current",

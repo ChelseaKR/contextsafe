@@ -500,6 +500,35 @@ def _sast_unavailable(tmp_path: Path) -> int:
     root = tmp_path / "sast"
     root.mkdir(parents=True, exist_ok=True)
     return int(gate.main(["--root", str(root), "--report", str(root / "absent.json")]))
+def _publication_exposure_unavailable(tmp_path: Path) -> int:
+    """No probe to run: nothing was asked of the host, so nothing is absent.
+
+    `tools/publication-exposure-check.sh` is not a gate over this tree and is
+    not in `make verify` — it asks a remote host a question. It carries this
+    contract anyway, and is held to it here, because the whole reason it exists
+    is that "the check did not look" was once read as "the exposure is over".
+    Its other states are `tests/test_publication_exposure_check.py`.
+    """
+
+    empty = tmp_path / "exposure" / "bin"
+    empty.mkdir(parents=True, exist_ok=True)
+    return subprocess.run(
+        [
+            shutil.which("bash") or "/bin/bash",
+            str(REPO_ROOT / "tools" / "publication-exposure-check.sh"),
+            "--repo",
+            "owner/name",
+            "--ref",
+            "some-ref",
+            "--path",
+            "docs/some-path.md",
+        ],
+        cwd=tmp_path,
+        capture_output=True,
+        text=True,
+        check=False,
+        env={**os.environ, "PATH": str(empty)},
+    ).returncode
 
 
 UNAVAILABLE_CASES: tuple[tuple[str, Callable[[Path], int]], ...] = (
@@ -515,6 +544,7 @@ UNAVAILABLE_CASES: tuple[tuple[str, Callable[[Path], int]], ...] = (
     ("tools/audit_gate.py", _audit_unavailable),
     ("tools/fresh_install_gate.py", _fresh_install_unavailable),
     ("tools/secret-scan-full-history.sh", _secret_scan_unavailable),
+    ("tools/publication-exposure-check.sh", _publication_exposure_unavailable),
 )
 
 

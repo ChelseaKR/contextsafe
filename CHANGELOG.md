@@ -730,6 +730,19 @@ rather than after it.
   any document explaining that silence to name every trigger the workflow has,
   because the first attempt at this row gave the two workflows one reason and
   `package.yml` has two triggers.
+- **`docs/PUBLICATION-READINESS.md` §6 still opened with the word "Closed"
+  (issue #92).** The 2026-08-29 update at the top of that file retracted it in
+  detail — the `git show` in §6 fails for a reader who only cloned, that
+  failure was read as absence, and the exposure was live throughout — but the
+  bold line four hundred lines below it was never touched, so a reader who
+  arrived at §6 by its heading was told an exposure was over while it was live.
+  The line now reads open, says what it used to say rather than hiding it,
+  carries the 2026-09-05 measurement (`STILL SERVED` on all three surfaces,
+  every positive control served, one fork where that subsection's
+  recommendation was written for none), and points at ADR 0016 for the decision.
+  A dated update at the top of the file says the same. The `git show` and the
+  commit names in §6 are unchanged, no id the audit did not already print was
+  added, and none of the audit's findings was softened.
 
 - **The summariser refused, in whole and forever, any log two commands had
   written at once.** `append_event` derives a record's sequence by counting the
@@ -1141,6 +1154,66 @@ rather than after it.
   no dependency added. `pytest-xdist` was installed into a scratch environment
   to measure the parallel option and is in neither `pyproject.toml` nor
   `uv.lock`.
+- **`tools/publication-exposure-check.sh`, so that "is the removed document
+  still served?" is answered by the host and carries a date (issue #92).**
+  `docs/PUBLICATION-READINESS.md` §6 records a document that a delete commit
+  removed from every branch and that the host still serves by explicit commit
+  id. It was briefly written down as closed because `git show` fails for a
+  reader who only cloned, which is this repository's named defect class — a
+  check reporting clean over content it did not examine — with the dangerous
+  polarity: it told a reader an exposure was over while it was live.
+
+  The script probes the three surfaces that serve the content — the contents
+  API, the web blob view, the raw host — unauthenticated, because "served
+  without authentication" is the exposure being measured. It reads status codes
+  only and never a response body, so running it cannot be the thing that copies
+  the content somewhere new. Each surface carries a **positive control** in the
+  same run against a ref and path that must be served, because a 404 is also
+  what a private, renamed, deleted or rate-limited repository looks like, and a
+  negative subject result means "removed" only where its surface proved it was
+  answering. A fourth probe reads the commit object, which is what a purge
+  removes: a commit that still resolves while all three surfaces report absent
+  is an incomplete purge or a mistyped path, and the script says so rather than
+  calling it gone. Exit 0 absent, 1 still served, 2 could not establish either,
+  64 usage — ADR 0008's contract, so "the probe could not look" can never be
+  read as "the content is gone". The ref and the path are required arguments
+  with no defaults: the audit already prints them and says that printing them is
+  part of the exposure surface, so the checker adds no second pointer. Its
+  record is a dated block, appendable with `--output`, and it reports the fork
+  count without ever letting it change the verdict. Deliberately not a `make`
+  target and not in `verify`: it needs the network and one specific remote,
+  `make verify` must stay exactly what CI runs, and its answer is stale the
+  moment it prints.
+
+  It is held to the contract anyway. `tests/test_gate_exit_contract.py`
+  recognises a gate program by shape rather than by name, so an executable
+  script under `tools/` joins that file or the suite is a lie about its own
+  coverage; the checker's "nothing was asked of the host" state is driven there
+  with no `curl` on `PATH`. Its other states are
+  `tests/test_publication_exposure_check.py`, twenty-one cases driven through a
+  stand-in `curl`, so the suite reaches the answers a live host will not produce
+  on demand — a rate limit, an outage, a redirect, a control that stopped
+  answering, a commit that outlived its path — and never touches the network.
+  It also asserts what the checker *asked for*: every status probe carries
+  `-o /dev/null` and no follow-redirects flag, so the property that running it
+  cannot copy the content anywhere is checked rather than described.
+
+- **[ADR 0016](docs/adr/0016-removed-document-still-served.md), the decision
+  that exposure puts to the maintainer, laid out and left unmade (issue #92).**
+  Two options — ask the host to purge the unreachable objects, or accept the
+  content as public and stop tracking it as an exposure — with what each costs,
+  what neither reaches (a fork, a clone already taken, a search or proxy cache,
+  a mirror, a web archive), why a history rewrite is no longer among them, and a
+  recommendation with its reasoning stated so that disagreeing with it is cheap.
+  It recommends accepting, and it does not decide: **no option is chosen, no
+  status was moved to closed, and nothing here records a decision as made.** A
+  support-request text is drafted inside it and is marked, in the record and
+  here, as a draft that **has not been sent** — nobody has been contacted, no
+  purge has been requested, no history has been rewritten, and no legal,
+  security, communications, clinical or community review of any of this has
+  happened. The record deliberately restates neither the ref, the path, nor
+  anything the document contains, and prints no commit id the audit does not
+  already print.
 
 - **`contextsafe events summarize --directory DIR`, the reader the event log
   never had (issue #97).** Every command has accepted `--log-dir` since B-046

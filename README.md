@@ -1131,6 +1131,7 @@ A successful v1 allows one design partner to:
 - [ADR 0013: what the pattern gate closes, and what still needs a hand-written pin (proposed, decision pending)](docs/adr/0013-what-the-pattern-gate-closes.md)
 - [ADR 0014: what a derived column may assert about an item's state (proposed, decision pending)](docs/adr/0014-what-a-derived-status-column-may-assert.md)
 - [ADR 0015: what a narrowing costs before the first tag (proposed, decision pending)](docs/adr/0015-narrowing-a-published-contract-before-release.md)
+- [ADR 0016: the removed business document the host still serves — purge request, or accept as public (proposed, decision pending)](docs/adr/0016-removed-document-still-served.md)
 
 ## Working principles
 
