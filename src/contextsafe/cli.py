@@ -121,8 +121,9 @@ def _mode_flags() -> "_Parser":
         help=(
             "append one closed-vocabulary event record to a local log in this "
             "directory. Off unless given, never read from the environment, and "
-            "the record carries the command, the outcome, and the error code "
-            "only: no message, no path, no clock reading"
+            "the record carries the command, the outcome, the error code, and "
+            "the command's own warning codes only: no message, no path, no "
+            "clock reading"
         ),
     )
     return parent
@@ -441,8 +442,11 @@ def _import_command(args: argparse.Namespace) -> str:
     Read-only: the source is opened once through the evidence boundary
     scan, never copied, indexed, or logged, and the only thing emitted is
     the document ``evaluate --observations`` accepts. The result's counts
-    and closed-vocabulary warnings stay in process because that contract
-    has no field for them.
+    stay in process because that contract has no field for them; its
+    closed-vocabulary warnings are handed to the event log, which is the one
+    surface that already carries closed codes, so a profile that binds
+    nothing is visible to an operator who asked for a log rather than to the
+    test suite alone.
     """
 
     mapping_path: Path | None = args.mapping
@@ -454,6 +458,7 @@ def _import_command(args: argparse.Namespace) -> str:
         checkpoint=checkpoint_value(args.checkpoint, "$.checkpoint"),
         profile=profile,
     )
+    args.event_warnings = tuple(item.value for item in result.warnings)
     return f"{canonical_json(result.observation_set())}\n"
 
 
@@ -685,14 +690,31 @@ def _log(args: argparse.Namespace, outcome: Outcome, error_code: str | None) -> 
     reasons, and turning "the log directory is read-only" into "your evaluation
     failed" would be its own defect. The failure is reported on stderr as a
     structured error and nothing else changes.
+
+    ``event_warnings`` is set by the command that ran, if it carried any:
+    only ``import`` does. They are read here only for an accepted record.
+    A conversion can succeed and the command be rejected afterwards --
+    ``--output`` over a directory raises ``output_io_error`` after
+    ``import`` returned, with its warnings still on ``args`` -- and a record
+    saying the command produced nothing may not also carry findings about an
+    artifact nobody received. So a rejected record's warning list is empty
+    whatever the command got through first, and the field means one thing
+    rather than depending on where the failure landed.
     """
 
     log_dir: Path | None = getattr(args, "log_dir", None)
     if log_dir is None:
         return
+    warnings: tuple[str, ...] = (
+        getattr(args, "event_warnings", ()) if outcome is Outcome.ACCEPTED else ()
+    )
     try:
         append_event(
-            log_dir, command=args.command, outcome=outcome, error_code=error_code
+            log_dir,
+            command=args.command,
+            outcome=outcome,
+            error_code=error_code,
+            warnings=warnings,
         )
     except ContextSafeError as exc:
         failure: dict[str, JsonValue] = {"error": as_json_value(exc.to_dict())}

@@ -370,6 +370,62 @@ community reviewer has confirmed; the `mapping sign` command, a signer key,
 a trust manifest, and the enrolled ContextSafe interoperability reviewer it
 needs all wait on B-035; and the sibling `contextsafe-observation-v1`
 contract, which no runtime parser reads, carries no profile binding.
+
+Implementation note (2026-09-04, B-026 corrections): five defects adversarial
+review of B-026 found, none of which a gate would have caught. The
+canonical-JSON carrier table advertised `sex_parameter_for_clinical_use`
+though that importer's converter always refuses such a record, so a row
+naming it could never match; the key is gone, `tests/test_import.py` pins the
+table against the carriers a conversion actually emits a token under, and the
+published contract's canonical-json carrier enum lost the same value. That
+narrowing does remove documents the contract accepted: a profile whose one
+row read that carrier as that concept and bound it to a synthetic
+sex-parameter value passed `mapping validate` at exit 0 and compiled with
+`valid_for_signing: true`, and the same file is now
+`mapping_profile_carrier_unknown` at `$.rows[0].source.carrier`
+(`tests/test_mapping_profile.py` stands on the refusal). Such a row could
+never bind anything — no token is emitted under that carrier — so no import
+changes behaviour, but inert is not invalid and the acceptance boundary of
+`contextsafe.mapping-profile/1.0.0` moved without the version moving with
+it. That is left as it stands rather than decided here: the published
+versioning rule in `schemas/README.md` covers a closed set that widens, not
+one that narrows, and no ContextSafe version has been tagged, so every
+document of the removed class was written against an untagged working tree.
+Whether the mapping-profile contract should move for a narrowing, and to
+what, is open and is the maintainer's; nothing here should be read as that
+decision having been made. The SPCU prohibition now runs ahead of the
+source checks rather than first among the target checks: `_source` ran before
+`_target`, so a row that both named a carrier its concept is never read as
+*and* targeted SPCU reported `mapping_profile_carrier_concept_mismatch`, and
+the three sentences promising `prohibited_spcu_mapping` first and by name
+were true only among the target checks. They are true as written now, and a
+doubly-invalid row is pinned to the prohibition. `PRONOUN_SET_PATTERN` said
+no name could be written in its shape: `jordan/rivera` satisfies it, and the
+boundary scan does not catch it either. The claim is narrowed to what the
+shape guarantees — exactly two or three segments of one to twelve lowercase
+ASCII letters, so no capital, digit, space, or other punctuation — rather
+than the shape narrowed to the claim, because separating a name from a
+pronoun set needs a published list of pronouns and publishing one is a
+community judgment nobody here has made; the property test draws that case
+now instead of filtering it away, which is why nothing caught it, and the
+residual is stated rather than closed. The row bound is tested from the
+accepting side at exactly `MAX_ROWS`, so an off-by-one making the bound
+exclusive would now fail. And `mapping_profile_row_unmatched` reaches an
+operator: the `--log-dir` event record carries the closed warning codes the
+command produced, so a `--mapping` profile that binds nothing is visible at
+exit 0, where the profile can still be fixed, rather than one artifact later
+as a finding about the data. The warning's trigger is any token the profile
+left unbound, not only a profile that binds none of them; a profile that
+binds nothing is the loudest case of it rather than the condition, and the
+partial case an operator will actually meet is tested too. A record whose
+outcome is `rejected` carries no warnings, including the reachable case
+where the conversion succeeded and the command was then rejected writing
+`--output`: the codes describe a conversion the command delivered, so the
+field's meaning does not depend on where in the command the failure landed.
+That widened the event record's field set, so its schema version moved to
+`contextsafe.event-log/0.2.0`; no new output document was invented, and
+whether an import report is ever published stays the maintainer's decision.
+
 Implementation note (2026-09-04, B-028): the identity, name-to-use, pronoun,
 and recorded-sex-or-gender predicates of A-005 and A-008 to A-015 exist as
 mechanism. A rule set declaring `contextsafe.rule-set/0.2.0` may name one of a
@@ -837,8 +893,10 @@ holding a retained entry is retained with it.
 The local log is deliberately minimal. It is off unless `--log-dir` is passed
 and is never enabled from the environment, because output that varies with the
 environment is what `tests/test_determinism.py` exists to prevent. A record is
-a closed vocabulary — command, outcome, error code — with no message field, so
-there is nowhere for an exception string or a path to land. It carries no
+a closed vocabulary — command, outcome, error code, and (since
+`contextsafe.event-log/0.2.0`) the closed warning codes the command carried,
+sorted and never repeated — with no message field, so there is nowhere for an
+exception string or a path to land. It carries no
 clock reading: the runner does not read a clock anywhere else and a log is not
 a good reason to start, so records carry a per-file sequence number instead.
 That is a real limitation and correlating these records with anything external
