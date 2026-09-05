@@ -30,6 +30,11 @@ rather than after it.
   carrying findings about an artifact nobody received. Which of the two the
   reader is looking at therefore does not depend on where in the command the
   failure happened.
+  The published list carries `result_observations_not_written` alongside
+  `result_columns_not_observed`: the laboratory readers emit both, and the log
+  writes its list out rather than importing the importers', so a code the
+  readers can raise and the log does not publish is a command the log refuses
+  to record at all. `tests/test_diagnostics.py` pins the two sets equal.
 
 - **The receipt contract is 0.3: `contextsafe.receipt/0.3.0`,
   `schemas/contextsafe-receipt-v0.3.schema.json`.** The payload gains the
@@ -433,6 +438,34 @@ rather than after it.
   Whether a pin is current against upstream is the one supply-chain fact no gate
   here re-derives, because it needs a network call; the README's Security and
   Supply-Chain row carries that disclosure.
+
+- **The LIS profile is 0.2.0, and both pinned LIS import digests moved with
+  it.** The version a profile records is what tells two behaviours apart, so
+  it moved with what the profile emits. The identity observations themselves
+  are unchanged in value and shape.
+- **The two packaged `lis-export` reference fixtures were rewritten so that
+  every result cell is an invented token.** They carried a synthetic analyte
+  code beside a real unit and a real-looking numeric range; once a result row
+  becomes an observation, that would have put both into one. The
+  publication-readiness synthetic-data table and byte total moved with them.
+- **A laboratory result's evidence pointer is the row it was read from, not a
+  cell.** A cell word such as `analyte` would widen
+  `STRUCTURAL_POINTER_SEGMENTS`, which the receipt contract's pointer pattern
+  copies verbatim, and widening that is a receipt version bump. The row is
+  where a result is read from; the cells are what it is built out of. When a
+  laboratory outcome does reach a receipt, both sets widen together and the
+  receipt contract moves with them.
+
+- **`ImportResult.result_set()` returns `None` for a conversion that claimed
+  no result, and `convert_table` refuses a repeated column.** A source that
+  names only some of the result columns produces no result, and
+  `contextsafe.result-set/0.1.0` requires at least one, so the accessor used
+  to be able to hand a caller a document its own published contract rejects;
+  it now says there is no document instead. `convert_table` is an entry point
+  of its own, and a table whose header repeats a column has two cells under
+  one name: the file readers already refused that, and the entry point now
+  does too, rather than reading one of the two cells and forgetting the
+  other. No command's behaviour changes: nothing writes a result set.
 
 ### Fixed
 
@@ -1464,6 +1497,78 @@ rather than after it.
   `0o700`. A test that holds only on the umask it happened to run under pins
   the environment, not the module. 123 mutants over 590 covered lines, all
   killed.
+
+- **Laboratory result observations, and the range and flag predicates over
+  them (B-025 result half, B-030 mechanism half).** The LIS readers already
+  recognised, bounded, scanned and counted the result columns of an export
+  and emitted nothing from them. They now build a laboratory result
+  observation from a row that carries the whole result column set: an analyte
+  code, a value carried as a decimal string, a unit, an order and a specimen,
+  a reference interval with both bounds, both inclusivities and a unit, and an
+  abnormal flag. Four pure predicates read them — `result_linked` (A-025),
+  `analyte_value_unit_preserved` (A-026, exact), `reference_interval_present`
+  (A-027/A-029) and `flag_consistent_with_interval` (A-028/A-030, computed
+  from the fixture's own bounds at below, lower bound, in range, upper bound
+  and above).
+
+  **A separate observation kind, not a sixth concept.** The five Gender
+  Harmony concepts are untouched: `ConceptKind` still has exactly its five
+  members, no result field is read as or derived from any of them, and no
+  identity value chooses an interval. A sixth `ConceptKind` would have added a
+  required key to the case manifest's closed concept set, put a laboratory
+  value on the identity divergence section, and moved every identity contract
+  for a laboratory change. The family carries its own two contracts instead.
+
+  **Absence is never normal.** A blank interval fails the presence claim
+  (A-029) and decides no flag (A-030); an out-of-range value returned with no
+  flag fails; an in-range value with no flag is indeterminate, because a flag
+  nobody sent is not evidence that a result is normal; and a range or flag in
+  a dialect this ungoverned profile cannot type is carried as `not_typed`
+  rather than normalized to whatever it most resembles (A-033), with every
+  outcome that would have read it indeterminate. `REASON_STATUSES` names the
+  statuses each reason may be published under, and four reasons can reach
+  `pass`.
+
+  **Nothing here is clinical content.** Every analyte code, unit, bound,
+  inclusivity and flag in the repository is a token invented for software
+  tests; no laboratory medical director, clinical reviewer or community
+  reviewer has supplied or approved any value, any interval or any predicate;
+  and no interval here is a reference range for any analyte, person or
+  population. `docs/05-DATA-AND-EVIDENCE.md` §4 is unchanged in substance: the
+  partner's laboratory medical director supplies the real fixture values, and
+  B-011 is open for exactly that. The shipped family carries no age band and
+  no effective oracle version, and no result status either, so each predicate
+  decides less than the assertion it is offered for and no rule written in it
+  can be a governed assertion; A-031 is not implemented at all, and A-025 to
+  A-030 are mechanisms rather than assertions.
+
+  Fixtures: the INV, CTX and XFAIL classes of `docs/05` §4 with all six edge
+  values each, and the seeded faults F-017 to F-022 and F-033 with a clean
+  counterpart each. The corpus matrix gains a fourth status, `exercised
+  outside the receipt`, and now reads 12 exercised at receipt level, 7
+  exercised outside it, 7 refused, 10 not yet exercisable — a laboratory
+  outcome reaches no receipt and no divergence section, so nothing localizes
+  one, and counting those rows as exercised would claim a localization the
+  mechanism does not make. One of those rows is reported by an assertion
+  other than the one its library row names, and `docs/09` says so: F-020
+  mutates the interval bounds, and `reference_interval_present` -- the only
+  mechanism for A-027 here -- passes over the faulted fixture, because both
+  bounds, both inclusivities and a fitting unit are all present. What reports
+  F-020 is the A-028/A-030 flag predicate, and only because the fixture left a
+  flag the moved bounds contradict; wrong bounds returned with a flag that
+  agrees with them would pass all four rules, and comparing bounds against
+  approved ones is what B-011 is for. The test module derives that set from
+  the corpus table and requires the disclosure, so a later row of the same
+  shape cannot be counted in silence.
+
+### Contracts
+
+- Added `contextsafe-result-set-v0.1.schema.json` and
+  `contextsafe-result-rule-set-v0.1.schema.json`, each with an agreement test
+  holding it to the runtime's vocabularies; `schemas/README.md` now counts
+  twenty-one contracts. No existing contract's version moved: the case
+  manifest, the observation set, the rule set and the receipt are all
+  untouched, and no closed set in any of them widened.
 
 ## [0.1.0] - 2026-09-02
 

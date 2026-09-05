@@ -11,15 +11,31 @@ refuses ``True``: no laboratory, interoperability, clinical, or community
 reviewer has approved it as the shape of any real export, and it is not a
 mapping profile in the B-026 sense.
 
-What it does not read. The result columns (``analyte``, ``value``,
-``unit``, ``range``, ``flag``, ``order``, ``specimen``) are recognized,
-bounded, scanned, and counted, and produce no observation, because the
-laboratory result observation family is a later item and the observation
-contract has no concept for a result. A source that carries them gets the
-closed warning ``result_columns_not_observed`` and a count of the cells it
-did not claim, never a silently dropped column. A column outside the
-allowlist rejects the whole source, with the column's position and never
-its name.
+What it reads beside the identity. A source that carries the whole result
+column set (``analyte``, ``value``, ``unit``, ``range``, ``flag``,
+``order``, ``specimen``) also produces one laboratory result observation per
+row (:mod:`contextsafe.laboratory`), pointed at the row it was read from.
+Those are a separate observation kind and not a sixth concept: they carry
+their own document, they reach no receipt, and no command writes them, which
+is what the closed warning ``result_observations_not_written`` says. A row that
+does not carry the whole result column set, or that leaves an analyte, value,
+unit, order, or specimen cell empty, produces no result: its result cells stay
+recognized, bounded, scanned, and counted, under the closed warning
+``result_columns_not_observed`` and a count of the cells the conversion did not
+claim -- never a silently dropped column, and never a result with an invented
+cell in it. A source whose rows differ carries both warnings and a count that
+says how many cells the results left behind. A column outside the allowlist rejects the whole source, with the
+column's position and never its name.
+
+What a result cell is not interpreted as. A range cell is typed only in the
+one invented dialect :mod:`contextsafe.laboratory` publishes
+(``ge2.500:le7.500:fixture-unit-alpha``), and a flag cell only in its
+invented flag vocabulary. A partner export's own range or flag dialect is
+not guessed at and not normalized to the closest one it resembles (A-033):
+the cell is carried as ``not_typed``, which is a different fact from an
+empty cell, and every predicate that would have read it is indeterminate
+rather than passing. Nothing here is a clinical reference range, and no
+laboratory reviewer has approved any of it.
 
 What it never does. ``sex`` maps only to recorded sex or gender, in the
 fixed context ``laboratory``; no column can name gender identity or sex
@@ -70,6 +86,20 @@ from contextsafe.importers.base import (
 )
 from contextsafe.importers.canonical_json import UNBOUND_SOURCE
 from contextsafe.importers.lis_csv import CsvBounds, parse_csv
+from contextsafe.laboratory import (
+    RESULT_SCHEMA_VERSION,
+    LaboratoryResult,
+    parse_result_set,
+    result_set_document,
+    type_abnormal_flag_cell,
+    type_reference_interval_cell,
+)
+from contextsafe.laboratory import (
+    RESULT_TOKEN_PATTERN as LABORATORY_TOKEN_PATTERN,
+)
+from contextsafe.laboratory import (
+    SYNTHETIC_IDENTIFIER_PATTERN as LABORATORY_IDENTIFIER_PATTERN,
+)
 from contextsafe.mapping_profile import SourceToken
 from contextsafe.models import (
     OBSERVATION_SCHEMA_VERSION,
@@ -120,18 +150,22 @@ The same grammar the canonical envelope publishes for a synthetic value
 code, so the two importers admit the same tokens.
 """
 
-SYNTHETIC_IDENTIFIER_PATTERN = re.compile(
-    r"^(?:ORDER-)?CSYN-[A-Z0-9][A-Z0-9_.:-]{0,95}$"
-)
-"""An order or specimen cell: an accession-shaped identifier, so synthetic only."""
+SYNTHETIC_IDENTIFIER_PATTERN = LABORATORY_IDENTIFIER_PATTERN
+"""An order or specimen cell: an accession-shaped identifier, so synthetic only.
 
-RESULT_TOKEN_PATTERN = re.compile(r"^[A-Za-z0-9<>][A-Za-z0-9:/_.%<>-]{0,63}$")
+The laboratory result family's own grammar, not a second copy of it, so a
+cell this reader admits is a cell the result contract admits and the
+re-validation below can never disagree with the reader about an identifier.
+"""
+
+RESULT_TOKEN_PATTERN = LABORATORY_TOKEN_PATTERN
 """A non-empty analyte, value, unit, range, or flag cell.
 
 No whitespace, so a sentence cannot be written in a result cell, and
-bounded, so nothing long can be either. Not interpreted: a later item
-decides what a result cell means, and this pattern only keeps free text
-out until then.
+bounded, so nothing long can be either. Not interpreted here: what a range
+or a flag cell means is decided by :mod:`contextsafe.laboratory`, whose
+grammar this is, and a cell it cannot type is carried as untyped rather
+than guessed at.
 """
 
 FORMULA_PREFIXES = frozenset({"=", "+", "-", "@"})
@@ -189,7 +223,7 @@ class LisProfile:
 
 
 LIS_PROFILE = LisProfile(
-    version="0.1.0",
+    version="0.2.0",
     case_column="patient_id",
     identity_columns=("name_to_use", "pronouns", "sex"),
     result_columns=("analyte", "value", "unit", "range", "flag", "order", "specimen"),
@@ -197,11 +231,32 @@ LIS_PROFILE = LisProfile(
     max_rows=2000,
     max_cell_length=128,
 )
-"""Profile 0.1.0. Reference-only; ``profile_reviewed`` is ``False``.
+"""Profile 0.2.0. Reference-only; ``profile_reviewed`` is ``False``.
 
-Its version is recorded as ``mapping.mapping_version`` on every observation.
-A change to the column set, to a cell grammar, to the fixed laboratory
-context, or to the duplicate-collapsing rule is a change to this number.
+Its version is recorded as ``mapping.mapping_version`` on every observation
+and as ``mapping_version`` on every laboratory result. A change to the
+column set, to a cell grammar, to the fixed laboratory context, to the
+duplicate-collapsing rule, or to what the profile emits is a change to this
+number. 0.2.0 is 0.1.0 plus the laboratory result observations: the identity
+observations it produces are unchanged in value and shape, and only the
+version they record moved, so two behaviours of one profile can never share
+a run identity.
+"""
+
+RESULT_REQUIRED_COLUMNS: tuple[str, ...] = (
+    "analyte",
+    "value",
+    "unit",
+    "order",
+    "specimen",
+)
+"""Result columns whose cell a row must carry to become a result.
+
+``range`` and ``flag`` may be empty -- a blank interval is the published
+failure pattern (A-029) and has to be representable. The five here are what
+identifies a result at all: a row that leaves one of them empty carries no
+result this profile can read, and nothing is invented to fill it. Its result
+cells are counted as unobserved instead, under the warning that says so.
 """
 
 _IDENTITY_CONCEPTS: Mapping[str, ConceptKind] = {
@@ -490,14 +545,76 @@ class _Read:
     """Identity column to distinct cell to the first row carrying it."""
 
     unobserved_cell_count: int
+    results: tuple[LaboratoryResult, ...] = ()
 
 
-def _read_rows(table: LisTable, case: SyntheticCase) -> _Read:
+def emits_results(table: LisTable) -> bool:
+    """True when the table carries every result column, so a row is a result."""
+
+    return set(LIS_PROFILE.result_columns) <= set(table.columns)
+
+
+def _carries_a_result(cells: Mapping[str, str]) -> bool:
+    """True when the row names an analyte, a value, a unit, an order and a specimen.
+
+    A row that leaves one of those empty is not a result with a hole in it:
+    it is a row this profile cannot read as a result at all. Nothing is
+    invented for the empty cell and nothing is dropped quietly -- the row's
+    result cells are counted as unobserved and the source carries the closed
+    warning that says so.
+    """
+
+    return all(cells[column] for column in RESULT_REQUIRED_COLUMNS)
+
+
+def _result(
+    cells: Mapping[str, str], row_index: int, *, case_id: str, source_sha256: str
+) -> LaboratoryResult:
+    """Build one laboratory result from one row.
+
+    The evidence pointer is the row, not a cell: a result is read from every
+    result column of one row at once, and a cell word would widen the closed
+    structural-pointer vocabulary the receipt contract copies.
+    """
+
+    interval_status, interval = type_reference_interval_cell(cells["range"])
+    flag_status, flag = type_abnormal_flag_cell(cells["flag"])
+    return LaboratoryResult(
+        schema_version=RESULT_SCHEMA_VERSION,
+        result_id=f"RES-{case_id}-L{row_index:04d}",
+        case_id=case_id,
+        checkpoint=LIS_CHECKPOINT,
+        analyte_code=cells["analyte"],
+        value=cells["value"],
+        unit=cells["unit"],
+        order_id=cells["order"],
+        specimen_id=cells["specimen"],
+        interval_status=interval_status,
+        reference_interval=interval,
+        flag_status=flag_status,
+        abnormal_flag=flag,
+        evidence=EvidencePointer(
+            source_sha256=source_sha256, source_pointer=f"$.rows[{row_index}]"
+        ),
+        mapping_version=LIS_PROFILE.version,
+    )
+
+
+def _read_rows(table: LisTable, case: SyntheticCase, source_sha256: str) -> _Read:
     first_rows: dict[str, dict[str, int]] = {
         column: {} for column in table.columns if column in _IDENTITY_CONCEPTS
     }
+    complete = emits_results(table)
     unobserved = 0
+    results: list[LaboratoryResult] = []
     for row_index, row in enumerate(table.rows):
+        # Every cell is checked from the header/row pairs, never from a
+        # mapping of them: a mapping keyed by column name would collapse a
+        # repeated column and leave the collapsed cell unchecked, uncounted,
+        # and unscanned. A repeated column is refused before this runs, and
+        # this loop does not depend on that refusal.
+        cells = dict(zip(table.columns, row, strict=True))
+        result_cells = 0
         for column, cell in zip(table.columns, row, strict=True):
             path = f"$.rows[{row_index}].{column}"
             _check_cell(cell, path)
@@ -508,8 +625,23 @@ def _read_rows(table: LisTable, case: SyntheticCase) -> _Read:
                 first_rows[column].setdefault(cell, row_index)
             else:
                 _result_cell(cell, path, column)
-                unobserved += 1
-    return _Read(first_rows=first_rows, unobserved_cell_count=unobserved)
+                result_cells += 1
+        if complete and _carries_a_result(cells):
+            results.append(
+                _result(
+                    cells,
+                    row_index,
+                    case_id=case.case_id,
+                    source_sha256=source_sha256,
+                )
+            )
+        else:
+            unobserved += result_cells
+    return _Read(
+        first_rows=first_rows,
+        unobserved_cell_count=unobserved,
+        results=tuple(results),
+    )
 
 
 def _observation(
@@ -547,6 +679,23 @@ def _require_lis_checkpoint(checkpoint: Checkpoint) -> None:
         )
 
 
+def _require_distinct_columns(table: LisTable) -> None:
+    """Refuse a table whose header repeats a column, whoever built it.
+
+    The file readers reject a repeated header before a cell is read, and
+    ``convert_table`` is an entry point of its own: a caller that hands it a
+    table directly gets the same refusal, rather than a row whose repeated
+    column collapses into one cell and leaves the other unchecked.
+    """
+
+    if len(set(table.columns)) != len(table.columns):
+        raise import_error(
+            ImportErrorCode.COLUMN_DUPLICATE,
+            "$.header",
+            "a column appears more than once",
+        )
+
+
 def convert_table(
     table: LisTable,
     *,
@@ -558,17 +707,21 @@ def convert_table(
 ) -> ImportResult:
     """Convert one table whole, or raise and produce nothing.
 
-    Every cell is bounded, checked for a formula prefix, and boundary
-    scanned; the case column is cross-checked against the case document;
-    identity cells are typed; result cells are held to their grammars and
-    counted. Then one observation is built per distinct value per identity
-    column, and the document is re-validated by the observation contract so
-    a value this module typed and the contract rejects (an unsupported RSG
-    value) rejects the source with the contract's own code.
+    A header that repeats a column is refused here as well as at each
+    reader, so no cell of a repeated column can go unchecked. Every cell is
+    bounded, checked for a formula prefix, and boundary scanned; the case
+    column is cross-checked against the case document; identity cells are
+    typed; result cells are held to their grammars and either counted or
+    built into a laboratory result. Then one observation
+    is built per distinct value per identity column, and both documents are
+    re-validated by their own contracts, so a value this module typed and a
+    contract rejects (an unsupported RSG value, a bound outside the decimal
+    grammar) rejects the source with that contract's own code.
     """
 
     _require_lis_checkpoint(checkpoint)
-    read = _read_rows(table, case)
+    _require_distinct_columns(table)
+    read = _read_rows(table, case, source_sha256)
     distinct = tuple(
         (column, cell, row_index)
         for column in LIS_PROFILE.identity_columns
@@ -595,8 +748,13 @@ def convert_table(
             "schema_version": OBSERVATION_SET_SCHEMA_VERSION,
         }
     )
+    results = (
+        parse_result_set(result_set_document(read.results)) if read.results else ()
+    )
     warnings = [ImportWarningCode.MAPPING_PROFILE_NOT_BOUND]
-    if any(column in LIS_PROFILE.result_columns for column in table.columns):
+    if results:
+        warnings.append(ImportWarningCode.RESULT_OBSERVATIONS_NOT_WRITTEN)
+    if read.unobserved_cell_count:
         warnings.append(ImportWarningCode.RESULT_COLUMNS_NOT_OBSERVED)
     return ImportResult(
         format_name=format_name,
@@ -607,6 +765,7 @@ def convert_table(
         observations=validated,
         warnings=tuple(warnings),
         unobserved_cell_count=read.unobserved_cell_count,
+        results=results,
         source_tokens=tokens,
     )
 

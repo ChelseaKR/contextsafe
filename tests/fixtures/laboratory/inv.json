@@ -1,0 +1,458 @@
+{
+  "class": "INV",
+  "description": "A sex-invariant fixture: one invented analyte, one invented interval, the same bounds and flags at every value. Nothing about it is chosen by, or varies with, any identity concept.",
+  "case": {
+    "schema_version": "contextsafe.case/0.1.0",
+    "case_id": "CTP-L01",
+    "synthetic_identifier": {
+      "system": "urn:contextsafe:synthetic",
+      "value": "CSYN-CTP-L01"
+    },
+    "concepts": {
+      "gender_identity": {
+        "status": "specified",
+        "value": "fixture-gender-1",
+        "code_system": "urn:contextsafe:fixture"
+      },
+      "recorded_sex_or_gender": [
+        {
+          "value": "unknown",
+          "context": "laboratory",
+          "source": "synthetic-fixture"
+        }
+      ],
+      "sex_parameter_for_clinical_use": [],
+      "name_to_use": {
+        "status": "specified",
+        "value": "CSYN-INV-L01",
+        "use": "usual"
+      },
+      "pronouns": {
+        "status": "specified",
+        "value": "they/them"
+      }
+    },
+    "prohibited_inferences": [
+      "gender_identity_to_spcu",
+      "recorded_sex_or_gender_to_spcu"
+    ]
+  },
+  "results": {
+    "schema_version": "contextsafe.result-set/0.1.0",
+    "results": [
+      {
+        "schema_version": "contextsafe.result/0.1.0",
+        "result_id": "RES-CTP-L01-0001",
+        "case_id": "CTP-L01",
+        "checkpoint": "lis_return",
+        "analyte_code": "fixture-analyte-1",
+        "value": "1.000",
+        "unit": "fixture-unit-alpha",
+        "order_id": "ORDER-CSYN-CTP-L01-A",
+        "specimen_id": "CSYN-SPEC-CTP-L01-0001",
+        "reference_interval": {
+          "status": "typed",
+          "low": "2.500",
+          "low_inclusive": true,
+          "high": "7.500",
+          "high_inclusive": true,
+          "unit": "fixture-unit-alpha"
+        },
+        "abnormal_flag": {
+          "status": "typed",
+          "flag": "fixture-flag-below-low"
+        },
+        "evidence": {
+          "source_sha256": "c8300d12bb4e14ffa26265f5daf14ae9332d9a066fc5365774402ed1c84532f7",
+          "source_pointer": "$.rows[0]"
+        },
+        "mapping_version": "0.1.0"
+      },
+      {
+        "schema_version": "contextsafe.result/0.1.0",
+        "result_id": "RES-CTP-L01-0002",
+        "case_id": "CTP-L01",
+        "checkpoint": "lis_return",
+        "analyte_code": "fixture-analyte-1",
+        "value": "2.500",
+        "unit": "fixture-unit-alpha",
+        "order_id": "ORDER-CSYN-CTP-L01-A",
+        "specimen_id": "CSYN-SPEC-CTP-L01-0002",
+        "reference_interval": {
+          "status": "typed",
+          "low": "2.500",
+          "low_inclusive": true,
+          "high": "7.500",
+          "high_inclusive": true,
+          "unit": "fixture-unit-alpha"
+        },
+        "abnormal_flag": {
+          "status": "typed",
+          "flag": "fixture-flag-in-range"
+        },
+        "evidence": {
+          "source_sha256": "c5cb74b8055aa7965a0e6ac6370f1eabb8ebbba35ff10b3fe9ee32b3c544b1b4",
+          "source_pointer": "$.rows[1]"
+        },
+        "mapping_version": "0.1.0"
+      },
+      {
+        "schema_version": "contextsafe.result/0.1.0",
+        "result_id": "RES-CTP-L01-0003",
+        "case_id": "CTP-L01",
+        "checkpoint": "lis_return",
+        "analyte_code": "fixture-analyte-1",
+        "value": "5.000",
+        "unit": "fixture-unit-alpha",
+        "order_id": "ORDER-CSYN-CTP-L01-A",
+        "specimen_id": "CSYN-SPEC-CTP-L01-0003",
+        "reference_interval": {
+          "status": "typed",
+          "low": "2.500",
+          "low_inclusive": true,
+          "high": "7.500",
+          "high_inclusive": true,
+          "unit": "fixture-unit-alpha"
+        },
+        "abnormal_flag": {
+          "status": "typed",
+          "flag": "fixture-flag-in-range"
+        },
+        "evidence": {
+          "source_sha256": "f3731a8d6463d9d9b34ff7d56f08c8c17e5b75f251fed5cbe31c2f5a9d28897d",
+          "source_pointer": "$.rows[2]"
+        },
+        "mapping_version": "0.1.0"
+      },
+      {
+        "schema_version": "contextsafe.result/0.1.0",
+        "result_id": "RES-CTP-L01-0004",
+        "case_id": "CTP-L01",
+        "checkpoint": "lis_return",
+        "analyte_code": "fixture-analyte-1",
+        "value": "7.500",
+        "unit": "fixture-unit-alpha",
+        "order_id": "ORDER-CSYN-CTP-L01-A",
+        "specimen_id": "CSYN-SPEC-CTP-L01-0004",
+        "reference_interval": {
+          "status": "typed",
+          "low": "2.500",
+          "low_inclusive": true,
+          "high": "7.500",
+          "high_inclusive": true,
+          "unit": "fixture-unit-alpha"
+        },
+        "abnormal_flag": {
+          "status": "typed",
+          "flag": "fixture-flag-in-range"
+        },
+        "evidence": {
+          "source_sha256": "aecfa867a774c5df97bf1593c2c8fee38caa454b87a3afa9f5542a58abe5a7ed",
+          "source_pointer": "$.rows[3]"
+        },
+        "mapping_version": "0.1.0"
+      },
+      {
+        "schema_version": "contextsafe.result/0.1.0",
+        "result_id": "RES-CTP-L01-0005",
+        "case_id": "CTP-L01",
+        "checkpoint": "lis_return",
+        "analyte_code": "fixture-analyte-1",
+        "value": "9.000",
+        "unit": "fixture-unit-alpha",
+        "order_id": "ORDER-CSYN-CTP-L01-A",
+        "specimen_id": "CSYN-SPEC-CTP-L01-0005",
+        "reference_interval": {
+          "status": "typed",
+          "low": "2.500",
+          "low_inclusive": true,
+          "high": "7.500",
+          "high_inclusive": true,
+          "unit": "fixture-unit-alpha"
+        },
+        "abnormal_flag": {
+          "status": "typed",
+          "flag": "fixture-flag-above-high"
+        },
+        "evidence": {
+          "source_sha256": "eb59d50d5a0e23076638cb759ae00bfc0676f287a6d9a2991e29acbf7061d956",
+          "source_pointer": "$.rows[4]"
+        },
+        "mapping_version": "0.1.0"
+      },
+      {
+        "schema_version": "contextsafe.result/0.1.0",
+        "result_id": "RES-CTP-L01-0006",
+        "case_id": "CTP-L01",
+        "checkpoint": "lis_return",
+        "analyte_code": "fixture-analyte-1",
+        "value": "5.000",
+        "unit": "fixture-unit-alpha",
+        "order_id": "ORDER-CSYN-CTP-L01-A",
+        "specimen_id": "CSYN-SPEC-CTP-L01-0006",
+        "reference_interval": {
+          "status": "absent"
+        },
+        "abnormal_flag": {
+          "status": "absent"
+        },
+        "evidence": {
+          "source_sha256": "0534ac990f1f4e3c8f4ef9d3f5ba4675e08b5be43ff59e5e9598c8a5ae29bc19",
+          "source_pointer": "$.rows[5]"
+        },
+        "mapping_version": "0.1.0"
+      }
+    ]
+  },
+  "rules": {
+    "schema_version": "contextsafe.result-rule-set/0.1.0",
+    "rules": [
+      {
+        "rule_id": "A-L01",
+        "version": "0.1.0",
+        "case_id": "CTP-L01",
+        "checkpoint": "lis_return",
+        "result_id": "RES-CTP-L01-0001",
+        "required": true,
+        "predicate": "result_linked",
+        "expected_order_id": "ORDER-CSYN-CTP-L01-A",
+        "expected_specimen_id": "CSYN-SPEC-CTP-L01-0001"
+      },
+      {
+        "rule_id": "A-L02",
+        "version": "0.1.0",
+        "case_id": "CTP-L01",
+        "checkpoint": "lis_return",
+        "result_id": "RES-CTP-L01-0001",
+        "required": true,
+        "predicate": "analyte_value_unit_preserved",
+        "expected_analyte_code": "fixture-analyte-1",
+        "expected_value": "1.000",
+        "expected_unit": "fixture-unit-alpha"
+      },
+      {
+        "rule_id": "A-L03",
+        "version": "0.1.0",
+        "case_id": "CTP-L01",
+        "checkpoint": "lis_return",
+        "result_id": "RES-CTP-L01-0001",
+        "required": true,
+        "predicate": "reference_interval_present"
+      },
+      {
+        "rule_id": "A-L04",
+        "version": "0.1.0",
+        "case_id": "CTP-L01",
+        "checkpoint": "lis_return",
+        "result_id": "RES-CTP-L01-0001",
+        "required": true,
+        "predicate": "flag_consistent_with_interval"
+      },
+      {
+        "rule_id": "A-L05",
+        "version": "0.1.0",
+        "case_id": "CTP-L01",
+        "checkpoint": "lis_return",
+        "result_id": "RES-CTP-L01-0002",
+        "required": true,
+        "predicate": "result_linked",
+        "expected_order_id": "ORDER-CSYN-CTP-L01-A",
+        "expected_specimen_id": "CSYN-SPEC-CTP-L01-0002"
+      },
+      {
+        "rule_id": "A-L06",
+        "version": "0.1.0",
+        "case_id": "CTP-L01",
+        "checkpoint": "lis_return",
+        "result_id": "RES-CTP-L01-0002",
+        "required": true,
+        "predicate": "analyte_value_unit_preserved",
+        "expected_analyte_code": "fixture-analyte-1",
+        "expected_value": "2.500",
+        "expected_unit": "fixture-unit-alpha"
+      },
+      {
+        "rule_id": "A-L07",
+        "version": "0.1.0",
+        "case_id": "CTP-L01",
+        "checkpoint": "lis_return",
+        "result_id": "RES-CTP-L01-0002",
+        "required": true,
+        "predicate": "reference_interval_present"
+      },
+      {
+        "rule_id": "A-L08",
+        "version": "0.1.0",
+        "case_id": "CTP-L01",
+        "checkpoint": "lis_return",
+        "result_id": "RES-CTP-L01-0002",
+        "required": true,
+        "predicate": "flag_consistent_with_interval"
+      },
+      {
+        "rule_id": "A-L09",
+        "version": "0.1.0",
+        "case_id": "CTP-L01",
+        "checkpoint": "lis_return",
+        "result_id": "RES-CTP-L01-0003",
+        "required": true,
+        "predicate": "result_linked",
+        "expected_order_id": "ORDER-CSYN-CTP-L01-A",
+        "expected_specimen_id": "CSYN-SPEC-CTP-L01-0003"
+      },
+      {
+        "rule_id": "A-L10",
+        "version": "0.1.0",
+        "case_id": "CTP-L01",
+        "checkpoint": "lis_return",
+        "result_id": "RES-CTP-L01-0003",
+        "required": true,
+        "predicate": "analyte_value_unit_preserved",
+        "expected_analyte_code": "fixture-analyte-1",
+        "expected_value": "5.000",
+        "expected_unit": "fixture-unit-alpha"
+      },
+      {
+        "rule_id": "A-L11",
+        "version": "0.1.0",
+        "case_id": "CTP-L01",
+        "checkpoint": "lis_return",
+        "result_id": "RES-CTP-L01-0003",
+        "required": true,
+        "predicate": "reference_interval_present"
+      },
+      {
+        "rule_id": "A-L12",
+        "version": "0.1.0",
+        "case_id": "CTP-L01",
+        "checkpoint": "lis_return",
+        "result_id": "RES-CTP-L01-0003",
+        "required": true,
+        "predicate": "flag_consistent_with_interval"
+      },
+      {
+        "rule_id": "A-L13",
+        "version": "0.1.0",
+        "case_id": "CTP-L01",
+        "checkpoint": "lis_return",
+        "result_id": "RES-CTP-L01-0004",
+        "required": true,
+        "predicate": "result_linked",
+        "expected_order_id": "ORDER-CSYN-CTP-L01-A",
+        "expected_specimen_id": "CSYN-SPEC-CTP-L01-0004"
+      },
+      {
+        "rule_id": "A-L14",
+        "version": "0.1.0",
+        "case_id": "CTP-L01",
+        "checkpoint": "lis_return",
+        "result_id": "RES-CTP-L01-0004",
+        "required": true,
+        "predicate": "analyte_value_unit_preserved",
+        "expected_analyte_code": "fixture-analyte-1",
+        "expected_value": "7.500",
+        "expected_unit": "fixture-unit-alpha"
+      },
+      {
+        "rule_id": "A-L15",
+        "version": "0.1.0",
+        "case_id": "CTP-L01",
+        "checkpoint": "lis_return",
+        "result_id": "RES-CTP-L01-0004",
+        "required": true,
+        "predicate": "reference_interval_present"
+      },
+      {
+        "rule_id": "A-L16",
+        "version": "0.1.0",
+        "case_id": "CTP-L01",
+        "checkpoint": "lis_return",
+        "result_id": "RES-CTP-L01-0004",
+        "required": true,
+        "predicate": "flag_consistent_with_interval"
+      },
+      {
+        "rule_id": "A-L17",
+        "version": "0.1.0",
+        "case_id": "CTP-L01",
+        "checkpoint": "lis_return",
+        "result_id": "RES-CTP-L01-0005",
+        "required": true,
+        "predicate": "result_linked",
+        "expected_order_id": "ORDER-CSYN-CTP-L01-A",
+        "expected_specimen_id": "CSYN-SPEC-CTP-L01-0005"
+      },
+      {
+        "rule_id": "A-L18",
+        "version": "0.1.0",
+        "case_id": "CTP-L01",
+        "checkpoint": "lis_return",
+        "result_id": "RES-CTP-L01-0005",
+        "required": true,
+        "predicate": "analyte_value_unit_preserved",
+        "expected_analyte_code": "fixture-analyte-1",
+        "expected_value": "9.000",
+        "expected_unit": "fixture-unit-alpha"
+      },
+      {
+        "rule_id": "A-L19",
+        "version": "0.1.0",
+        "case_id": "CTP-L01",
+        "checkpoint": "lis_return",
+        "result_id": "RES-CTP-L01-0005",
+        "required": true,
+        "predicate": "reference_interval_present"
+      },
+      {
+        "rule_id": "A-L20",
+        "version": "0.1.0",
+        "case_id": "CTP-L01",
+        "checkpoint": "lis_return",
+        "result_id": "RES-CTP-L01-0005",
+        "required": true,
+        "predicate": "flag_consistent_with_interval"
+      },
+      {
+        "rule_id": "A-L21",
+        "version": "0.1.0",
+        "case_id": "CTP-L01",
+        "checkpoint": "lis_return",
+        "result_id": "RES-CTP-L01-0006",
+        "required": true,
+        "predicate": "result_linked",
+        "expected_order_id": "ORDER-CSYN-CTP-L01-A",
+        "expected_specimen_id": "CSYN-SPEC-CTP-L01-0006"
+      },
+      {
+        "rule_id": "A-L22",
+        "version": "0.1.0",
+        "case_id": "CTP-L01",
+        "checkpoint": "lis_return",
+        "result_id": "RES-CTP-L01-0006",
+        "required": true,
+        "predicate": "analyte_value_unit_preserved",
+        "expected_analyte_code": "fixture-analyte-1",
+        "expected_value": "5.000",
+        "expected_unit": "fixture-unit-alpha"
+      },
+      {
+        "rule_id": "A-L23",
+        "version": "0.1.0",
+        "case_id": "CTP-L01",
+        "checkpoint": "lis_return",
+        "result_id": "RES-CTP-L01-0006",
+        "required": true,
+        "predicate": "reference_interval_present"
+      },
+      {
+        "rule_id": "A-L24",
+        "version": "0.1.0",
+        "case_id": "CTP-L01",
+        "checkpoint": "lis_return",
+        "result_id": "RES-CTP-L01-0006",
+        "required": true,
+        "predicate": "flag_consistent_with_interval"
+      }
+    ]
+  }
+}

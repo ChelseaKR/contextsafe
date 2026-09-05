@@ -666,7 +666,7 @@ laboratory, or community review has looked at any of it.
 Every one of the 36 published seeded faults in
 [Test and evaluation §4](docs/09-TEST-AND-EVALUATION.md) now has a committed
 answer. `tests/test_seeded_faults.py` carries a matrix that says, for each
-fault, one of three things, and a dated table under §4 restates it row for
+fault, one of four things, and a dated table under §4 restates it row for
 row with a test holding the two together. Twelve are *exercised*: a complete
 synthetic fixture under `tests/fixtures/seeded-faults/` with exactly one fault
 applied, proved to be reported with the assertion's own reason and located in
@@ -677,24 +677,36 @@ source in place of the declared ones, reported as a changed record while the
 `not_coerced` rule beside it still passes, because the X survived), and F-035
 (the same value through another mapping version: the trace names it and the
 run identity moves, so two mapping versions can never share a receipt). Seven
-are *refused*: the faulted input never reaches evaluation because a
+are *exercised outside the receipt*: the laboratory faults F-017 to F-022 and
+F-033, each a complete synthetic fixture under
+`tests/fixtures/laboratory/seeded-faults/` reported as `fail` by one of the
+laboratory result predicates with that predicate's own reason, beside a clean
+counterpart that passes every rule — a wrong patient's order, an altered
+value, a blank interval, wrong bounds, a missing flag above the bound, an
+out-of-range value flagged normal, and a range preserved in the wrong unit.
+They are counted apart from the twelve because a laboratory outcome reaches
+no receipt and no divergence section, so nothing localizes them, and because
+every analyte, unit, bound, and flag in them is a token invented for software
+tests: no laboratory medical director has supplied or approved any of them,
+and none of them is a reference range. Seven are *refused*: the faulted input never reaches evaluation because a
 fail-closed gate refuses it whole with a named code at a structural path — a
 declared GI-to-SPCU or RSG-to-SPCU mapping (F-015, F-016), an unsupported
 value that is refused rather than nearest-matched (F-024), an identifier
 outside the synthetic namespace (F-029), an observation naming another case
 (F-032), and the pack validity and receipt contract gates that already exist
 (F-028, F-030); a refusal is detection without a receipt, so it is counted
-separately and never as localization. Seventeen are *not yet exercisable*,
-and each row names what it waits on from a closed vocabulary: the laboratory
-fixture and importer, the SPCU predicates and their clinical review, name
-contexts and periods in the observation contract, the receipt verifier,
-signatures, the review state machine, and the presentation pass.
+separately and never as localization. Ten are *not yet exercisable*, and each
+row names what it waits on from a closed vocabulary: the SPCU predicates and
+their clinical review, name contexts and periods in the observation contract,
+the receipt verifier, signatures, the review state machine, and the
+presentation pass.
 
 Its limits are the whole point of writing it down. This is not the 41-fault
 evaluation B-048 defines: there is no hidden-fault set, no independent fault
 author has reviewed the corpus, no independent QA has run it, and every fault
 here was written by the implementer of the mechanism that detects it. Twelve
-of 36 is deterministic corpus coverage over the published library — not a
+of 36 at receipt level, and nineteen decided in all, is deterministic corpus
+coverage over the published library — not a
 sensitivity estimate over faults the library does not contain, and not a
 population claim of any kind. Nothing here is governed content, and no
 clinical, laboratory, or community review has looked at any fixture.

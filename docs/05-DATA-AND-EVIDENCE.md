@@ -77,6 +77,35 @@ Required edge values per approved fixture:
 
 The oracle records whether a blank range, dual range, safety range, or contact-the-lab behavior is locally approved. Disputed behavior is indeterminate, never normalized into a universal expectation.
 
+### What ships today, and what it is not (B-025/B-030, 2026-09-04)
+
+The repository now carries a laboratory result observation family
+(`contextsafe.result-set/0.1.0`), the four ungoverned predicates below, and
+one INV, CTX, and XFAIL fixture with all six edge values each, under
+`tests/fixtures/laboratory/`. **None of it is clinical content.** Every
+analyte code, unit, bound, inclusivity, and flag in it is a token invented
+for software tests (`fixture-analyte-1`, `fixture-unit-alpha`,
+`ge2.500:le7.500:fixture-unit-alpha`, `fixture-flag-above-high`); no
+laboratory medical director, clinical reviewer, or community reviewer has
+supplied or approved any value; and no interval in the repository is a
+reference range for any analyte, person, or population. The partner's
+laboratory medical director still supplies the real fixture values, exactly
+as this section says, and until that happens the shipped fixtures are
+software-test data and nothing else. The age band and effective oracle
+version this section requires are not carried by the shipped family at all,
+and neither is the result status A-026 names, so each predicate decides
+less than the assertion it is offered for -- which is one of the reasons no
+rule written in it can be a governed assertion.
+
+The family is a separate observation kind rather than a sixth concept: the
+five Gender Harmony concepts are unchanged, no result field is read as or
+derived from any of them, and no identity value chooses an interval. A
+result carries `analyte_code`, `value` (a decimal as a string), `unit`,
+`order_id`, `specimen_id`, a reference interval that is present with both
+bounds, both inclusivities and a unit, absent, or in a dialect the reader
+could not type, and an abnormal flag in the same three states. Absence and
+illegibility are different facts and neither is ever a pass.
+
 ## 5. Mandatory assertions
 
 All applicable assertions are mandatory. “Applicable” is determined by the immutable case manifest and partner profile before observation.

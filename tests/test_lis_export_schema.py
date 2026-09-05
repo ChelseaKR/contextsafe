@@ -205,7 +205,12 @@ _PRESENCE_OR_TOKEN = st.one_of(
     st.sampled_from(("declined", "unknown", "absent")),
     _TOKEN_SUFFIX.map(lambda s: f"CSYN-VAL-{s}"),
 )
-_RESULT = st.one_of(st.just(""), st.sampled_from(("4.1", "mmol/L", "3.5-5.5", "H")))
+_RESULT = st.one_of(
+    st.just(""),
+    st.sampled_from(
+        ("4.1", "fixture-unit-alpha/beta", "fixture-range-1", "fixture-flag-1")
+    ),
+)
 _IDENTIFIER = st.one_of(st.just(""), _TOKEN_SUFFIX.map(lambda s: f"CSYN-{s}"))
 _CELLS = {
     "name_to_use": _PRESENCE_OR_TOKEN,
