@@ -69,8 +69,8 @@ the bytes evaluated are the bytes the caller named.
 | `contextsafe receipt diff` | runs | reads two receipt documents |
 | `contextsafe mapping validate` | runs | reads one mapping profile as ordinary JSON |
 | `contextsafe fixtures export` | runs | writes the packaged synthetic fixtures |
-| `contextsafe diagnostics` | runs | and reports `descriptor_relative_reads` and `no_follow_open` as false there, which is how an operator finds this out before running anything else |
-| `contextsafe cleanup` | runs | enumerates and, with `--remove --confirm`, deletes inside a workspace |
+| `contextsafe diagnostics` | runs | and reports `descriptor_relative_reads`, `no_follow_open`, and `owner_only_permissions` as false there, which is how an operator finds this out before running anything else |
+| `contextsafe cleanup` | runs | enumerates and, with `--remove --confirm`, deletes inside a workspace; the evidence store's owner-only permission refusals are skipped there, as below |
 | `contextsafe support-bundle` | runs | assembles the redacted bundle |
 | `contextsafe evidence preflight` | **refuses** | exit 2, `input_path_unsupported`, "platform cannot enforce no-follow evidence input" |
 | `contextsafe import` (every format) | **refuses** | exit 2, `input_path_unsupported`, same message; the source is read through the same path |
@@ -78,17 +78,27 @@ the bytes evaluated are the bytes the caller named.
 | `contextsafe pack validate` | **refuses** | exit 2, `component_path_escape` at `$.components`, once compilation reaches a component read |
 | `contextsafe plan validate` | **refuses** | exit 2, same code, because it revalidates the pack first |
 
-Two limits of this table are stated rather than closed. `pack validate` and
+Three limits of this table are stated rather than closed. `pack validate` and
 `plan validate` report `component_path_escape` rather than
 `input_path_unsupported`: the pack compiler maps both an escaping component
 path and an unsupported platform onto one code, so the error names the
 component and not the platform. That is fail-closed and it is not what a
 Windows operator needs to read; it is recorded here rather than corrected,
-because correcting it changes a published error code. And the opt-in
-`--log-dir` event log opens its file with `O_APPEND` and with `O_NOFOLLOW`
-only where the platform has it, so on Windows the append happens without the
-no-follow guarantee rather than refusing — the one place in the tool where a
-missing platform capability degrades silently instead of failing closed.
+because correcting it changes a published error code. The opt-in `--log-dir`
+event log (`src/contextsafe/eventlog.py`) opens its file with `O_APPEND` and
+with `O_NOFOLLOW` only where the platform has it, so on Windows the append happens without the no-follow
+guarantee rather than refusing. And `src/contextsafe/evidence_store.py` folds
+`O_NOFOLLOW` into its staging and read flags the same way, and applies its
+owner-only permission refusals only on a POSIX platform, so on Windows those
+checks are skipped rather than refused. The store is reached from `contextsafe
+cleanup` and `contextsafe diagnostics`, which this table marks as running
+there, so the event log and those two commands are where a missing platform
+capability degrades instead of failing closed. None of the three reads a
+caller-named source: the store opens files it wrote inside the workspace, and
+a caller-named file still reaches the tool only through the read path above,
+which refuses. `contextsafe diagnostics` reports all three capability flags —
+`descriptor_relative_reads`, `no_follow_open`, and `owner_only_permissions` —
+so an operator can see which of them are false before running anything else.
 
 Closing the gap properly means designing a Windows read that gives the same
 guarantee and saying what that guarantee is. Nobody has done that work, no

@@ -515,14 +515,22 @@ rather than after it.
   determinism matrix had been recording the gap since 2026-08-15. Section 3.1
   is a command-by-command matrix saying what runs on Windows and what refuses,
   with the code each refusal carries, so a reader learns before running one.
-  Two limits are recorded rather than corrected, because correcting either
-  changes behaviour: `pack validate` and `plan validate` report
+  Three limits are recorded rather than corrected, because correcting any of
+  them changes behaviour: `pack validate` and `plan validate` report
   `component_path_escape`, not `input_path_unsupported`, because the pack
   compiler maps an unsupported platform onto the same code as an escaping
-  component path; and the opt-in `--log-dir` event log appends without the
-  no-follow guarantee rather than refusing, the one place in the tool where a
-  missing platform capability degrades silently. No decision to drop Windows
-  has been taken and none is claimed.
+  component path; the opt-in `--log-dir` event log appends without the
+  no-follow guarantee rather than refusing; and `src/contextsafe/evidence_store.py`
+  drops `O_NOFOLLOW` and skips its owner-only permission refusals off POSIX,
+  which `cleanup` and `diagnostics` reach. Those are the places where a missing
+  platform capability degrades instead of failing closed, and none of them
+  reads a caller-named source. The `diagnostics` row names all three capability
+  flags the command emits, `owner_only_permissions` included, so an operator
+  can see which are false. The 2026-08-15 implementation note in
+  `docs/13-BACKLOG.md` that recorded the gap carries a dated correction rather
+  than a rewrite: it had said three commands, `input_path_unsupported` for all
+  of them, and Operations listing Windows 11 unqualified. No decision to drop
+  Windows has been taken and none is claimed.
 
 ### Fixed
 
