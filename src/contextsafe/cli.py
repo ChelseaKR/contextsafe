@@ -692,14 +692,22 @@ def _log(args: argparse.Namespace, outcome: Outcome, error_code: str | None) -> 
     structured error and nothing else changes.
 
     ``event_warnings`` is set by the command that ran, if it carried any:
-    only ``import`` does. A command that failed set none, so a rejected
-    record's warning list is empty.
+    only ``import`` does. They are read here only for an accepted record.
+    A conversion can succeed and the command be rejected afterwards --
+    ``--output`` over a directory raises ``output_io_error`` after
+    ``import`` returned, with its warnings still on ``args`` -- and a record
+    saying the command produced nothing may not also carry findings about an
+    artifact nobody received. So a rejected record's warning list is empty
+    whatever the command got through first, and the field means one thing
+    rather than depending on where the failure landed.
     """
 
     log_dir: Path | None = getattr(args, "log_dir", None)
     if log_dir is None:
         return
-    warnings: tuple[str, ...] = getattr(args, "event_warnings", ())
+    warnings: tuple[str, ...] = (
+        getattr(args, "event_warnings", ()) if outcome is Outcome.ACCEPTED else ()
+    )
     try:
         append_event(
             log_dir,

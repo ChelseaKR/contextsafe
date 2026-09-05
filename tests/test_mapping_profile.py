@@ -304,6 +304,13 @@ def test_a_carrier_the_importer_never_emits_is_not_in_the_table() -> None:
     envelope carries no supporting-observation link), so it emits no token
     under that carrier and the table does not advertise one. The row is
     refused where a carrier the format does not read is refused.
+
+    This document is also the class the narrowing removed. Until 2026-09-04
+    it passed ``mapping validate`` at exit 0 and compiled to a profile
+    declaring ``contextsafe.mapping-profile/1.0.0`` with
+    ``valid_for_signing: true``; it bound nothing while it did, because no
+    token is emitted under that carrier. The refusal is pinned here so the
+    documents the change removed are written down rather than remembered.
     """
 
     document = _reference_profile("canonical-json")
@@ -1080,6 +1087,46 @@ def test_cli_import_with_a_profile_that_binds_everything_logs_no_unmatched_row(
     assert _logged_warnings(log_dir) == ["plan_binding_not_checked"]
 
 
+def test_cli_import_logs_an_unmatched_row_when_only_some_tokens_bind(
+    tmp_path: Path,
+) -> None:
+    """The trigger is a token with no row, not a profile that binds none.
+
+    A profile that binds nothing is the loudest case of the warning, not the
+    condition for it, and the two ends -- everything bound, nothing bound --
+    were tested while the middle an operator actually meets was not. The
+    reference profile's pronouns row is pointed at a token this source does
+    not carry, so three of its four rows still bind: the pronouns value
+    stays the verbatim source token while gender identity arrives mapped,
+    and the warning is raised over that mixture.
+    """
+
+    document = _reference_profile("fhir-r4-json")
+    rows = document["rows"]
+    pronouns = next(row for row in rows if row["source"]["concept"] == "pronouns")
+    pronouns["source"].update({"token": "CSYN-PRONOUN-NOBODY"})
+    partial = _write(tmp_path / "profile.json", document)
+    output = tmp_path / "partial.json"
+    whole_log = tmp_path / "whole-log"
+    partial_log = tmp_path / "partial-log"
+    whole = _import_args("fhir-r4-json", REFERENCE / "mapping-fhir-r4-json.json")
+    assert main([*whole, "--quiet", "--log-dir", str(whole_log)]) == EXIT_SUCCESS
+    assert "mapping_profile_row_unmatched" not in _logged_warnings(whole_log)
+    argv = _import_args("fhir-r4-json", partial)
+    assert (
+        main([*argv, "--quiet", "--output", str(output), "--log-dir", str(partial_log)])
+        == EXIT_SUCCESS
+    )
+    warnings = _logged_warnings(partial_log)
+    assert "mapping_profile_row_unmatched" in warnings
+    assert "mapping_profile_not_bound" not in warnings
+    values = {
+        str(item["concept"]): item["value"] for item in _read(output)["observations"]
+    }
+    assert values["pronouns"]["value"] == "CSYN-PRONOUN-THEY-THEM"
+    assert values["gender_identity"]["value"] == "fixture-gender-1"
+
+
 def test_cli_import_that_is_refused_logs_no_warnings(tmp_path: Path) -> None:
     """A rejected command produced no conversion, so it carries no warning."""
 
@@ -1090,6 +1137,34 @@ def test_cli_import_that_is_refused_logs_no_warnings(tmp_path: Path) -> None:
     record = json.loads(text)
     assert record["outcome"] == "rejected"
     assert record["error_code"] == "prohibited_spcu_mapping"
+    assert record["warnings"] == []
+
+
+def test_cli_import_rejected_after_its_conversion_logs_no_warnings(
+    tmp_path: Path,
+) -> None:
+    """The rejection that happens after the warnings were already attached.
+
+    The test above pins the path where the conversion itself was refused,
+    which is the case that holds trivially: nothing ever set a warning. Here
+    the conversion succeeds and attaches its codes to ``args``, and writing
+    ``--output`` over a directory then raises ``output_io_error``. The
+    record says the command produced nothing, so it carries the error code
+    and no warnings rather than findings about an artifact nobody received.
+    """
+
+    log_dir = tmp_path / "log"
+    directory = tmp_path / "output-is-a-directory"
+    directory.mkdir()
+    argv = _import_args("canonical-json", None)
+    assert (
+        main([*argv, "--quiet", "--output", str(directory), "--log-dir", str(log_dir)])
+        == EXIT_CONTRACT_ERROR
+    )
+    text = (log_dir / "contextsafe-events.jsonl").read_text(encoding="utf-8")
+    record = json.loads(text)
+    assert record["outcome"] == "rejected"
+    assert record["error_code"] == "output_io_error"
     assert record["warnings"] == []
 
 

@@ -40,6 +40,7 @@ from contextsafe.errors import ContextSafeError
 from contextsafe.eventlog import (
     LOG_FILE_NAME,
     MAX_LOG_BYTES,
+    WARNING_CODES,
     Outcome,
     append_event,
 )
@@ -47,6 +48,7 @@ from contextsafe.evidence_store import (
     EvidenceStore,
     store_internal_synthetic_evidence,
 )
+from contextsafe.importers.base import ImportWarningCode
 from contextsafe.preflight import identifier_hits
 
 CYRILLIC_A = "\N{CYRILLIC SMALL LETTER A}"
@@ -503,6 +505,37 @@ def test_the_log_refuses_a_warning_code_that_is_a_message(tmp_path: Path) -> Non
     assert excinfo.value.code == "unloggable_warning_code"
     assert excinfo.value.path == "$.warnings"
     assert not (tmp_path / LOG_FILE_NAME).exists()
+
+
+def test_the_log_refuses_a_warning_code_it_does_not_publish(tmp_path: Path) -> None:
+    """The warning list is a list, not a shape, exactly as the command is.
+
+    ``str.isalnum`` is Unicode-aware, so a shape check alone admitted any
+    lowercase word and any script: a name written without a separator, or in
+    Cyrillic, or in fullwidth Latin, would have been written to the file
+    verbatim. Nothing passes such a value today, and the record says its
+    codes are drawn from a closed vocabulary, so membership is what enforces
+    the sentence.
+    """
+
+    fullwidth = "\uff2a\uff2f\uff32\uff24\uff21\uff2e"
+    """FULLWIDTH LATIN CAPITAL J O R D A N, written by codepoint for the same
+    reason ``CYRILLIC_A`` is: the homoglyph is the fixture, and pasting it
+    would need an exemption from the linter's ambiguous-character rule."""
+    for code in ("jordanrivera", f"p{CYRILLIC_A}tient", fullwidth):
+        with pytest.raises(ContextSafeError) as excinfo:
+            append_event(
+                tmp_path, command="import", outcome=Outcome.ACCEPTED, warnings=[code]
+            )
+        assert excinfo.value.code == "unloggable_warning_code"
+        assert excinfo.value.path == "$.warnings"
+    assert not (tmp_path / LOG_FILE_NAME).exists()
+
+
+def test_the_published_warning_codes_are_the_importers_warning_codes() -> None:
+    """The log writes them out rather than importing them; this pins the two."""
+
+    assert {code.value for code in ImportWarningCode} == WARNING_CODES
 
 
 def test_the_log_refuses_a_repeated_warning_code(tmp_path: Path) -> None:
