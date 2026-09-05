@@ -58,6 +58,7 @@ def _record(**overrides: Any) -> dict[str, Any]:
         "outcome": "accepted",
         "schema_version": LOG_SCHEMA_VERSION,
         "sequence": 0,
+        "warnings": [],
     }
     record.update(overrides)
     return record
@@ -319,8 +320,8 @@ def test_a_missing_field_is_refused_at_the_field(tmp_path: Path) -> None:
 @pytest.mark.parametrize(
     "line",
     [
-        b'{"error_code":null,"command":"evaluate","outcome":"accepted","schema_version":"contextsafe.event-log/0.1.0","sequence":0}',
-        b'{"command": "evaluate", "error_code": null, "outcome": "accepted", "schema_version": "contextsafe.event-log/0.1.0", "sequence": 0}',
+        b'{"error_code":null,"command":"evaluate","outcome":"accepted","schema_version":"contextsafe.event-log/0.2.0","sequence":0,"warnings":[]}',
+        b'{"command": "evaluate", "error_code": null, "outcome": "accepted", "schema_version": "contextsafe.event-log/0.2.0", "sequence": 0, "warnings": []}',
     ],
 )
 def test_a_record_that_is_not_canonical_is_refused(line: bytes) -> None:

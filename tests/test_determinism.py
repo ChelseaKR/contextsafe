@@ -141,7 +141,7 @@ document, the importers' mapping versions, or the reference profiles.
 """
 
 EVENT_LOG_SUMMARY_SHA256 = (
-    "9cf8cc48c204e1622478d4567924d3bcad3a114712080e0c0702f98b6a0e7a85"
+    "04e77cc5033f71b2c13de4ebd7aa0af379ad3a05866000223510d0a60fa76077"
 )
 """SHA-256 of ``events summarize`` over the three-record reference log.
 
