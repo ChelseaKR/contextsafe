@@ -11,6 +11,21 @@ rather than after it.
 
 ### Changed
 
+- **`verify` is a required status check on `main`.** `DEFINITION_OF_DONE.md`
+  said the opposite, and said it deliberately: the `protect-main` ruleset
+  carried only the deletion and non-fast-forward rules, so nothing mechanically
+  refused a merge over a red or absent `verify`, and the file recorded that a
+  gate named in a definition of done and absent from the repository is the
+  defect class `docs/18-ASSURANCE-PROGRAM.md` tracks. It stopped being
+  hypothetical during the 2026-09 wave, when a pull request merged while its
+  `verify` check was red on a transient PyPI failure. The rule is now on the
+  ruleset, and the definition of done says what is true (#75). It could not be
+  turned on until `ci.yml` stopped skipping documentation-only pull requests
+  (#102), because a required check that never runs blocks such a pull request
+  forever.
+
+### Changed
+
 - **The local event log's record carries the command's warning codes, and its
   schema version moves to `contextsafe.event-log/0.2.0`.** A record was
   command, outcome, error code, schema version, and sequence; it now also
