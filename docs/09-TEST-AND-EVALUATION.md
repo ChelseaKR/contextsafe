@@ -122,8 +122,18 @@ of any kind, and no evidence about faults this library does not contain. An
 exercised row may still name a missing item: F-001 is reported at the EHR as
 a value change, not at a patient-facing display (A-006), and F-035 proves the
 run identity moves with the mapping version, not that a verifier would notice
-a claimed one. Rows waiting on SPCU predicates wait on clinical review, not
-only on code. The seven laboratory rows are decided by an ungoverned
+a claimed one. A row may also be reported by an assertion other than the one
+its library row names: F-020 mutates the interval bounds and its row names
+A-027, but `reference_interval_present`, the only mechanism for A-027 here,
+**passes** over the faulted fixture, because both bounds, both inclusivities,
+and a unit that fits the value are all present, which is the whole of what
+that predicate checks. What reports F-020 is A-L04, the A-028/A-030 flag
+predicate, and only because the fixture left a flag the moved bounds
+contradict: a boundary that returned wrong bounds together with a flag
+consistent with them would pass all four rules here and the fault would go
+undetected. Comparing returned bounds against approved ones is what the
+laboratory oracle's values are for (B-011), and this repository has none.
+Rows waiting on SPCU predicates wait on clinical review, not only on code. The seven laboratory rows are decided by an ungoverned
 mechanism over invented fixture values: every analyte, unit, bound, and flag
 in them is a software-test token, no laboratory medical director has supplied
 or approved any of them (B-011), and nothing in those rows is a reference

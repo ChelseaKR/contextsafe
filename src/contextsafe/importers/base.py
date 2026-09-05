@@ -221,11 +221,16 @@ class ImportResult:
     always ``False`` here and is not a field a caller sets.
 
     ``unobserved_cell_count`` is the number of cells the importer recognized
-    under a column its profile names and deliberately did not convert: the
-    laboratory result columns of an LIS export, whose observation family is
-    a later item. It counts what was read and not claimed, so a caller
-    holding the result can see that the source carried more than the
-    observations say. It is zero for a format with no such column.
+    under a column its profile names and read without claiming anything
+    from: the laboratory result cells of a row that became no result,
+    because the source names only some of the result columns or the row
+    leaves one of the columns that identify a result empty. It counts what
+    was read and not claimed, so a caller holding the result can see that
+    the source carried more than its output says. A zero is not a statement
+    that the source had no result column: it is equally the count for a
+    format with no such column and for a source whose every row became a
+    laboratory result. What was claimed from those cells is ``results``,
+    and ``warnings`` says what was not.
 
     ``results`` is the laboratory result observation family
     (:mod:`contextsafe.laboratory`): one result per row of a source that
@@ -300,15 +305,25 @@ class ImportResult:
             "schema_version": OBSERVATION_SET_SCHEMA_VERSION,
         }
 
-    def result_set(self) -> dict[str, JsonValue]:
-        """Return the laboratory result-set document this conversion produced.
+    def result_set(self) -> dict[str, JsonValue] | None:
+        """Return the laboratory result-set document, or ``None`` if there is none.
 
         A separate contract from the observation set
         (``contextsafe.result-set/0.1.0``) because a laboratory result is a
         separate observation kind, not a sixth canonical concept. No command
         writes it yet.
+
+        A conversion may produce no result at all -- a source that names
+        only some of the result columns, or whose rows leave one of them
+        empty -- and ``contextsafe.result-set/0.1.0`` requires at least one
+        result, so there is no document to return for that conversion.
+        This returns ``None`` rather than a document its own contract would
+        reject: a caller reads ``results`` for what was claimed, and the
+        warnings for what was not.
         """
 
+        if not self.results:
+            return None
         return result_set_document(self.results)
 
     def to_dict(self) -> dict[str, JsonValue]:

@@ -451,6 +451,17 @@ rather than after it.
   laboratory outcome does reach a receipt, both sets widen together and the
   receipt contract moves with them.
 
+- **`ImportResult.result_set()` returns `None` for a conversion that claimed
+  no result, and `convert_table` refuses a repeated column.** A source that
+  names only some of the result columns produces no result, and
+  `contextsafe.result-set/0.1.0` requires at least one, so the accessor used
+  to be able to hand a caller a document its own published contract rejects;
+  it now says there is no document instead. `convert_table` is an entry point
+  of its own, and a table whose header repeats a column has two cells under
+  one name: the file readers already refused that, and the entry point now
+  does too, rather than reading one of the two cells and forgetting the
+  other. No command's behaviour changes: nothing writes a result set.
+
 ### Fixed
 
 - **The receipt contract and the runtime disagreed about how long a source
@@ -1521,9 +1532,10 @@ rather than after it.
   population. `docs/05-DATA-AND-EVIDENCE.md` §4 is unchanged in substance: the
   partner's laboratory medical director supplies the real fixture values, and
   B-011 is open for exactly that. The shipped family carries no age band and
-  no effective oracle version, so no rule written in it can be a governed
-  assertion; A-031 is not implemented at all, and A-025 to A-030 are
-  mechanisms rather than assertions.
+  no effective oracle version, and no result status either, so each predicate
+  decides less than the assertion it is offered for and no rule written in it
+  can be a governed assertion; A-031 is not implemented at all, and A-025 to
+  A-030 are mechanisms rather than assertions.
 
   Fixtures: the INV, CTX and XFAIL classes of `docs/05` §4 with all six edge
   values each, and the seeded faults F-017 to F-022 and F-033 with a clean
@@ -1532,7 +1544,17 @@ rather than after it.
   exercised outside it, 7 refused, 10 not yet exercisable — a laboratory
   outcome reaches no receipt and no divergence section, so nothing localizes
   one, and counting those rows as exercised would claim a localization the
-  mechanism does not make.
+  mechanism does not make. One of those rows is reported by an assertion
+  other than the one its library row names, and `docs/09` says so: F-020
+  mutates the interval bounds, and `reference_interval_present` -- the only
+  mechanism for A-027 here -- passes over the faulted fixture, because both
+  bounds, both inclusivities and a fitting unit are all present. What reports
+  F-020 is the A-028/A-030 flag predicate, and only because the fixture left a
+  flag the moved bounds contradict; wrong bounds returned with a flag that
+  agrees with them would pass all four rules, and comparing bounds against
+  approved ones is what B-011 is for. The test module derives that set from
+  the corpus table and requires the disclosure, so a later row of the same
+  shape cannot be counted in silence.
 
 ### Contracts
 

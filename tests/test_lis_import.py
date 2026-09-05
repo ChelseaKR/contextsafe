@@ -67,6 +67,7 @@ from contextsafe.importers.lis import (
 )
 from contextsafe.importers.lis_csv import CsvBounds, parse_csv
 from contextsafe.laboratory import (
+    REFERENCE_INTERVAL_TOKEN_PATTERN,
     RESULT_ID_PATTERN,
     RESULT_SET_SCHEMA_VERSION,
     RESULT_TOKEN_PATTERN,
@@ -784,6 +785,33 @@ def test_any_checkpoint_but_lis_return_rejects_before_the_source_is_opened(
     assert raised.value.code == ImportErrorCode.CHECKPOINT_MISMATCH.value
 
 
+def test_a_repeated_column_is_refused_at_the_conversion_entry_point_too() -> None:
+    """The readers refuse a repeated header; so does the table entry point.
+
+    ``convert_table`` takes a table somebody else built, and a table whose
+    header repeats a column has two cells under one name. Refusing it whole
+    is the only reading that keeps every cell checked, counted, and scanned:
+    reading one of the two and forgetting the other would be a strip-and-
+    accept of the cell that lost.
+    """
+
+    with pytest.raises(ContextSafeError) as raised:
+        convert_table(
+            LisTable(
+                columns=("patient_id", "name_to_use", "name_to_use"),
+                rows=(("CSYN-CTP-I01", "CSYN-ASTER", "CSYN-BIRCH"),),
+            ),
+            format_name=LIS_CSV_FORMAT,
+            case=_CASE,
+            checkpoint=Checkpoint.LIS_RETURN,
+            source_sha256="0" * 64,
+            source_byte_count=0,
+        )
+    assert raised.value.code == ImportErrorCode.COLUMN_DUPLICATE.value
+    assert raised.value.path == "$.header"
+    assert "CSYN-BIRCH" not in json.dumps(raised.value.to_dict())
+
+
 # --- the read path -------------------------------------------------------------
 
 
@@ -1121,6 +1149,26 @@ Invented tokens rather than any laboratory's own analyte code, unit, range,
 or flag: nothing in this repository carries one, and a cell in a dialect this
 ungoverned profile cannot type is exactly the case these properties are about.
 """
+_RANGE = st.one_of(
+    _RESULT,
+    st.sampled_from(
+        (
+            "ge2.500:le7.500:fixture-unit-alpha",
+            "gt2.500:lt7.500:fixture-unit-alpha",
+            "ge0:le10.000:fixture-unit-beta",
+        )
+    ),
+)
+"""Range cells, including the one dialect this profile can type.
+
+Without these the property could only ever draw a range cell the reader
+declines to type, so the typed path would be exercised by the hand-written
+reference export alone.
+"""
+
+_FLAG = st.one_of(_RESULT, st.sampled_from(tuple(item.value for item in AbnormalFlag)))
+"""Flag cells, including the invented vocabulary this profile can type."""
+
 _IDENTIFIER = st.one_of(st.just(""), _TOKEN_SUFFIX.map(lambda s: f"ORDER-CSYN-{s}"))
 
 
@@ -1149,6 +1197,8 @@ def _tables(draw: st.DrawFn) -> LisTable:
         "sex": _SEX,
         "order": _IDENTIFIER,
         "specimen": _IDENTIFIER,
+        "range": _RANGE,
+        "flag": _FLAG,
     }
     row_count = draw(st.integers(min_value=1, max_value=5))
     rows = tuple(
@@ -1195,7 +1245,49 @@ def _convert_any(table: LisTable) -> Any:
     )
 
 
+_TYPED_COLUMNS = (
+    "patient_id",
+    "name_to_use",
+    "analyte",
+    "value",
+    "unit",
+    "range",
+    "flag",
+    "order",
+    "specimen",
+)
+
+
 @settings(max_examples=150, deadline=None)
+@example(
+    table=LisTable(
+        columns=_TYPED_COLUMNS,
+        rows=(
+            (
+                "CSYN-CTP-I01",
+                "CSYN-VAL-A",
+                "fixture-analyte-1",
+                "4.100",
+                "fixture-unit-alpha",
+                "ge2.500:le7.500:fixture-unit-alpha",
+                "fixture-flag-in-range",
+                "ORDER-CSYN-A1",
+                "CSYN-SPEC-1",
+            ),
+            (
+                "CSYN-CTP-I01",
+                "CSYN-VAL-B",
+                "fixture-analyte-1",
+                "<0.5",
+                "fixture-unit-alpha",
+                "fixture-range-1",
+                "",
+                "ORDER-CSYN-A2",
+                "CSYN-SPEC-2",
+            ),
+        ),
+    )
+)
 @given(table=_tables())
 def test_both_readers_agree_and_the_conversion_is_deterministic(
     table: LisTable,
@@ -1222,6 +1314,21 @@ def test_both_readers_agree_and_the_conversion_is_deterministic(
     unread = [row for row in table.rows if not _row_is_a_result(table, row)]
     assert first.unobserved_cell_count == len(unread) * cells_per_row
     assert len(first.results) == len(table.rows) - len(unread)
+    read = [row for row in table.rows if _row_is_a_result(table, row)]
+    for result, row in zip(first.results, read, strict=True):
+        # The typing rule, restated from the grammars rather than run
+        # through the reader's own typing functions: a range cell in the one
+        # dialect this profile reads is typed, with the unit the cell named,
+        # and anything else -- an empty cell included -- is not typed.
+        cells = dict(zip(table.columns, row, strict=True))
+        interval = REFERENCE_INTERVAL_TOKEN_PATTERN.fullmatch(cells["range"])
+        assert (result.interval_status is CellStatus.TYPED) is (interval is not None)
+        if interval is not None:
+            assert result.reference_interval is not None
+            assert result.reference_interval.unit == interval.group(5)
+        assert (result.flag_status is CellStatus.TYPED) is (
+            cells["flag"] in {item.value for item in AbnormalFlag}
+        )
     assert canonical_json(first.result_set()) == canonical_json(second.result_set())
     assert all(item.checkpoint is Checkpoint.LIS_RETURN for item in first.observations)
     assert all(
@@ -1438,6 +1545,7 @@ def test_the_two_readers_emit_the_same_results_but_for_the_source_digest() -> No
 
 def test_the_emitted_results_validate_against_their_own_published_contract() -> None:
     document = _convert_reference("lis-export.json").result_set()
+    assert document is not None
     Draft202012Validator(_RESULT_SET_SCHEMA).validate(document)
     assert document["schema_version"] == RESULT_SET_SCHEMA_VERSION
     assert parse_result_set(document)
@@ -1473,10 +1581,15 @@ def test_a_table_with_only_some_result_columns_emits_no_result_and_says_so() -> 
     assert result.unobserved_cell_count == 4
     assert ImportWarningCode.RESULT_COLUMNS_NOT_OBSERVED in result.warnings
     assert ImportWarningCode.RESULT_OBSERVATIONS_NOT_WRITTEN not in result.warnings
-    assert result.result_set() == {
-        "results": [],
-        "schema_version": RESULT_SET_SCHEMA_VERSION,
-    }
+    # A conversion that claimed no result has no result-set document: the
+    # published contract requires at least one result, so an accessor that
+    # returned the empty form would hand a caller a document its own
+    # contract refuses.
+    assert result.result_set() is None
+    empty = {"results": [], "schema_version": RESULT_SET_SCHEMA_VERSION}
+    assert not Draft202012Validator(_RESULT_SET_SCHEMA).is_valid(empty)
+    with pytest.raises(ContextSafeError):
+        parse_result_set(empty)
 
 
 _RESULT_COLUMNS = (
@@ -1537,4 +1650,5 @@ def test_the_reader_cannot_build_a_result_its_own_contract_would_refuse() -> Non
     longest = f"RES-CTP-{longest_case}-L{LIS_PROFILE.max_rows - 1:04d}"
     assert RESULT_ID_PATTERN.fullmatch(longest)
     document = _convert_reference("lis-export.csv").result_set()
+    assert document is not None
     assert parse_result_set(document) == _convert_reference("lis-export.csv").results

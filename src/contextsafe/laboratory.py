@@ -10,7 +10,10 @@ partner's laboratory medical director supplies the real fixture analyte
 code, units, bounds, inclusivity, age band, effective version, and expected
 flag; until that exists, what ships here is software-test data and the
 predicates are an ungoverned mechanism for the assertions A-025 to A-030,
-not the assertions themselves.
+not the assertions themselves. Each covers less than the assertion it is
+offered for: this family carries no age band and no effective oracle
+version, which A-027 requires, and no result status, which A-026 requires,
+so no predicate below decides those halves of anything.
 
 **A separate observation kind, not a sixth concept.** A laboratory result is
 not a Gender Harmony concept, so :class:`~contextsafe.models.ConceptKind` is
@@ -94,7 +97,13 @@ MAX_RESULTS = 512
 """The most results one document may carry."""
 
 MAX_RESULT_RULES = 512
-"""The most rules one result rule set may carry."""
+"""The most rules one result rule set may carry.
+
+The document-size bound this family shares with :data:`MAX_RESULTS`, and
+not a claim that five hundred rules could exist: rule ids are unique and
+``A-Lnn`` admits a hundred of them, so a document reaches this bound only
+by repeating one, and the size check is what refuses it first.
+"""
 
 RESULT_ID_PATTERN = re.compile(r"^RES-[A-Z0-9][A-Z0-9-]{2,47}$")
 """A result observation identifier."""
@@ -950,6 +959,11 @@ def _analyte_value_unit_preserved(
     The value is compared as the string it was carried as, not as a number:
     ``4.10`` and ``4.1`` are the same quantity and different round trips, and
     A-026 is a claim about the round trip.
+
+    Three of the four things A-026 names. It also names the result's status,
+    and this family carries no status field at all, so nothing here decides
+    whether a status survived a boundary; a result whose status changed and
+    whose analyte code, value, and unit did not passes this predicate.
     """
 
     return _decided(
