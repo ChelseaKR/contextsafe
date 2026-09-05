@@ -500,6 +500,8 @@ def _sast_unavailable(tmp_path: Path) -> int:
     root = tmp_path / "sast"
     root.mkdir(parents=True, exist_ok=True)
     return int(gate.main(["--root", str(root), "--report", str(root / "absent.json")]))
+
+
 def _publication_exposure_unavailable(tmp_path: Path) -> int:
     """No probe to run: nothing was asked of the host, so nothing is absent.
 

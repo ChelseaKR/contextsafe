@@ -387,13 +387,15 @@ follows is the measurement rather than a decision taken on it.
 
 **Method, and what it is worth.** Measured on 2026-09-05 at commit `8a23096`,
 Python 3.12, a ten-core macOS workstation, 3,258 tests as
-`pytest --collect-only -q` counted them at that commit, across the 52 modules
+`pytest --collect-only -q` counted them at that commit, across the 53 modules
 `tests/` holds today: five of those are named in the module table below and the
-other 47 are its residual row, which is the denominator every share in this
-section is taken over. One of the 47, `tests/test_sast_gate.py`, landed with the
-SAST gate after the measurement was taken, so it is inside the denominator and
-none of the seconds below are its; the measured run saw 51 modules and 3,258
-tests, and re-measuring is what would put the 52nd module's cost on the record.
+other 48 are its residual row, which is the denominator every share in this
+section is taken over. Two of the 48, `tests/test_sast_gate.py` and
+`tests/test_publication_exposure_check.py`, landed after the measurement was
+taken -- with the SAST gate and with the publication-exposure checker -- so both
+are inside the denominator and none of the seconds below are theirs; the
+measured run saw 51 modules and 3,258 tests, and re-measuring is what would put
+those two modules' cost on the record.
 Wall time on a developer machine is not a stable number: the identical pytest
 command over the identical tree measured 218 seconds and 1,769 seconds
 twenty minutes apart, because other work shared the machine. So the figures
@@ -425,7 +427,7 @@ individual tests:
 | `tests/test_import_hl7v2_er7.py` | 17.2 s | 8.9% |
 | `tests/test_mutation_gate.py` | 13.9 s | 7.2% |
 | `tests/test_determinism.py` | 13.8 s | 7.2% |
-| the other 47 modules | 70.0 s | 36.5% |
+| the other 48 modules | 70.0 s | 36.5% |
 
 Two things fall out of that table. The determinism suite is 7.2% of the stage by
 CPU and 6.7% by wall — fourteen seconds of a four-minute gate — so the

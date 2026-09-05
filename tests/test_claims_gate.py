@@ -514,13 +514,13 @@ def test_a_cost_table_that_stops_counting_the_rest_is_a_finding(repo: Path) -> N
 def test_a_test_module_added_and_left_out_of_the_denominator_is_a_finding(
     repo: Path,
 ) -> None:
-    """The finding this check was written for: five named plus 47 stopped adding up."""
+    """The finding this check was written for: five named plus 48 stopped adding up."""
 
     (repo / "tests" / "test_added_since.py").write_text("{}\n", encoding="utf-8")
     findings = gate.run_gate(repo)
     assert _checks(findings) == {"measured-cost"}
-    assert any("which holds 53" in f.detail for f in findings)
-    assert any("against the 53 in tests/" in f.detail for f in findings)
+    assert any("which holds 54" in f.detail for f in findings)
+    assert any("against the 54 in tests/" in f.detail for f in findings)
 
 
 def test_a_module_priced_by_name_that_left_tests_is_a_finding(repo: Path) -> None:
@@ -531,7 +531,7 @@ def test_a_module_priced_by_name_that_left_tests_is_a_finding(repo: Path) -> Non
 
 
 def test_a_residual_row_that_stops_stating_its_count_is_a_finding(repo: Path) -> None:
-    _edit(repo, ASSURANCE, "| the other 47 modules |", "| the other modules |")
+    _edit(repo, ASSURANCE, "| the other 48 modules |", "| the other modules |")
     findings = gate.run_gate(repo)
     assert _checks(findings) == {"measured-cost"}
     assert all("no residual row" in f.detail for f in findings)
@@ -540,7 +540,7 @@ def test_a_residual_row_that_stops_stating_its_count_is_a_finding(repo: Path) ->
 def test_a_section_that_stops_stating_the_module_total_is_a_finding(
     repo: Path,
 ) -> None:
-    _edit(repo, ASSURANCE, "the 52 modules", "the modules in")
+    _edit(repo, ASSURANCE, "the 53 modules", "the modules in")
     findings = gate.run_gate(repo)
     assert _checks(findings) == {"measured-cost"}
     assert all("how many modules" in f.detail for f in findings)
