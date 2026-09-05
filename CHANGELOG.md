@@ -467,6 +467,63 @@ rather than after it.
   does too, rather than reading one of the two cells and forgetting the
   other. No command's behaviour changes: nothing writes a result set.
 
+- **The 2026-09 wave is consolidated into one "Iteration 6" block, and the
+  README status line reaches it (#77).** The wave had appended a subsection per
+  item to the end of "Internal implementation slice", on the explicit
+  instruction that a later pass would consolidate them; this is that pass.
+  Thirteen `### B-0xx` subsections become one iteration block in the shape of
+  iterations 1 to 5 — one bullet group per shipped item, every limit kept,
+  nothing aspirational — and the `iteration-6` status line makes the claims
+  gate's iteration check pass against what the README now documents. Three
+  sentences that had gone stale with it were corrected rather than carried: the
+  lead paragraph said "Twelve subcommands" on one line and "Eleven" on the
+  duplicate line below it, where there are fourteen; the closing summary still
+  said these slices have no "HL7/LIS adapters" or "HTML report", both of which
+  it documents above; and the Windows sentence named
+  `input_path_unsupported` for `pack validate` and `plan validate`, which
+  report `component_path_escape` (see below). The `[Unreleased]` section of
+  this file is also tidied into one heading of each kind — it carried two
+  `### Fixed` headings when this pass was written — with every one of its
+  entries kept, and four entries describing a new command or document moved
+  from `Changed` to `Added`.
+
+- **`docs/13-BACKLOG.md` phase tables carry a derived `Status` column, and
+  `make claims` re-derives every cell from the implementation notes (#98).**
+  The notes had outgrown their shape: an item's row was separated from its
+  status by the notes for four other items, and the wave added nine more. The
+  notes stay chronological, which is what they are, and the column is now the
+  index into them — `Open — note YYYY-MM-DD` where a note names the item,
+  `Open — no note` where none does. Both values begin with `Open` because no
+  item in the backlog is closed, and a derived column may not be the place that
+  first says one is. `tools/claims_gate.py` grows a tenth check,
+  `backlog-status`, which fails in both directions: a cell that disagrees with
+  the notes, and a row that stops carrying one. Two note headers that named no
+  item although their bodies did (2026-07-13, B-017/B-018/B-019; 2026-07-17,
+  B-021) now name them, since the header is where the derivation binds, and one
+  note that had been glued to the paragraph above it got its blank line back.
+  The gate's printed boundary gains the matching limit: it derives that a note
+  exists and when it was written, never whether the work moved the item toward
+  its acceptance statement.
+
+- **`docs/10-OPERATIONS-SRE.md` no longer lists Windows 11 as supported without
+  qualification (#79).** Six commands read a caller-named file through the
+  evidence boundary — `evidence preflight`, `import` in every format, both
+  `finding` commands, `pack validate`, and `plan validate` — and Windows
+  provides neither `O_NOFOLLOW` nor `dir_fd`, so they refuse rather than read
+  with a weaker guarantee. That behaviour is correct and is unchanged; the
+  documentation claim was what had gone out of date, and the cross-platform
+  determinism matrix had been recording the gap since 2026-08-15. Section 3.1
+  is a command-by-command matrix saying what runs on Windows and what refuses,
+  with the code each refusal carries, so a reader learns before running one.
+  Two limits are recorded rather than corrected, because correcting either
+  changes behaviour: `pack validate` and `plan validate` report
+  `component_path_escape`, not `input_path_unsupported`, because the pack
+  compiler maps an unsupported platform onto the same code as an escaping
+  component path; and the opt-in `--log-dir` event log appends without the
+  no-follow guarantee rather than refusing, the one place in the tool where a
+  missing platform capability degrades silently. No decision to drop Windows
+  has been taken and none is claimed.
+
 ### Fixed
 
 - **The receipt contract and the runtime disagreed about how long a source
@@ -1560,6 +1617,39 @@ rather than after it.
   approved ones is what B-011 is for. The test module derives that set from
   the corpus table and requires the disclosure, so a later row of the same
   shape cannot be counted in silence.
+
+- **`docs/ROADMAP-WAVE-2026-09.md`, a dated state table for all fifty-seven
+  backlog items (#77).** One row per item, in one of four states derived from
+  the implementation notes in `docs/13-BACKLOG.md` and the git log and nothing
+  else: shipped in this wave with the commit, previously shipped, blocked on a
+  named person or a maintainer decision with the open issue beside it, or not
+  started. Twelve items had a mechanism land in this wave, seventeen had one
+  before it, twenty-eight are waiting on somebody who does not exist yet, and
+  no row is "not started", because every unstarted item has a named blocker in
+  front of it. The preface says what the wave did **not** establish — no
+  governance, no pilot, no clinical approval, no signing — and the table says
+  in its own header that "shipped" means a mechanism landed, never that a
+  backlog item closed. Two limits of the derivation are stated in the document:
+  five Phase 1 and Phase 2 rows are read from a commit subject that does not
+  name the item, and no state here is a judgment about quality or readiness.
+
+- **A README walkthrough that runs a reader, and a test that runs it from the
+  wheel (#95).** The Quickstart evaluated observations somebody had already
+  authored, which is the one path that exercises no importer: a visitor saw the
+  fixture path rather than the thing the project is for. A second block under
+  `### From a source file to a receipt` now takes the packaged synthetic FHIR
+  R4 `Patient` through `import --format fhir-r4-json --mapping`, `evaluate`,
+  and `render`, using only fixtures that ship in the wheel, and says what the
+  receipt reports: three passes at the EHR and two `missing_evidence`
+  indeterminates for the boundaries this one source never crossed.
+  `tools/fresh_install_gate.py` grows `documented_commands(readme, heading)`,
+  so the Quickstart parser and the walkthrough parser are one function pointed
+  at two headings, and `tests/test_wheel_quickstart.py` runs the walkthrough
+  from the same built wheel in the same directory outside the checkout. The
+  walkthrough is deliberately **not** part of `run_gate`: `import` fails closed
+  where the platform has no descriptor-relative no-follow read, and
+  `package.yml` runs that gate on Windows. No fixture, command, or digest
+  changed.
 
 ### Contracts
 

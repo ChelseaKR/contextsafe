@@ -1379,29 +1379,36 @@ _NUMBER_WORDS = [
 ]
 
 
-def _readme_subsection(heading: str) -> str:
-    """The README text under ``### heading`` up to the next heading of any level."""
+def _readme_item(item: str) -> str:
+    """One iteration bullet group, located by the item its lead-in names.
+
+    The 2026-09 wave's per-item ``### B-0xx`` subsections were consolidated
+    into the README's iteration-6 bullet list on 2026-09-04, so a heading is no
+    longer what holds these counts; the bullet that names the item is. A bullet
+    runs from its own ``- **`` to the next one, or to the end of the list.
+    """
 
     text = README.read_text(encoding="utf-8")
-    start = text.index(f"### {heading}\n")
-    following = re.compile(r"\n##+ ").search(text, start + 1)
-    assert following is not None
+    named = text.index(f"({item}).**")
+    start = text.rindex("\n- **", 0, named)
+    following = re.compile(r"\n- \*\*|\n#+ ").search(text, named)
+    assert following is not None, item
     return " ".join(text[start : following.start()].split())
 
 
 def test_the_readme_carries_one_current_count_and_older_slices_defer_to_it() -> None:
-    """A slice subsection may say what it detected, never what the tree detects.
+    """A slice's bullet may say what it detected, never what the tree detects.
 
-    The B-028 subsection was written when twenty-seven faults had no answer
-    here; that count is dated to its slice and points at the subsection that
-    carries the current one, whose figures are the matrix's.
+    The B-028 bullet was written when twenty-seven faults had no answer here;
+    that count is dated to its slice and points at the bullet that carries the
+    current one, whose figures are the matrix's.
     """
 
-    older = _readme_subsection("B-028")
+    older = _readme_item("B-028")
     assert "are not detectable by anything here" not in older
     assert "were not detectable by that slice" in older
-    assert "the B-048 subsection below carries the current count" in older
-    current = _readme_subsection("B-048")
+    assert "the B-048 bullet below carries the current count" in older
+    current = _readme_item("B-048")
     for status, phrase in (
         (CorpusStatus.EXERCISED, "are *exercised*"),
         (

@@ -36,13 +36,66 @@ Business hours: Monday–Friday, 09:00–17:00 Pacific, excluding published US h
 
 ## 3. Supported environments
 
-- Windows 11 current supported release.
-- macOS 14 and newer supported releases.
-- Ubuntu 24.04 LTS.
+- macOS 14 and newer supported releases: every command.
+- Ubuntu 24.04 LTS: every command.
+- Windows 11 current supported release: **the evaluator, the renderer, and the local surfaces only.** The commands that read a caller-named file through the boundary do not run there; section 3.1 says which, and why.
 - Python runtime bundled or locked so customers do not resolve dependencies from the internet during a run.
 - x86_64 and arm64 where release tests pass.
 
 The exact support matrix is pinned per release. Unsupported environments may be evaluated during discovery but cannot receive an unqualified v1 receipt.
+
+### 3.1 What runs on Windows, and what refuses
+
+This section was corrected on 2026-09-04. It previously listed Windows 11 as a
+planned supported platform without qualification, while the cross-platform
+determinism matrix had been recording the gap since 2026-08-15. The fail-closed
+behaviour is correct and is not changed here; the claim about it was what had
+gone out of date.
+
+Six commands open a caller-named file through the evidence boundary's read
+path: one `open` with `O_NOFOLLOW`, and, where the file is reached through a
+directory, a descriptor-relative traversal that retains each directory
+descriptor so a rename or a symlink swap cannot change the object between the
+check and the read. Windows provides neither `O_NOFOLLOW` nor `dir_fd`, so
+those commands refuse rather than read with a weaker guarantee. A weaker read
+is not a read this project will make: the whole point of the boundary is that
+the bytes evaluated are the bytes the caller named.
+
+| Command | Windows | What happens there |
+|---|---|---|
+| `contextsafe validate` | runs | reads its documents as ordinary JSON; no boundary read |
+| `contextsafe evaluate` | runs | same, and the receipt document reproduces the pinned digest on all three platforms |
+| `contextsafe render` | runs | reads a receipt document and writes an HTML page |
+| `contextsafe receipt diff` | runs | reads two receipt documents |
+| `contextsafe mapping validate` | runs | reads one mapping profile as ordinary JSON |
+| `contextsafe fixtures export` | runs | writes the packaged synthetic fixtures |
+| `contextsafe diagnostics` | runs | and reports `descriptor_relative_reads` and `no_follow_open` as false there, which is how an operator finds this out before running anything else |
+| `contextsafe cleanup` | runs | enumerates and, with `--remove --confirm`, deletes inside a workspace |
+| `contextsafe support-bundle` | runs | assembles the redacted bundle |
+| `contextsafe evidence preflight` | **refuses** | exit 2, `input_path_unsupported`, "platform cannot enforce no-follow evidence input" |
+| `contextsafe import` (every format) | **refuses** | exit 2, `input_path_unsupported`, same message; the source is read through the same path |
+| `contextsafe finding review`, `contextsafe finding list` | **refuses** | exit 2, `input_path_unsupported`, "platform cannot enforce no-follow review-log access" |
+| `contextsafe pack validate` | **refuses** | exit 2, `component_path_escape` at `$.components`, once compilation reaches a component read |
+| `contextsafe plan validate` | **refuses** | exit 2, same code, because it revalidates the pack first |
+
+Two limits of this table are stated rather than closed. `pack validate` and
+`plan validate` report `component_path_escape` rather than
+`input_path_unsupported`: the pack compiler maps both an escaping component
+path and an unsupported platform onto one code, so the error names the
+component and not the platform. That is fail-closed and it is not what a
+Windows operator needs to read; it is recorded here rather than corrected,
+because correcting it changes a published error code. And the opt-in
+`--log-dir` event log opens its file with `O_APPEND` and with `O_NOFOLLOW`
+only where the platform has it, so on Windows the append happens without the
+no-follow guarantee rather than refusing — the one place in the tool where a
+missing platform capability degrades silently instead of failing closed.
+
+Closing the gap properly means designing a Windows read that gives the same
+guarantee and saying what that guarantee is. Nobody has done that work, no
+decision to drop Windows has been taken, and this section claims neither.
+Until then, a Windows operator can evaluate a pre-authored observation set and
+render its receipt, and cannot import a source, preflight evidence, validate a
+pack or a plan, or record a finding disposition.
 
 ## 4. Installation and update
 
