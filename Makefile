@@ -28,8 +28,16 @@ test:
 	uv run pytest --cov --cov-branch --cov-report=term-missing --cov-fail-under=90
 	uv run coverage report --include='$(SAFETY_MODULES)' --fail-under=95
 
+# pip-audit answers with two exit codes: clean, and everything else. A dropped
+# PyPI connection therefore failed this stage -- and so the whole merge gate --
+# with the same code as a real advisory, which is what happened on PR #61. The
+# gate program keeps the same audit and separates the third state: exit 1 is an
+# advisory the service reported, exit 2 is a service that did not answer, and a
+# transient failure is retried with backoff before the gate says so. It still
+# needs the network, so `verify` is still not runnable offline; what it no
+# longer does is report that as the same failure as a vulnerability.
 audit:
-	uv run pip-audit --skip-editable --cache-dir .cache/pip-audit
+	uv run python tools/audit_gate.py
 
 # Deliberately not part of `verify`: it needs a pinned gitleaks on PATH, which a
 # clean clone does not have, and `verify` must stay the byte-for-byte gate that

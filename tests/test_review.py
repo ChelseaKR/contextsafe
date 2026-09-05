@@ -1088,6 +1088,39 @@ def test_a_symbolic_link_is_never_followed(
     assert target.read_bytes() == b""
 
 
+def test_a_created_log_is_created_with_the_mode_the_module_names(
+    tmp_path: Path, finding_receipt: dict[str, Any], review_event: EventBuilder
+) -> None:
+    """The mode `_open_log` creates the file with, which nothing asserted.
+
+    `make mutants` moved that `0o600` to `0o601` -- an execute bit for everyone
+    on the machine -- and the whole suite stayed green: every test here reads
+    what the log says and none reads what the filesystem says about who may
+    read it. A review log carries decision hashes, signer roles and the chain
+    that makes tampering visible, so the permissions it lands with are part of
+    what the module promises rather than an incidental of the umask.
+
+    The umask is cleared for the duration, and the assertion is on the literal
+    `0o600`. Asserting only that the group and other bits are clear passes for
+    the wrong reason on the machines this suite actually runs on: with the mode
+    argument removed entirely, `os.open` creates at `0o777 & ~umask`, which is
+    `0o700` under the umask 077 a hardened account uses and `0o755` under the
+    022 that macOS and the ubuntu runners default to. The first of those would
+    satisfy `mode & 0o077 == 0` while the module promised nothing. Clearing the
+    umask makes the file's mode the argument `_open_log` passed, so this pins
+    the module rather than the environment it ran in.
+    """
+
+    log = tmp_path / "review.jsonl"
+    previous = os.umask(0)
+    try:
+        append_review_event(log, review_event("confirmed"), finding_receipt)
+        mode = os.stat(log).st_mode & 0o777
+    finally:
+        os.umask(previous)
+    assert mode == 0o600, f"the review log was created at mode {mode:o}, not 600"
+
+
 def test_a_directory_is_not_a_log(
     tmp_path: Path, finding_receipt: dict[str, Any], review_event: EventBuilder
 ) -> None:

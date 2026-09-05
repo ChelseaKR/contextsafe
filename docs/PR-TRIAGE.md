@@ -386,7 +386,10 @@ Recorded so a later reader knows the ground was covered.
    after step 4 their diffs are empty but they stay open.
 6. **Run `make mutants` by hand once** after step 4. It is deliberately outside
    `make verify` and no workflow invokes it, so merging #49 is the first moment it
-   exists on `main` with nothing running it.
+   exists on `main` with nothing running it. (**Update, 2026-09-04 (#80):**
+   `.github/workflows/mutation.yml` invokes it now, weekly and on any pull
+   request touching the package, the suite or the gate. It is still outside
+   `make verify`.)
 
 ## Defects on `main` that no open pull request addresses
 
@@ -413,6 +416,9 @@ class `docs/18-ASSURANCE-PROGRAM.md` exists to track.
    beside it: `ci.yml` carries `paths-ignore` for `**.md`, `docs/**` and
    `LICENSE`, so a documentation-only pull request gets no `verify` run at all.
 
+   **Update, 2026-09-04 (#102):** the `paths-ignore` is gone. `verify` runs on
+   every pull request, and `tests/test_ci_workflows.py` fails if one comes back.
+
 3. **Two SHA-pinned actions are stale and nothing will re-raise them.** `main`
    pins `actions/checkout` at v7.0.0 (upstream v7.0.1) and `actions/setup-python`
    at v6.3.0 (upstream v7.0.0). Dependabot offered both, as #18 and #19, and both
@@ -428,6 +434,16 @@ class `docs/18-ASSURANCE-PROGRAM.md` exists to track.
    untested workflow change that only CI can validate would be the same unwatched
    green this triage argues against. The remedy is to let Dependabot re-raise them
    and review the result normally.
+
+   **Update, 2026-09-04 (#91):** Dependabot did not re-raise them, which is what
+   closing its pull requests means, so both were bumped by hand — `actions/checkout`
+   to v7.0.1 and `actions/setup-python` to v7.0.0, each SHA read from the upstream
+   tag rather than guessed, and the version comment kept beside each pin. The
+   caution above is answered rather than waived: setup-python v7.0.0's one
+   breaking change is the removal of the `pip-install` input, and every
+   `setup-python` step in this repository passes `python-version` and
+   `check-latest` and nothing else. It is still a workflow change only a CI run
+   can validate, and that run is the pull request carrying this note.
 
 4. **Not fixed, recorded:** the secret-scan enumeration hole in item 1 of the #49
    list is present on `main` today, independent of any pull request. If #49 is

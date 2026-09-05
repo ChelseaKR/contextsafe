@@ -17,11 +17,12 @@ mutant the tests do not kill is a line they execute and do not check.
 What is measured, and what is declared away
 -------------------------------------------
 
-Two modules, named in ``DECLARED_TARGETS``, and the tests that must kill their
-mutants. That is a subset of ``SAFETY_MODULES`` and
-it is a declaration rather than a silence: `make scope` is the model, and the
-same rule applies here, that a declaration which no longer matches the tree is
-itself a finding.
+The modules named in ``DECLARED_TARGETS``, and the tests that must kill their
+mutants. How many there are is written in that tuple and nowhere else: a count
+restated here is a second copy that goes stale the first time the tuple grows,
+as it did. That set is a subset of ``SAFETY_MODULES``, and it is a declaration
+rather than a silence: `make scope` is the model, and the same rule applies
+here, that a declaration which no longer matches the tree is itself a finding.
 
 Mutants are generated only on lines the suite actually executes, measured with
 `coverage` in the same run rather than assumed. A mutant on a line

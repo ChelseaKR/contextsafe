@@ -27,7 +27,10 @@ assert clinical approval, production readiness, or V1 completion.
   tests pass with at least 90% overall branch coverage and 95% coverage across
   the safety modules named by the Makefile.
 - The dependency audit and repository-hygiene checks pass without a suppressed
-  failure or an unowned `TODO`, `FIXME`, or `HACK` in product code or tests.
+  failure or an unowned `TODO`, `FIXME`, or `HACK` in product code or tests. An
+  audit that could not reach the advisory service exits 2 and is a failure, not
+  a pass: the advisory status of the locked graph is then unknown, which is not
+  the same as no advisory.
 - New behavior includes happy-path, malformed-input, boundary, and applicable
   safety-negative tests; deterministic output vectors change only when the
   reviewed contract changes.
