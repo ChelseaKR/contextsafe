@@ -393,15 +393,19 @@ The same iteration adds the operator surface (the B-046 slice):
   file by hand. It prints the record count, the count of each command, of each
   outcome, and of each error code, and the SHA-256 of the bytes it read
   ([contract](schemas/contextsafe-event-log-summary-v0.1.schema.json)). It
-  writes nothing to the log, refuses an `--output` that names it, and carries
-  no timestamp, path, or free text — there is nothing in the record shape for
-  one to have come from. A line that is not one canonical record refuses the
-  whole summary, naming the line and the field and neither value: a count
-  derived from the lines that happened to parse would understate exactly the
-  runs an operator is counting. Like the other descriptor-anchored commands it
-  fails closed with `input_path_unsupported` where the platform lacks
-  `O_NOFOLLOW`. What it cannot see is a record removed from the end of a log,
-  which is why the digest is in the document.
+  never writes to the log it reads, refuses an `--output` that names either
+  that log or the one `--log-dir` writes to, and carries no timestamp, path,
+  or free text — there is nothing in the record shape for one to have come
+  from. A line that is not one canonical record refuses the whole summary,
+  naming the line and the field and neither value: a count derived from the
+  lines that happened to parse would understate exactly the runs an operator
+  is counting. The log is opened `O_NOFOLLOW`, so the command fails closed
+  with `input_path_unsupported` where the platform has no such open; that
+  guards the log's own name, not the directory the operator hands it, which
+  the pack readers guard with descriptor-relative opens and this one does not.
+  What it cannot see is a record removed from the end of a log, which is why
+  the digest is in the document, and a sequence number tells it how many
+  records that writer had seen, never which run came first.
 
 Iteration 6 adds the source readers, the assertion predicates, the divergence
 section, the unsigned review log, and the packaging evidence (the B-022 to

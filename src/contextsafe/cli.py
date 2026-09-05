@@ -717,6 +717,7 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     args = _parser().parse_args(argv)
     try:
+        _refuse_output_over_the_event_log(args)
         output = _run(args)
         output_path: Path | None = getattr(args, "output", None)
         if output_path is not None:
@@ -740,6 +741,30 @@ def main(argv: Sequence[str] | None = None) -> int:
         _emit(sys.stderr, f"{canonical_json(error)}\n")
         _log(args, Outcome.REJECTED, exc.code)
         return EXIT_CONTRACT_ERROR
+
+
+def _refuse_output_over_the_event_log(args: argparse.Namespace) -> None:
+    """Refuse an ``--output`` that names the log ``--log-dir`` writes to.
+
+    ``--output`` is written with a plain truncating write, and the event log is
+    append-only, so an ``--output`` naming it replaces every record with one
+    command's document and then ``_log`` appends a record to what is left. That
+    was cosmetic while nothing read the log; it is not now, because the summary
+    the reader derives refuses a whole log over one line it cannot parse, so a
+    truncated log is a log an operator can never summarise again.
+
+    It runs before the command, for every command that accepts ``--log-dir``,
+    so the log is intact when the refusal is recorded in it. ``events
+    summarize`` guards its ``--directory`` separately: that is the log it
+    reads, which need not be the log it writes.
+    """
+
+    log_dir: Path | None = getattr(args, "log_dir", None)
+    if log_dir is None:
+        return
+    refuse_output_over_log(
+        getattr(args, "output", None), log_dir / LOG_FILE_NAME, what="the event log"
+    )
 
 
 def _log(args: argparse.Namespace, outcome: Outcome, error_code: str | None) -> None:

@@ -42,6 +42,22 @@ these records with anything else needs an external timestamp, and an operator
 who needs one should capture it outside the tool. Recording an untrusted local
 clock reading in a file that looks like an audit trail would be worse.
 
+A sequence number is exactly one thing: **the number of records the writer saw
+in the file before it appended its own**. It is not a unique key and not a
+position. The writer counts the lines, then appends under ``O_APPEND`` with no
+lock, so two commands run at once against one ``--log-dir`` both see the same
+count and both write it, and a writer delayed between counting and appending
+writes a number smaller than the position its line ends up at. Both logs are
+written entirely by this tool. What the append-only file does guarantee is the
+one direction that matters, and it is what the reader checks: a writer can
+never have seen more records than precede its own line, so ``sequence`` is
+never greater than the index of the line carrying it. A line claiming to have
+been written after more records than exist before it is a log that was edited
+— a removed line is the case a per-line shape check alone would miss — and
+that refuses the whole summary. Requiring equality instead would have been the
+stricter check and the wrong one: it refuses, permanently and with no recovery
+path, a log that two concurrent runs of this tool wrote correctly.
+
 **Append-only, owner-only, one line at a time.** Each record is one canonical
 JSON line, opened with ``O_APPEND`` and ``O_NOFOLLOW``, written in a single
 call. Nothing here imports ``logging``: the privacy canary in
@@ -51,12 +67,20 @@ worth more than the convenience.
 **Readable, and only as counts.** ``contextsafe events summarize --directory
 DIR`` is the supported way to ask what a log holds: how many records, how many
 of each command, how many of each outcome, how many of each error code, and
-the SHA-256 of the bytes it read. Nothing else. A summary is derived from the
-same closed vocabularies the writer draws from, so there is no field for a
+the SHA-256 of the bytes it read. Nothing else. There is no field for a
 timestamp, a path, or free text to appear in, and the reader refuses a log
 whose lines are not the record shape rather than skipping them: a summary over
 the lines that happened to parse would understate exactly the runs an operator
 is counting. A refusal names the line and the field and carries neither.
+
+One residual, stated rather than implied by "closed vocabulary": the command
+keys and the outcome keys are closed sets, and the error-code keys are a
+grammar. ``counts_by_error_code`` keys are the codes the log carries, held to
+``ERROR_CODE_PATTERN`` at both ends but not to membership of the set this
+package actually raises, so a hand-written log line carrying a conforming
+string that is not one of this package's codes summarises to that string as a
+key. The tool cannot write such a line, and the published summary contract
+says the same thing in its semantic constraints.
 """
 
 from __future__ import annotations
@@ -441,15 +465,12 @@ def _read_record(raw: bytes, index: int) -> _Record:
     outcome = Outcome(enum_string(data["outcome"], "$.outcome", _OUTCOME_VALUES))
     error_code = _error_code_value(data["error_code"], "$.error_code")
     warnings = _warning_list(data["warnings"], "$.warnings")
-    if data["sequence"] != index:
-        raise contract_error(
-            "log_sequence_mismatch", "$.sequence", "record is out of sequence"
-        )
+    sequence = _sequence_value(data["sequence"], "$.sequence", index)
     rebuilt = _record(
         command=command,
         outcome=outcome,
         error_code=error_code,
-        sequence=index,
+        sequence=sequence,
         warnings=warnings,
     )
     if canonical_json(rebuilt).encode("utf-8") != raw:
@@ -470,6 +491,33 @@ def _warning_list(value: object, path: str) -> list[str]:
     for item in array_value(value, path):
         codes.append(enum_string(item, path, WARNING_CODES))
     return codes
+
+
+def _sequence_value(value: object, path: str, index: int) -> int:
+    """Require a count of records no writer could have seen at this position.
+
+    ``sequence`` is what ``_next_sequence`` saw, not where the line landed:
+    concurrent writers against one ``--log-dir`` legitimately repeat a number,
+    and a writer delayed between counting and appending legitimately writes one
+    below its own position. The file only ever grows, so the invariant that
+    does hold for every line this tool writes is one-sided — no writer can have
+    counted more records than precede its line — and that is what is enforced.
+    A line above its position is a log with a line taken out of it, which is
+    the one edit the per-line shape check cannot see, and it refuses the whole
+    summary. Neither the value nor the position is in the message.
+    """
+
+    if not isinstance(value, int) or isinstance(value, bool):
+        raise contract_error(
+            "invalid_integer", path, "record sequence is not an integer"
+        )
+    if value < 0 or value > index:
+        raise contract_error(
+            "log_sequence_mismatch",
+            path,
+            "record sequence is ahead of the records before it",
+        )
+    return value
 
 
 def _error_code_value(value: object, path: str) -> str | None:
