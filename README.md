@@ -1114,6 +1114,7 @@ A successful v1 allows one design partner to:
 - [Publication policy](docs/17-PUBLICATION-POLICY.md)
 - [Assurance program](docs/18-ASSURANCE-PROGRAM.md)
 - [Publication readiness](docs/PUBLICATION-READINESS.md)
+- [Open decisions: three questions with the evidence assembled](docs/OPEN-DECISIONS.md)
 - [ADR 0000: record architecture decisions](docs/adr/0000-record-architecture-decisions.md)
 - [ADR 0001: v1 boundary](docs/adr/0001-v1-boundary.md)
 - [ADR 0002: unsigned compilation before authorization](docs/adr/0002-unsigned-compilation-before-authorization.md)
@@ -1172,7 +1173,7 @@ turn on what that rendered page is and is not:
 | AI Evaluation | N/A — deterministic fixture evaluator; no LLM/model component |
 | Quality & Metrics | Applies — coverage floors enforced in `pyproject.toml` and `make test`, over `src/contextsafe` and the gate implementations in `tools/`; hygiene gate bans TODO/FIXME/HACK in `src`, `tests` and `tools`, with line-level exemptions that must carry a reason and are printed on every run |
 | Documentation | Applies — the planning corpus in `docs/`, ADR log in `docs/adr/`, published contracts in `schemas/`, `CONTRIBUTING.md`, `CHANGELOG.md` |
-| Release & Versioning | Applies — tag-triggered `release.yml` re-runs `make verify` at the tag and gates on a matching CHANGELOG section. No tag and no release exist yet, so it has never fired, and `CITATION.cff` deliberately carries no `version` or `date-released` |
+| Release & Versioning | Applies — tag-triggered `release.yml` re-runs the full-history secret scan and `make verify` at the tag, gates on a matching CHANGELOG section, and builds an sdist and a wheel it does not publish or sign. No tag and no release exist yet, so it has never fired, and neither has `package.yml`, which triggers on the same tag shape. `CHANGELOG.md` carries a dated `## [0.1.0]` section and `CITATION.cff` carries `version: "0.1.0"` and `date-released: 2026-09-02`, both written before the tag because the release job refuses to build without the heading. Whether the tag follows, and at which version, is open — the evidence is assembled in [open decisions §1](docs/OPEN-DECISIONS.md) |
 | AI Development Measurement | Applies — no AI-development baseline is recorded in this repo yet. The merge-blocking gates that do exist are outcome-side, not activity counters: `make verify` runs branch-coverage floors, mypy `--strict`, and the hygiene gate on every change |
 | Incident Response | Applies — the private vulnerability channel and acknowledgement expectation are in [SECURITY.md](SECURITY.md); the confirmed safety-defect withdrawal timeline is in `docs/10-OPERATIONS-SRE.md` and the recall procedure in `docs/07-GOVERNANCE-LEGAL-SAFETY.md`. No incident has been recorded, so there is no `docs/incidents/` directory yet |
 | Data Governance | Applies — data classification, retention, and the prohibited-data boundary are set out in `docs/05-DATA-AND-EVIDENCE.md` section 11. Every fixture in this repo is synthetic by construction, and the synthetic-only namespaces, PHI canaries, and direct-identifier checks fail closed rather than warn. Operator-supplied provenance on an accepted evidence record is bounded by a published grammar and then scanned, per [ADR 0006](docs/adr/0006-provenance-token-grammar-and-boundary-scan.md) |

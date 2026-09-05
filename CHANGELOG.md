@@ -9,6 +9,30 @@ rather than after it.
 
 ## [Unreleased]
 
+### Added
+
+- **`docs/OPEN-DECISIONS.md`, the evidence behind three open questions, with
+  no decision recorded.** Issues #100 (a changelog section, a release
+  workflow, and no tag), #96 (whether an import report is ever a published
+  contract), and #94 (whether pa11y joins the accessibility gate) are each a
+  question for the maintainer rather than a defect, and each had been sitting
+  behind the work of establishing what is true today. One section per
+  question: what is true now with the file, line, or command that shows it;
+  the options; what each costs and forecloses; and a recommendation stated as
+  one. Nothing in it is a decision record, and it says so.
+  Three things the assembly turned up that the issues do not carry. A tag ends
+  the argument that a published contract may be narrowed without a version
+  move, which `schemas/README.md`, ADR 0006 and `docs/13-BACKLOG.md` each rest
+  on and which #109 is the live instance of; `.github/workflows/package.yml`
+  has never fired either, and can be exercised today by `workflow_dispatch`
+  without any tag or version claim. `contextsafe events summarize` counts
+  command, outcome and error code and not the warning codes the 0.2.0 record
+  now carries, so the surface the import warnings were routed to does not
+  count them yet. And the accessibility gate's rendered page already carries a
+  `data-cs-status` marker for every one of the five statuses, not only the
+  `pass` the reference receipt's results use, so the coverage argument for
+  more subjects is weaker than `docs/08` §7's fixture list implies.
+
 ### Changed
 
 - **The SAST gate reads the scan instead of the scanner's exit code, and a file
@@ -681,32 +705,13 @@ rather than after it.
   which found this while measuring its own subject, records that the fix is
   independent of the three options it puts to the maintainer.
 
-- **`make claims` read a backlog row's status by position, and reported clean
-  over a row it had not examined.** `check_backlog_status` took the row's cell
-  as the last one the row split into. The `Status` column is column seven of
-  seven in every phase table in `docs/13-BACKLOG.md`, so the last cell and the
-  status cell coincided — until a row lost a column. A row that dropped any
-  column other than `Status` left the correct status value in the last
-  position: deleting only the Estimate from B-022's row leaves six cells, and
-  `tools/claims_gate.py` answered `claims: clean - 10 check(s) re-derived from
-  the repository` at exit 0 over a row whose shape it never established. That
-  is the class `docs/18-ASSURANCE-PROGRAM.md` names — a check reporting a clean
-  result over content it did not examine — and nothing else in the tree
-  examined a backlog row's column count. A row that dropped the `Status`
-  column itself was a finding, but the wrong one: it named the item's Estimate
-  as its status.
-
-  The cell is now taken by the index of the `Status` header in the table the
-  row belongs to, so `backlog_status_cells` establishes each row's shape before
-  it reads anything. A row too short to reach that column, and a table
-  publishing no such header, are findings that say the cell was not found
-  rather than reporting whatever cell was last; a present-but-empty cell is
-  named as empty. Four tests in `tests/test_claims_gate.py` stand on the four
-  cases, and each fails against the previous code. The derived values, the
-  check's name and its exit-code contract are unchanged, and what the column
-  may assert is still open — [ADR 0014](docs/adr/0014-what-a-derived-status-column-may-assert.md),
-  which found this while measuring its own subject, records that the fix is
-  independent of the three options it puts to the maintainer.
+- **The README said `CITATION.cff` deliberately carries no `version` or
+  `date-released`.** It has carried both since `d472f76` ("release: prepare
+  0.1.0"). The Release and Versioning row of the standards table now says what
+  the two files hold and that the tag they were written for is still an open
+  question, and it records that `package.yml` has never fired for the same
+  reason `release.yml` has not. The sentence was false whichever way #100 is
+  decided, so it is corrected here rather than left to wait for the decision.
 
 - **The summariser refused, in whole and forever, any log two commands had
   written at once.** `append_event` derives a record's sequence by counting the
