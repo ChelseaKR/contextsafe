@@ -35,6 +35,7 @@ DOCUMENTS = (
     "DEFINITION_OF_DONE.md",
     "schemas/README.md",
     "docs/PUBLICATION-READINESS.md",
+    "docs/13-BACKLOG.md",
     "tools/a11y_gate.py",
 )
 
@@ -457,12 +458,10 @@ def test_removing_the_dated_correction_is_a_finding(repo: Path) -> None:
 
 
 def test_a_status_line_behind_the_iterations_described_is_a_finding(repo: Path) -> None:
-    _edit(
-        repo, "README.md", "and iteration-5 localized receipt", "and localized receipt"
-    )
+    _edit(repo, "README.md", "and\niteration-6 file readers", "and\nfile readers")
     findings = gate.run_gate(repo)
     assert _checks(findings) == {"iteration-status"}
-    assert "stops short of 'iteration-5'" in findings[0].detail
+    assert "stops short of 'iteration-6'" in findings[0].detail
 
 
 def test_a_readme_describing_no_iteration_cannot_be_examined(repo: Path) -> None:
@@ -470,6 +469,83 @@ def test_a_readme_describing_no_iteration_cannot_be_examined(repo: Path) -> None
     (repo / "README.md").write_text(text.replace("\nIteration ", "\nStage "), "utf-8")
     with pytest.raises(gate.GateUnavailable, match="no iteration"):
         gate.run_gate(repo)
+
+
+# --- backlog-status ---------------------------------------------------------
+
+
+def test_a_status_cell_that_disagrees_with_the_notes_is_a_finding(repo: Path) -> None:
+    _edit(
+        repo,
+        "docs/13-BACKLOG.md",
+        "| B-022 | P0-04 | Canonical JSON import with schema and property tests | F | B-017..021 | 3d | Open — note 2026-09-04 |",
+        "| B-022 | P0-04 | Canonical JSON import with schema and property tests | F | B-017..021 | 3d | Closed |",
+    )
+    findings = gate.run_gate(repo)
+    assert _checks(findings) == {"backlog-status"}
+    assert "B-022 states 'Closed'" in findings[0].detail
+
+
+def test_a_row_that_stops_carrying_a_status_is_a_finding(repo: Path) -> None:
+    """The other direction: a column nobody states is a claim nobody checks."""
+
+    _edit(
+        repo,
+        "docs/13-BACKLOG.md",
+        "| B-001 | H-01..06, DG-01 | Recruit and complete 15\u201320 interviews; synthesis includes disconfirming evidence and buyer path | F | none | 10d | Open — no note |",
+        "| B-001 | H-01..06, DG-01 | Recruit and complete 15\u201320 interviews; synthesis includes disconfirming evidence and buyer path | F | none | 10d |",
+    )
+    findings = gate.run_gate(repo)
+    assert _checks(findings) == {"backlog-status"}
+    assert "B-001 states '10d'" in findings[0].detail
+
+
+def test_a_note_that_moves_to_a_later_date_moves_the_cell(repo: Path) -> None:
+    """The cell is derived from the notes, so editing a note breaks the cell."""
+
+    _edit(
+        repo,
+        "docs/13-BACKLOG.md",
+        "Implementation note (2026-09-04, B-022):",
+        "Implementation note (2026-09-30, B-022):",
+    )
+    findings = gate.run_gate(repo)
+    assert _checks(findings) == {"backlog-status"}
+    assert "derive 'Open \u2014 note 2026-09-30'" in findings[0].detail
+
+
+def test_a_note_naming_no_item_leaves_its_row_saying_so(repo: Path) -> None:
+    """A note header that names no item binds to nothing, and the row says it."""
+
+    _edit(
+        repo,
+        "docs/13-BACKLOG.md",
+        "Implementation note (2026-08-04, B-033):",
+        "Implementation note (2026-08-04):",
+    )
+    findings = gate.run_gate(repo)
+    assert _checks(findings) == {"backlog-status"}
+    assert "B-033 states 'Open \u2014 note 2026-08-04'" in findings[0].detail
+    assert "derive 'Open \u2014 no note'" in findings[0].detail
+
+
+def test_a_backlog_with_no_phase_row_cannot_be_examined(repo: Path) -> None:
+    path = repo / "docs" / "13-BACKLOG.md"
+    text = path.read_text(encoding="utf-8")
+    path.write_text(text.replace("\n| B-0", "\n| X-0"), encoding="utf-8")
+    with pytest.raises(gate.GateUnavailable, match="no phase-table row"):
+        gate.run_gate(repo)
+
+
+def test_the_parking_lot_and_the_allocation_rows_are_not_status_rows(
+    repo: Path,
+) -> None:
+    """Only per-item phase rows carry a status; B-1xx and B-001-007 do not."""
+
+    backlog = (repo / "docs" / "13-BACKLOG.md").read_text(encoding="utf-8")
+    rows = {m.group("item") for m in gate._BACKLOG_ROW.finditer(backlog)}
+    assert "B-101" not in rows
+    assert len(rows) == 57
 
 
 # --- the gate could not look ------------------------------------------------
@@ -512,9 +588,7 @@ def test_main_is_zero_and_prints_its_own_boundary(
 def test_main_is_one_on_a_finding_and_says_where(
     repo: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    _edit(
-        repo, "README.md", "and iteration-5 localized receipt", "and localized receipt"
-    )
+    _edit(repo, "README.md", "and\niteration-6 file readers", "and\nfile readers")
     assert gate.main(["--root", str(repo)]) == 1
     err = capsys.readouterr().err
     assert "iteration-status" in err

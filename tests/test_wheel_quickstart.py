@@ -29,6 +29,14 @@ README, and the receipt document checked against the digest
 gate through its real subprocess runner, and then makes the two comparisons
 only a checkout can make: the exported fixtures against the tree's bytes, and
 the wheel's receipt payload against one produced in process.
+
+It then runs the README's second block, the walkthrough that starts at a
+synthetic FHIR Patient and ends at a rendered receipt, from the same wheel in
+the same directory. That block is deliberately outside ``run_gate``:
+``import`` needs descriptor-relative no-follow reads and fails closed where the
+platform has none, and ``package.yml`` runs the gate on Windows. So the reader
+path is proved from a wheel on the platforms ``make verify`` runs on, and the
+gate keeps to the one block every platform can run.
 """
 
 import importlib.util
@@ -113,6 +121,27 @@ def test_the_readme_quickstart_still_names_the_commands_this_test_runs() -> None
     assert [argv[0] for argv in commands] == ["fixtures", "evaluate", "render"]
 
 
+def test_the_readme_walkthrough_still_starts_at_a_source_file() -> None:
+    """The walkthrough is the reader path, so it has to contain a reader.
+
+    The Quickstart above evaluates observations somebody already authored,
+    which is the one path that exercises no importer. If the walkthrough ever
+    stops naming ``import``, the block below runs a second copy of the
+    Quickstart and this file's claim to cover a reader from a wheel is false.
+    """
+
+    commands = gate.walkthrough_commands(README.read_text(encoding="utf-8"))
+
+    assert [argv[0] for argv in commands] == [
+        "fixtures",
+        "import",
+        "evaluate",
+        "render",
+    ]
+    source = commands[1][commands[1].index("--source") + 1]
+    assert Path(source).name in REFERENCE_FILES
+
+
 def _output_of(argv: list[str]) -> str:
     """The ``--output`` operand of one quickstart command."""
 
@@ -156,7 +185,7 @@ def test_the_documented_quickstart_runs_from_an_installed_wheel(
     # wheel's package, not this checkout's. The gate checks this too; this is
     # the same fact asserted from outside it.
     venv = workdir / "venv"
-    python, _ = gate.venv_layout(venv)
+    python, script = gate.venv_layout(venv)
     located = Path(
         _harness(
             [str(python), "-c", "import contextsafe; print(contextsafe.__file__)"],
@@ -202,3 +231,55 @@ def test_the_documented_quickstart_runs_from_an_installed_wheel(
     assert produced["payload_sha256"] == report.payload_sha256
     rendered = (outside / _output_of(by_command["render"])).read_text(encoding="utf-8")
     assert "<html" in rendered
+
+    # And the reader path, from the same wheel in the same directory outside
+    # the checkout: a synthetic FHIR Patient through import, evaluate, and
+    # render. It is not part of `run_gate`, because `import` fails closed with
+    # `input_path_unsupported` where the platform has no descriptor-relative
+    # no-follow read, and that gate also runs on Windows.
+    walkthrough = gate.walkthrough_commands(README.read_text(encoding="utf-8"))
+    for argv in walkthrough:
+        completed = subprocess.run(
+            [str(script), *argv],
+            cwd=outside,
+            env=_clean_env(),
+            capture_output=True,
+            text=True,
+            timeout=HARNESS_TIMEOUT_SECONDS,
+            check=False,
+        )
+        assert completed.returncode == EXIT_SUCCESS, (
+            f"`contextsafe {argv[0]}` from the walkthrough exited "
+            f"{completed.returncode} from the installed wheel: {completed.stderr}"
+        )
+
+    by_walkthrough = {argv[0]: argv for argv in walkthrough}
+    imported = json.loads(
+        (outside / _output_of(by_walkthrough["import"])).read_text(encoding="utf-8")
+    )
+    assert len(imported["observations"]) == 4
+    assert {o["checkpoint"] for o in imported["observations"]} == {"ehr"}
+
+    # The receipt the reader path produces is the one the README describes:
+    # three passes at the EHR, and two boundaries nobody observed left
+    # indeterminate rather than passed.
+    reader_receipt = json.loads(
+        (outside / _output_of(by_walkthrough["evaluate"])).read_text(encoding="utf-8")
+    )
+    summary = reader_receipt["payload"]["summary"]
+    assert summary == {
+        "blocked": 0,
+        "fail": 0,
+        "indeterminate": 2,
+        "not_applicable": 0,
+        "pass": 3,
+    }
+    assert {
+        r["reason"]
+        for r in reader_receipt["payload"]["results"]
+        if r["status"] == "indeterminate"
+    } == {"missing_evidence"}
+    reader_page = (outside / _output_of(by_walkthrough["render"])).read_text(
+        encoding="utf-8"
+    )
+    assert "<html" in reader_page

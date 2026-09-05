@@ -95,6 +95,8 @@ PIN_NAME = "RECEIPT_DOCUMENT_SHA256"
 """Where the reference receipt digest lives, and the one name it lives under."""
 
 QUICKSTART_HEADING = "\n## Quickstart\n"
+
+WALKTHROUGH_HEADING = "\n### From a source file to a receipt\n"
 QUICKSTART_PREFIX = ("uv", "run", "contextsafe")
 
 COMMAND_TIMEOUT_SECONDS = 600
@@ -184,23 +186,28 @@ def read(root: Path, name: str) -> str:
         raise GateUnavailable(f"cannot read {name}: {exc}") from exc
 
 
-def quickstart_commands(readme_text: str) -> list[list[str]]:
-    """The ``contextsafe`` invocations in the README's Quickstart, as argv tails.
+def documented_commands(readme_text: str, heading_text: str) -> list[list[str]]:
+    """The ``contextsafe`` invocations in the first ``sh`` block under a heading.
 
-    Reads the first ``sh`` block under ``## Quickstart``, joins backslash
-    continuations, drops ``#`` comments and the ``make`` line, and requires
-    every remaining line to be ``uv run contextsafe ...``: a line this gate
-    cannot run from a wheel is a failure to examine, not a silent omission.
+    Joins backslash continuations, drops ``#`` comments and the ``make`` line,
+    and requires every remaining line to be ``uv run contextsafe ...``: a line
+    this gate cannot run from a wheel is a failure to examine, not a silent
+    omission. The heading is a parameter because the README documents two paths
+    a wheel must be able to run -- the shortest one, and the walkthrough that
+    starts at a source file -- and a second copy of this parser would be one
+    more thing to keep in step.
     """
 
-    heading = readme_text.find(QUICKSTART_HEADING)
+    heading = readme_text.find(heading_text)
     if heading < 0:
-        raise GateUnavailable("README.md has no `## Quickstart` section")
+        raise GateUnavailable(f"README.md has no `{heading_text.strip()}` section")
     fence = "```sh\n"
     start = readme_text.find(fence, heading)
     end = readme_text.find("```", start + len(fence)) if start >= 0 else -1
     if start < 0 or end < 0:
-        raise GateUnavailable("README.md Quickstart has no closed ```sh block")
+        raise GateUnavailable(
+            f"README.md `{heading_text.strip()}` has no closed ```sh block"
+        )
     logical: list[str] = []
     pending = ""
     for line in readme_text[start + len(fence) : end].splitlines():
@@ -217,17 +224,38 @@ def quickstart_commands(readme_text: str) -> list[list[str]]:
             continue
         if tuple(tokens[:3]) != QUICKSTART_PREFIX:
             raise GateUnavailable(
-                "README.md Quickstart line is not a `uv run contextsafe` command, "
-                f"so it cannot be run from a wheel: {text!r}"
+                f"README.md `{heading_text.strip()}` line is not a `uv run "
+                f"contextsafe` command, so it cannot be run from a wheel: {text!r}"
             )
         if len(tokens) == len(QUICKSTART_PREFIX):
             raise GateUnavailable(
-                f"README.md Quickstart line names no contextsafe subcommand: {text!r}"
+                f"README.md `{heading_text.strip()}` line names no contextsafe "
+                f"subcommand: {text!r}"
             )
         commands.append(tokens[3:])
     if not commands:
-        raise GateUnavailable("README.md Quickstart names no contextsafe command")
+        raise GateUnavailable(
+            f"README.md `{heading_text.strip()}` names no contextsafe command"
+        )
     return commands
+
+
+def quickstart_commands(readme_text: str) -> list[list[str]]:
+    """The Quickstart's own commands: the shortest path, and the pinned one."""
+
+    return documented_commands(readme_text, QUICKSTART_HEADING)
+
+
+def walkthrough_commands(readme_text: str) -> list[list[str]]:
+    """The reader walkthrough: a synthetic source file through to a receipt.
+
+    Not part of ``run_gate``. ``import`` needs descriptor-relative no-follow
+    reads, so it fails closed on Windows, and this gate runs on Windows in
+    ``package.yml``. ``tests/test_wheel_quickstart.py`` drives this block from
+    the same wheel on the platforms ``make verify`` runs on.
+    """
+
+    return documented_commands(readme_text, WALKTHROUGH_HEADING)
 
 
 def pinned_digest(source_text: str) -> str:
