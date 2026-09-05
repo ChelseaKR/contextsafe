@@ -1065,6 +1065,44 @@ and add none, because neither the diagnostics nor the bundle enumerates the
 importer registry's formats. No independent security review of the bundle contents has happened
 (B-040).
 
+Implementation note (2026-09-04, B-046, issue #97): the log now has a reader.
+`contextsafe events summarize --directory DIR` prints the record count, the
+count of each command, of each outcome, and of each error code, and the
+SHA-256 of the bytes it read, and that is the whole document. It is the
+operator surface the note above left out: the log was written from the first
+commit of this slice and nothing read it, so the only way to answer "how many
+evaluations failed closed, and with which codes" was to parse the file by
+hand — and [User research and pilot §7](02-USER-RESEARCH-AND-PILOT.md) measures partner
+hours against a pilot where this log is the only record of what was run.
+
+It is derived the way the rest of the operator surface reports: closed keys,
+counts, one digest, and no timestamp, path, or free text, because the record
+shape it reads has nowhere for one to have come from. It refuses rather than
+skips — any line that is not one canonical record refuses the whole summary at
+`$.log[N]` and the field, with neither the value nor the log's path in the
+error — since a count over the lines that happened to parse would understate
+exactly the runs being counted. The log is opened once, no-follow, required to
+be a regular file within the writer's own size limit, never written to, and an
+`--output` naming it is refused as `output_path_unsafe`; a directory holding no
+log is a rejection, not an empty summary. The summary is published as
+`schemas/contextsafe-event-log-summary-v0.1.schema.json`, and because it names
+every command the log's vocabulary publishes, the next command added to that
+vocabulary moves the summary contract's version.
+
+Building the reader found one thing the writer had been getting wrong since
+`fixtures export` was added: `fixtures` was not in the log's command
+vocabulary, so `fixtures export --log-dir DIR` refused the record as
+`unloggable_command`, printed that on stderr, and exited 0. It is in the
+vocabulary now, and the test derives the set from the argument parser rather
+than restating it, in both directions.
+
+This does not close B-046, and the paragraph above still says why. It adds no
+governed cleanup, no security review, and no clock: correlating these records
+with anything outside the tool still needs a timestamp captured outside it. The
+summary says what ran and what was refused, never what a run found; findings
+live in a receipt, and dispositions in the B-032 review log, which is a
+different file with a different contract.
+
 Implementation note (2026-09-04, B-048): the part of the seeded-fault
 corpus that needs no external person is committed. For every one of F-001 to
 F-036 in [Test and evaluation §4](09-TEST-AND-EVALUATION.md),
