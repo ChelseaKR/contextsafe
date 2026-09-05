@@ -39,6 +39,7 @@ import pytest
 from contextsafe import jsonio
 from contextsafe.cli import main
 from contextsafe.errors import ContextSafeError
+from contextsafe.eventlog import LOG_FILE_NAME
 from contextsafe.models import Checkpoint
 from contextsafe.reference_fixtures import REFERENCE_ROOT
 
@@ -137,6 +138,19 @@ profile's digest and version beside the source's digest, so a platform that
 changed one byte of a profile's canonical form would change every bound
 observation set. They move only with the reference sources, the case
 document, the importers' mapping versions, or the reference profiles.
+"""
+
+EVENT_LOG_SUMMARY_SHA256 = (
+    "04e77cc5033f71b2c13de4ebd7aa0af379ad3a05866000223510d0a60fa76077"
+)
+"""SHA-256 of ``events summarize`` over the three-record reference log.
+
+The log itself is written by three commands in this module, so this constant
+covers both halves of the claim: that the same three runs write the same log
+bytes on every platform, and that the summary derived from them is the same
+document. It moves with the event-log record shape, the summary contract, or
+the three commands the log is built from -- not with a clock, because neither
+the log nor the summary reads one.
 """
 
 COMPILED_MAPPING_PROFILE_SHA256 = (
@@ -1084,6 +1098,71 @@ def test_finding_review_and_list_are_byte_identical_across_runs(
     _assert_identical(listed)
     assert listed[0].returncode == 0
     assert listed[0].stdout == artifact
+
+
+def _event_log_directories(root: Path) -> tuple[Path, ...]:
+    """Three event logs, each written by the same three commands in order."""
+
+    directories: list[Path] = []
+    for index in range(3):
+        log_dir = root / f"events-{index}"
+        logged = ["--quiet", "--log-dir", str(log_dir)]
+        assert main([*_fixture_argv("validate", REFERENCE), *logged]) == 0
+        assert main(["diagnostics", *logged]) == 0
+        assert (
+            main(
+                [
+                    "cleanup",
+                    "--workspace",
+                    str(root / "no-such-workspace"),
+                    "--remove",
+                    *logged,
+                ]
+            )
+            == 2
+        )
+        directories.append(log_dir)
+    return tuple(directories)
+
+
+@pytest.mark.skipif(os.name == "nt", reason=_WINDOWS_UNSUPPORTED)
+def test_event_log_summary_is_byte_identical_across_runs_and_pinned(
+    tmp_path: Path,
+) -> None:
+    """The same runs write the same log, and it summarises to one document.
+
+    Three identical logs, one per environment, so the summary cannot be
+    reproducible only because the three runs read the same file. What an
+    operator would report from a week of runs is a constant here.
+    """
+
+    directories = _event_log_directories(tmp_path)
+    logs = {(directory / LOG_FILE_NAME).read_bytes() for directory in directories}
+    assert len(logs) == 1
+    handed_out = iter(directories)
+    runs = _three_runs(
+        tmp_path,
+        lambda _reference: [
+            "events",
+            "summarize",
+            "--directory",
+            str(next(handed_out)),
+        ],
+        with_output=True,
+    )
+    _assert_identical(runs)
+    assert runs[0].returncode == 0
+    assert runs[0].stdout == b""
+    assert runs[0].stderr == b""
+    artifact = runs[0].artifact
+    assert artifact is not None
+    _assert_canonical_line(artifact)
+    assert hashlib.sha256(artifact).hexdigest() == EVENT_LOG_SUMMARY_SHA256
+    summary = json.loads(artifact.decode("utf-8"))
+    assert summary["record_count"] == 3
+    assert summary["counts_by_error_code"] == {"cleanup_not_confirmed": 1}
+    for fragment in (str(tmp_path), str(ROOT), "Kiritimati", "en_US", LOG_FILE_NAME):
+        assert fragment.encode("utf-8") not in artifact
 
 
 def test_platforms_without_descriptor_relative_open_fail_closed(
