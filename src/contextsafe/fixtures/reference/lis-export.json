@@ -6,11 +6,11 @@
       "name_to_use": "CSYN-ASTER",
       "pronouns": "CSYN-PRONOUN-THEY-THEM",
       "sex": "X",
-      "analyte": "CSYN-ANALYTE-K",
-      "value": "4.1",
-      "unit": "mmol/L",
-      "range": "3.5-5.5",
-      "flag": "N",
+      "analyte": "fixture-analyte-1",
+      "value": "4.100",
+      "unit": "fixture-unit-alpha",
+      "range": "ge2.500:le7.500:fixture-unit-alpha",
+      "flag": "fixture-flag-in-range",
       "order": "ORDER-CSYN-I01-A",
       "specimen": "CSYN-SPECIMEN-I01-A"
     },
@@ -19,13 +19,13 @@
       "name_to_use": "CSYN-ASTER",
       "pronouns": "CSYN-PRONOUN-THEY-THEM",
       "sex": "X",
-      "analyte": "CSYN-ANALYTE-NA",
-      "value": "140",
-      "unit": "mmol/L",
+      "analyte": "fixture-analyte-2",
+      "value": "140.000",
+      "unit": "fixture-unit-beta",
       "range": "",
       "flag": "",
       "order": "ORDER-CSYN-I01-A",
-      "specimen": "CSYN-SPECIMEN-I01-A"
+      "specimen": "CSYN-SPECIMEN-I01-B"
     }
   ]
 }

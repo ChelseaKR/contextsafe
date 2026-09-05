@@ -282,10 +282,11 @@ export reader exists as `contextsafe import --format lis-csv` and
 column, so a result export that repeats the identity per row is not
 ambiguous with itself and rows that disagree stay ambiguous. The result
 columns (`analyte`, `value`, `unit`, `range`, `flag`, `order`, `specimen`)
-are recognized, bounded, scanned, and counted and produce no observation;
-the source gets the closed warning `result_columns_not_observed`. The column
-set is the versioned profile constant `LIS_PROFILE` 0.1.0 with
-`profile_reviewed` false and a type that refuses true. An unknown column or
+were recognized, bounded, scanned, and counted and produced no observation,
+under the closed warning `result_columns_not_observed`; the B-030 note below
+is where that changed. The column
+set is the versioned profile constant `LIS_PROFILE`, 0.1.0 then and 0.2.0
+since B-030, with `profile_reviewed` false and a type that refuses true. An unknown column or
 key, a formula-leading cell, an empty identity cell, a non-synthetic
 identifier anywhere, free text in any cell, a malformed record, or a bound
 overrun rejects the whole file by position. CSV is an RFC 4180 subset read
@@ -299,14 +300,92 @@ fixture per rule sits under `tests/fixtures/lis/`.
 B-025 is not closed: the profile is reference-only and the 4h laboratory
 review the row budgets has not happened, so no reviewer has said this is
 the shape of any export; the laboratory half — result, range, flag, order,
-and specimen observations — does not exist, because the observation contract
-has no concept for them and A-025..A-030 wait on B-030 and the B-011
-fixtures; values are carried as tokens with no mapping profile (B-026) to
+and specimen observations — was built by B-030 below and is ungoverned, and
+the B-011 fixture values are still the laboratory medical director's to
+supply; values are carried as tokens with no mapping profile (B-026) to
 bind them, so a pronoun token or a laboratory-context sex value reports
 `semantic_mismatch` against the case manifest rather than pass or fail on
 its merits; an empty identity cell rejects rather than reading as `absent`,
 because deciding what an LIS's empty cell means is a profile decision; and
 the result's counts and warnings stay in process.
+
+Implementation note (2026-09-04, B-025/B-030): the laboratory result half.
+`src/contextsafe/laboratory.py` carries a laboratory result observation
+family and four pure predicates over it, and the LIS readers emit the
+family. A result carries `analyte_code`, `value` (a decimal as a string),
+`unit`, `order_id`, `specimen_id`, a reference interval that is either
+present with `low`, `low_inclusive`, `high`, `high_inclusive` and a unit,
+absent, or `not_typed`, and an abnormal flag in the same three states, plus
+the checkpoint, the evidence pointer and digest, and the mapping version.
+**A separate observation kind, not a sixth `ConceptKind`,** and that is the
+decision the item asked for: gender identity, recorded sex or gender, sex
+parameter for clinical use, name to use and pronouns are untouched, and the
+alternative would have added a required key to the case manifest's closed
+concept set, put a laboratory value on the identity divergence section, and
+moved every identity contract for a laboratory change. The family has its
+own documents, `schemas/contextsafe-result-set-v0.1.schema.json` and
+`schemas/contextsafe-result-rule-set-v0.1.schema.json`, each with an
+agreement test, and `schemas/README.md` counts twenty-one contracts.
+
+The predicates, all ungoverned mechanism: `result_linked` (A-025 — the
+order and specimen are the ones the rule declares; the case half is a
+refusal at parse and the analyte half is A-026's),
+`analyte_value_unit_preserved` (A-026, exact, so `4.10` and `4.100` are one
+quantity and two round trips), `reference_interval_present` (A-027/A-029 — bounds,
+inclusivity and a unit that fits the value; a blank interval is a `fail`,
+one in an unreadable dialect is `indeterminate`, and one in another unit is
+a `fail`), and `flag_consistent_with_interval` (A-028/A-030 — the flag the
+fixture's own bounds imply at below, lower bound, in range, upper bound and
+above; an out-of-range value with no flag is a `fail`, an in-range value
+with no flag is `indeterminate` because a flag nobody sent is not evidence
+of normality, and no interval, an unreadable interval, a mismatched unit, an
+uncomparable value, or an unreadable flag is `indeterminate` and never
+`pass`). `REASON_STATUSES` says which statuses each reason may be published
+under, and only four reasons can reach `pass`.
+
+The LIS readers (`LIS_PROFILE` 0.2.0) build one result per row from the
+result columns they already recognised and counted, whenever the table
+carries the whole result column set and the row names an analyte, value,
+unit, order and specimen; any other row leaves its result cells counted and
+unclaimed. A range or flag cell in a dialect this ungoverned profile cannot
+type is carried as `not_typed` rather than normalized to the nearest thing
+it resembles (A-033), so a partner export's own dialect reads as
+undecidable rather than as a finding. The evidence pointer is the row
+(`$.rows[3]`) and not a cell, deliberately: a cell word such as `analyte`
+would widen `STRUCTURAL_POINTER_SEGMENTS`, which the receipt contract's
+pointer pattern copies, and widening that is a receipt version bump this
+change does not make. `laboratory.py` is a safety module; the profile
+version moved with what the profile emits, so the two pinned LIS import
+digests moved with it; and the packaged `lis-export` fixtures were rewritten
+so every result cell is an invented token, because a real unit or a
+real-looking range beside a synthetic analyte code would otherwise have
+entered an observation.
+
+Fixtures: the INV, CTX and XFAIL classes of `docs/05` §4 with all six edge
+values each, under `tests/fixtures/laboratory/`, and F-017 to F-022 and
+F-033 with a clean counterpart each under
+`tests/fixtures/laboratory/seeded-faults/`. The corpus matrix gains a
+fourth status, `exercised outside the receipt`, and reads 12 exercised at
+receipt level, 7 exercised outside it, 7 refused, 10 not yet exercisable.
+
+**What remains ungoverned, and what this does not close.** Nothing here is
+clinical content. Every analyte code, unit, bound, inclusivity and flag is
+a token invented for software tests; no laboratory medical director,
+clinical reviewer or community reviewer has supplied or approved any value,
+any interval or any predicate; and no interval in this repository is a
+reference range for any analyte, person or population. `docs/05` §4 is
+explicit that the partner's laboratory medical director supplies the real
+fixture analyte code, units, bounds, inclusivity, age band, effective
+version and expected flag, and B-011 is still open for exactly that: the
+shipped family carries no age band and no effective oracle version at all,
+so no rule written in it can be a governed assertion, and A-025 to A-031
+remain unproved. A-031 is not implemented here at all — a result-facing
+name and pronoun display needs the display observation (B-019). No
+laboratory outcome reaches a receipt, no divergence section locates one,
+and no command writes a result set: the readers produce the family in
+process under the closed warning `result_observations_not_written`. B-030
+is not closed, B-025 is not closed, and the 8h laboratory review the B-030
+row budgets has not happened.
 
 Implementation note (2026-09-04, B-026): the versioned mapping profile
 exists as `schemas/contextsafe-mapping-profile-v1.schema.json`, a closed
@@ -961,10 +1040,16 @@ identifier outside the synthetic namespace (`invalid_synthetic_identifier`,
 beside the preflight canary suite), F-032 as an observation naming another
 case (`case_mismatch`), and F-028 and F-030 by the pack validity and receipt
 contract tests that already exist; each fixture also exits 2 through the CLI
-with no receipt written and no value in the error object. Seventeen are not
+with no receipt written and no value in the error object. Seven are exercised outside the receipt: the
+laboratory rows F-017 to F-022 and F-033, each a fixture under
+`tests/fixtures/laboratory/seeded-faults/` reported as `fail` by one
+laboratory predicate with that predicate's own reason, beside a clean
+counterpart that passes every rule. They are counted apart from the twelve
+because no receipt carries a laboratory outcome, so nothing localizes them,
+and because every value in them is invented for software tests and no
+laboratory medical director has approved any of it (B-011). Ten are not
 yet exercisable, and every row names what it waits on from a closed
-vocabulary: seven laboratory rows (F-017 to F-022, F-033) on the laboratory
-fixture and importer (B-011, B-025, B-030); F-011 to F-014 on the SPCU
+vocabulary: F-011 to F-014 on the SPCU
 predicates and the clinical review they need (B-029); F-002 and F-003 on name
 contexts and periods the observation contract does not carry; F-026 on the
 receipt verifier (B-036); F-027 on the evidence-minimized presentation pass
@@ -974,11 +1059,12 @@ acceptance statement: there is no hidden-fault set; no independent fault
 author has reviewed the corpus and no independent QA has run it, because both
 are people (B-004, B-013, and the 16 QA hours the row budgets) and neither
 exists yet; every fault here was written by the implementer of the mechanism
-that detects it; 12 of 36 is deterministic corpus coverage over the published
-library and makes no population-sensitivity claim; and the 41/41 detection
-and localization figure the row requires cannot be computed until the
-seventeen waiting rows have a mechanism and the five hidden faults have an
-author.
+that detects it; 12 of 36 at receipt level, and 19 decided in all, is
+deterministic corpus coverage over the published library and makes no
+population-sensitivity claim; and the 41/41 detection and localization figure
+the row requires cannot be computed until the ten waiting rows have a
+mechanism, the seven laboratory rows can be localized in a receipt, and the
+five hidden faults have an author.
 
 Implementation note (2026-09-04, B-045): the part CI can do.
 `.github/workflows/package.yml` builds the sdist and wheel with `uv build`,

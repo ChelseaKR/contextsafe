@@ -482,6 +482,29 @@ def _semantic_value(concept: ConceptKind, value: object, path: str) -> SemanticV
     return _SEMANTIC_PARSERS[concept](value, path)
 
 
+def parse_structural_pointer(value: object, path: str) -> str:
+    """Parse one source pointer built only from structural segments.
+
+    The public form of the check every observation's evidence pointer goes
+    through, so a second observation family (the laboratory results in
+    :mod:`contextsafe.laboratory`) builds its pointers from
+    :data:`STRUCTURAL_POINTER_SEGMENTS` and this grammar rather than from a
+    second copy of either.
+    """
+
+    return _structural_pointer(value, path)
+
+
+def reject_prohibited_fields(value: object) -> None:
+    """Refuse a prohibited free-text or identifying key anywhere in ``value``.
+
+    Public for the same reason as :func:`parse_structural_pointer`: a new
+    document shape is held to the one prohibited-key set, not to a copy.
+    """
+
+    _reject_prohibited_fields(value)
+
+
 def parse_semantic_value(
     concept: ConceptKind, value: object, path: str
 ) -> SemanticValue:

@@ -135,7 +135,25 @@ NUMBER_WORDS: dict[int, str] = {
     18: "eighteen",
     19: "nineteen",
     20: "twenty",
+    21: "twenty-one",
+    22: "twenty-two",
+    23: "twenty-three",
+    24: "twenty-four",
+    25: "twenty-five",
+    26: "twenty-six",
+    27: "twenty-seven",
+    28: "twenty-eight",
+    29: "twenty-nine",
+    30: "thirty",
 }
+"""The counts a document may state in words rather than in digits.
+
+Extended past twenty on 2026-09-04, when the laboratory result family took
+the published contracts to twenty-one: past the end of this table the gate
+asks for the digits instead, which is a correct check and a document that
+reads as if a machine wrote it. Widening the table changes nothing the gate
+decides -- a wrong count is a finding either way.
+"""
 
 
 class GateUnavailable(Exception):

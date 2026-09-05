@@ -4,7 +4,11 @@ What these tests pin. The conversion reads only the identity columns of a
 laboratory result export and emits name-to-use, pronoun, and recorded-sex-
 or-gender observations at ``lis_return``, one per distinct value per
 column, each pointed at the first row that carries it and at the source's
-digest. The result columns are recognized, counted, and never observed.
+digest. A row that carries the whole result column set additionally becomes
+one laboratory result observation (B-030), pointed at the row; a row that
+does not becomes none, and its result cells are counted instead. A range or
+flag cell in a dialect this ungoverned profile cannot type is carried as
+untyped rather than guessed at.
 ``sex`` becomes recorded sex or gender in the fixed ``laboratory`` context
 and nothing else; no path in the module can produce a gender identity or a
 sex parameter for clinical use. The conversion is whole or nothing: an
@@ -32,7 +36,9 @@ from typing import Any
 import pytest
 from hypothesis import example, given, settings
 from hypothesis import strategies as st
+from jsonschema import Draft202012Validator
 
+import contextsafe.importers.lis as lis_module
 import contextsafe.preflight as preflight_module
 from contextsafe.canonical import canonical_json
 from contextsafe.cli import EXIT_CONTRACT_ERROR, EXIT_SUCCESS, main
@@ -60,6 +66,16 @@ from contextsafe.importers.lis import (
     parse_lis_json,
 )
 from contextsafe.importers.lis_csv import CsvBounds, parse_csv
+from contextsafe.laboratory import (
+    RESULT_ID_PATTERN,
+    RESULT_SET_SCHEMA_VERSION,
+    RESULT_TOKEN_PATTERN,
+    SYNTHETIC_IDENTIFIER_PATTERN,
+    AbnormalFlag,
+    CellStatus,
+    ReferenceInterval,
+    parse_result_set,
+)
 from contextsafe.models import Checkpoint, ConceptKind, SyntheticCase
 from contextsafe.preflight import MAX_EVIDENCE_BYTES
 from contextsafe.reference_fixtures import REFERENCE_ROOT
@@ -71,6 +87,11 @@ FIXTURES = ROOT / "tests" / "fixtures" / "lis"
 FORMATS = (LIS_CSV_FORMAT, LIS_JSON_FORMAT)
 _CASE_JSON = json.loads((REFERENCE / "case.json").read_text(encoding="utf-8"))
 _CASE = parse_case(_CASE_JSON)
+_RESULT_SET_SCHEMA = json.loads(
+    (ROOT / "schemas" / "contextsafe-result-set-v0.1.schema.json").read_text(
+        encoding="utf-8"
+    )
+)
 
 
 def _format_for(name: str) -> str:
@@ -140,15 +161,15 @@ def test_reference_export_reads_into_three_identity_observations(name: str) -> N
     )
 
     assert result.format_name == _format_for(name)
-    assert result.mapping_version == LIS_PROFILE.version == "0.1.0"
+    assert result.mapping_version == LIS_PROFILE.version == "0.2.0"
     assert result.record_count == len(result.observations) == 3
     assert result.source_sha256 == hashlib.sha256(raw).hexdigest()
     assert result.source_byte_count == len(raw)
     assert result.profile_reviewed is False
-    assert result.unobserved_cell_count == 2 * len(LIS_PROFILE.result_columns)
+    assert result.unobserved_cell_count == 0
     assert result.warnings == (
         ImportWarningCode.MAPPING_PROFILE_NOT_BOUND,
-        ImportWarningCode.RESULT_COLUMNS_NOT_OBSERVED,
+        ImportWarningCode.RESULT_OBSERVATIONS_NOT_WRITTEN,
     )
     by_concept = {item.concept: item for item in result.observations}
     assert set(by_concept) == {
@@ -188,7 +209,8 @@ def test_reference_export_reads_into_three_identity_observations(name: str) -> N
     report = result.to_dict()
     assert report["persisted"] is False
     assert report["profile_reviewed"] is False
-    assert report["unobserved_cell_count"] == 14
+    assert report["unobserved_cell_count"] == 0
+    assert report["result_count"] == 2
 
 
 def test_csv_and_json_reference_exports_agree_on_everything_but_the_source_digest() -> (
@@ -264,7 +286,7 @@ def test_imported_set_evaluates_a_surviving_name_as_pass_and_unbound_tokens_as_f
                 ("pronouns", "CSYN-PRONOUN-THEY-THEM", 0),
                 ("sex", "X", 0),
             ],
-            7,
+            0,
         ),
         (
             "accept-no-final-terminator.csv",
@@ -273,7 +295,7 @@ def test_imported_set_evaluates_a_surviving_name_as_pass_and_unbound_tokens_as_f
                 ("pronouns", "CSYN-PRONOUN-THEY-THEM", 0),
                 ("sex", "X", 0),
             ],
-            7,
+            0,
         ),
         (
             "accept-quoted-cells.csv",
@@ -1082,8 +1104,23 @@ _PRESENCE_OR_TOKEN = st.one_of(
 )
 _SEX = st.sampled_from(("F", "M", "X", "unknown"))
 _RESULT = st.one_of(
-    st.just(""), st.sampled_from(("4.1", "mmol/L", "3.5-5.5", "H", "<0.5"))
+    st.just(""),
+    st.sampled_from(
+        (
+            "4.1",
+            "fixture-unit-alpha/beta",
+            "fixture-range-1",
+            "fixture-flag-1",
+            "<0.5",
+        )
+    ),
 )
+"""Result cells the profile admits and, deliberately, cannot type.
+
+Invented tokens rather than any laboratory's own analyte code, unit, range,
+or flag: nothing in this repository carries one, and a cell in a dialect this
+ungoverned profile cannot type is exactly the case these properties are about.
+"""
 _IDENTIFIER = st.one_of(st.just(""), _TOKEN_SUFFIX.map(lambda s: f"ORDER-CSYN-{s}"))
 
 
@@ -1132,6 +1169,21 @@ def _json_document(table: LisTable) -> dict[str, Any]:
     }
 
 
+def _row_is_a_result(table: LisTable, row: tuple[str, ...]) -> bool:
+    """The emission rule, restated rather than imported from the reader.
+
+    A row becomes a laboratory result when the table names every result
+    column and the row names an analyte, a value, a unit, an order, and a
+    specimen. Anything else leaves the row's result cells counted and
+    unclaimed.
+    """
+
+    cells = dict(zip(table.columns, row, strict=True))
+    return set(LIS_PROFILE.result_columns) <= set(table.columns) and all(
+        cells[column] for column in ("analyte", "value", "unit", "order", "specimen")
+    )
+
+
 def _convert_any(table: LisTable) -> Any:
     return convert_table(
         table,
@@ -1164,9 +1216,13 @@ def test_both_readers_agree_and_the_conversion_is_deterministic(
         if column in LIS_PROFILE.identity_columns
     )
     assert first.record_count == distinct
-    assert first.unobserved_cell_count == len(table.rows) * sum(
+    cells_per_row = sum(
         column in LIS_PROFILE.result_columns for column in table.columns
     )
+    unread = [row for row in table.rows if not _row_is_a_result(table, row)]
+    assert first.unobserved_cell_count == len(unread) * cells_per_row
+    assert len(first.results) == len(table.rows) - len(unread)
+    assert canonical_json(first.result_set()) == canonical_json(second.result_set())
     assert all(item.checkpoint is Checkpoint.LIS_RETURN for item in first.observations)
     assert all(
         item.concept
@@ -1324,3 +1380,161 @@ def test_a_formula_prefix_in_any_cell_rejects_the_whole_table(
         "message": _FORMULA_MESSAGE,
         "path": f"$.rows[{row_index}].{table.columns[column_index]}",
     }
+
+
+# --- the laboratory result observations the readers emit (B-025, B-030) -------
+
+
+def _results(name: str) -> Any:
+    return _convert(name).results
+
+
+def test_the_reference_export_becomes_one_laboratory_result_per_row() -> None:
+    """Every result column of one row at once, pointed at the row it was read from."""
+
+    result = _convert_reference("lis-export.csv")
+
+    assert len(result.results) == 2
+    first, second = result.results
+    assert first.result_id == "RES-CTP-I01-L0000"
+    assert second.result_id == "RES-CTP-I01-L0001"
+    assert first.analyte_code == "fixture-analyte-1"
+    assert first.value == "4.100"
+    assert first.unit == "fixture-unit-alpha"
+    assert first.order_id == "ORDER-CSYN-I01-A"
+    assert first.specimen_id == "CSYN-SPECIMEN-I01-A"
+    assert first.interval_status is CellStatus.TYPED
+    assert first.reference_interval == ReferenceInterval(
+        low="2.500",
+        low_inclusive=True,
+        high="7.500",
+        high_inclusive=True,
+        unit="fixture-unit-alpha",
+    )
+    assert first.abnormal_flag is AbnormalFlag.IN_RANGE
+    assert first.checkpoint is Checkpoint.LIS_RETURN
+    assert first.case_id == "CTP-I01"
+    assert first.mapping_version == LIS_PROFILE.version
+    assert first.evidence.source_pointer == "$.rows[0]"
+    assert first.evidence.source_sha256 == result.source_sha256
+    # The second row returned no interval and no flag, which is a fact about
+    # the export and not a value this reader may invent.
+    assert second.interval_status is CellStatus.ABSENT
+    assert second.reference_interval is None
+    assert second.flag_status is CellStatus.ABSENT
+    assert second.abnormal_flag is None
+
+
+def test_the_two_readers_emit_the_same_results_but_for_the_source_digest() -> None:
+    csv_result = _convert_reference("lis-export.csv")
+    json_result = _convert_reference("lis-export.json")
+    strip = lambda item: {  # noqa: E731
+        key: value for key, value in item.to_dict().items() if key != "evidence"
+    }
+    assert [strip(item) for item in csv_result.results] == [
+        strip(item) for item in json_result.results
+    ]
+
+
+def test_the_emitted_results_validate_against_their_own_published_contract() -> None:
+    document = _convert_reference("lis-export.json").result_set()
+    Draft202012Validator(_RESULT_SET_SCHEMA).validate(document)
+    assert document["schema_version"] == RESULT_SET_SCHEMA_VERSION
+    assert parse_result_set(document)
+
+
+def test_a_result_never_enters_the_observation_set_a_command_writes() -> None:
+    """A laboratory result is a separate observation kind, not a sixth concept."""
+
+    result = _convert_reference("lis-export.csv")
+    rendered = canonical_json(result.observation_set())
+    assert "fixture-analyte-1" not in rendered
+    assert "RES-CTP-I01-L0000" not in rendered
+    assert ImportWarningCode.RESULT_OBSERVATIONS_NOT_WRITTEN in result.warnings
+
+
+def test_a_partner_dialect_range_or_flag_is_carried_as_untyped_and_never_guessed() -> (
+    None
+):
+    """A-033: a cell in another dialect is not normalized to the closest one."""
+
+    results = _results("accept-crlf.csv")
+    assert len(results) == 1
+    assert results[0].interval_status is CellStatus.NOT_TYPED
+    assert results[0].reference_interval is None
+    assert results[0].flag_status is CellStatus.NOT_TYPED
+    assert results[0].abnormal_flag is None
+
+
+def test_a_table_with_only_some_result_columns_emits_no_result_and_says_so() -> None:
+    result = _convert("accept-empty-result-cells.csv")
+
+    assert result.results == ()
+    assert result.unobserved_cell_count == 4
+    assert ImportWarningCode.RESULT_COLUMNS_NOT_OBSERVED in result.warnings
+    assert ImportWarningCode.RESULT_OBSERVATIONS_NOT_WRITTEN not in result.warnings
+    assert result.result_set() == {
+        "results": [],
+        "schema_version": RESULT_SET_SCHEMA_VERSION,
+    }
+
+
+_RESULT_COLUMNS = (
+    "patient_id",
+    "name_to_use",
+    "analyte",
+    "value",
+    "unit",
+    "range",
+    "flag",
+    "order",
+    "specimen",
+)
+_COMPLETE_ROW = (
+    "CSYN-CTP-I01",
+    "CSYN-ASTER",
+    "fixture-analyte-1",
+    "4.100",
+    "fixture-unit-alpha",
+    "",
+    "",
+    "ORDER-CSYN-I01-A",
+    "CSYN-SPECIMEN-I01-A",
+)
+
+
+def test_a_row_missing_a_column_that_identifies_a_result_is_counted_not_invented() -> (
+    None
+):
+    """Both warnings, and a count of exactly the cells no result carried."""
+
+    without_a_unit = (*_COMPLETE_ROW[:4], "", *_COMPLETE_ROW[5:])
+    result = _convert_any(LisTable(_RESULT_COLUMNS, (_COMPLETE_ROW, without_a_unit)))
+
+    assert len(result.results) == 1
+    assert result.results[0].evidence.source_pointer == "$.rows[0]"
+    assert result.unobserved_cell_count == 7
+    assert set(result.warnings) == {
+        ImportWarningCode.MAPPING_PROFILE_NOT_BOUND,
+        ImportWarningCode.RESULT_COLUMNS_NOT_OBSERVED,
+        ImportWarningCode.RESULT_OBSERVATIONS_NOT_WRITTEN,
+    }
+
+
+def test_the_reader_cannot_build_a_result_its_own_contract_would_refuse() -> None:
+    """The re-validation is a guard, and this is why nothing reaches it.
+
+    Every cell grammar the reader holds a result cell to is the laboratory
+    family's own grammar rather than a second copy, and the longest case
+    identifier the case contract admits still makes a result identifier the
+    result contract admits. The document is re-validated anyway, so a future
+    divergence between the two is a refusal rather than an emitted result.
+    """
+
+    assert lis_module.RESULT_TOKEN_PATTERN is RESULT_TOKEN_PATTERN
+    assert lis_module.SYNTHETIC_IDENTIFIER_PATTERN is SYNTHETIC_IDENTIFIER_PATTERN
+    longest_case = "A" * 16
+    longest = f"RES-CTP-{longest_case}-L{LIS_PROFILE.max_rows - 1:04d}"
+    assert RESULT_ID_PATTERN.fullmatch(longest)
+    document = _convert_reference("lis-export.csv").result_set()
+    assert parse_result_set(document) == _convert_reference("lis-export.csv").results
