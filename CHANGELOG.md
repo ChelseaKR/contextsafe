@@ -410,6 +410,25 @@ rather than after it.
   receipt binding held leaves a new, empty log behind, which replays to the
   empty state.
 
+- **Two SHA-pinned actions that Dependabot had stopped offering were bumped by
+  hand.** `actions/checkout` v7.0.0 to v7.0.1 and `actions/setup-python` v6.3.0
+  to v7.0.0, across all five workflows, each SHA read from the upstream tag
+  rather than guessed and each version comment kept beside its pin. Closing a
+  Dependabot pull request tells it not to raise that version again, and #18 and
+  #19 were closed on 2026-08-16, so neither bump was ever coming back on its own
+  (#91). `docs/PR-TRIAGE.md` declined the setup-python major bump as an untested
+  workflow change; that caution is answered rather than ignored -- v7.0.0's one
+  breaking change is the removal of the `pip-install` input, and every
+  `setup-python` step here passes `python-version` and `check-latest` and
+  nothing else -- and it remains a change only a CI run can validate.
+
+  `tests/test_ci_workflows.py` pins what a checkout can check: every action is
+  pinned to a full commit SHA, every pin carries the version it is, and one
+  action is pinned to one SHA in every workflow, so a bump cannot half-happen.
+  Whether a pin is current against upstream is the one supply-chain fact no gate
+  here re-derives, because it needs a network call; the README's Security and
+  Supply-Chain row carries that disclosure.
+
 ### Fixed
 
 - **The receipt contract and the runtime disagreed about how long a source
@@ -550,6 +569,53 @@ rather than after it.
   nothing stood at exactly `MAX_ROWS`, so an off-by-one making the bound
   exclusive would have passed the whole suite. A test now builds exactly
   `MAX_ROWS` rows and asserts the profile parses.
+
+- **A dropped PyPI connection failed the merge gate with the same exit code as
+  a real advisory.** `make audit` was `uv run pip-audit ...`, and pip-audit
+  answers with two exit codes where every other gate here answers with three.
+  On pull request #61 the audit died with `ConnectionResetError(104,
+  'Connection reset by peer')`, `verify` went red on a change that touched no
+  dependency, and the same commit passed on a re-run (#74).
+
+  `make audit` runs `tools/audit_gate.py` now. Same pip-audit, same locked
+  environment, same `--skip-editable`, three states: 0 every non-editable
+  distribution was audited and none carried an advisory, 1 at least one did, 2
+  the advisory service did not answer, the report could not be read, or the run
+  audited nothing. The report decides, not the exit code and not a string match
+  on stderr -- pip-audit writes its JSON report when the audit completes and
+  writes none when it does not, which was measured rather than assumed, so a
+  parsed report naming an advisory is a finding whatever the process exited
+  with, and a non-zero exit over a report naming none is an unexplained
+  disagreement and therefore not a clean audit. A transient failure is retried
+  three times with doubling backoff before the gate answers 2; an advisory is
+  never retried, because asking the same service again is not a second opinion.
+
+  **This does not make `make verify` runnable offline, and #74's second half is
+  refused rather than quietly dropped.** An audit needs the advisory service.
+  Offline, `verify` now fails at `audit` with exit 2 and a sentence saying the
+  service was not reached, instead of exit 1 and a traceback. The alternative --
+  a stage that answers 0 without reaching the service -- is the defect the gate
+  exists to remove. `security.yml` runs `make audit` rather than its own copy of
+  the command line, so CI and a contributor run the identical gate. The three
+  states are driven by a stand-in auditor in `tests/test_audit_gate.py`, with no
+  network call anywhere: a test that reached PyPI would be the flake it tests
+  for. The "did not examine" case joins the one contract in
+  `tests/test_gate_exit_contract.py`, whose derivation would have failed had it
+  not. See
+  [ADR 0011](docs/adr/0011-dependency-audit-reachability-in-the-merge-gate.md).
+
+- **A documentation-only pull request skipped the four gates that exist to read
+  documentation.** `ci.yml` carried `paths-ignore` for `**.md`, `docs/**` and
+  `LICENSE`, and `make verify` runs `claims` (which re-derives the figures and
+  lists the README and `CONTRIBUTING.md` state), `publication-sweep`, `hygiene`
+  and `i18n`. So a README-only change could break `make claims` and merge green,
+  and the next code pull request inherited a failure it did not cause (#102).
+  The `paths-ignore` is gone from both triggers; `verify` runs on every pull
+  request and every push to `main`. `tests/test_ci_workflows.py` fails if one
+  comes back, in any workflow. This also removes the mechanical reason `verify`
+  could not be a required status check -- a required check that never runs
+  leaves a documentation-only pull request pending forever -- but **making it
+  required is a repository-settings change and has not been made** (#75).
 
 - **The full-history secret scan has been red on `main` since B-026 landed, on
   four false positives.** gitleaks' `generic-api-key` rule reads
@@ -1333,6 +1399,33 @@ rather than after it.
   claim, not a correctness claim; and the pack contract still pins the
   exact-only rule-set shape, so a 0.2.0 rule set is refused as a pack
   component by name (`incompatible_component`) until that contract moves.
+
+- **Mutation evidence now runs without anybody remembering to produce it.**
+  `make mutants` changes one operator or constant in a declared safety module
+  and requires the suite to fail, and ADR 0009 left it deliberately outside
+  `make verify` for runtime and outside CI entirely, which meant the only
+  evidence that the suite would *notice* a change rather than merely execute the
+  line was evidence somebody produced by hand (#80).
+  `.github/workflows/mutation.yml` runs it weekly and on any pull request
+  touching `src/contextsafe/**`, the suite, the gate, the `Makefile` or the
+  lock. It stays out of `make verify`.
+
+  The path filter is `src/contextsafe/**` rather than the safety modules by
+  name: that set is decided in the `Makefile`'s `SAFETY_MODULES`, and a filter
+  enumerating those files would be a second hand-maintained copy of it in a file
+  no gate reads. Broad is the fail-closed direction here -- it runs the gate on
+  changes that did not need it and never skips one that did. ADR 0008's exit
+  codes are not softened: the job has no `continue-on-error` and no `|| true`,
+  it always exits with the gate's own status, and it names which of the three
+  states happened first, so "the gate produced no evidence" does not have to be
+  inferred from a number. ADR 0009's caution against a workflow nobody has
+  watched execute is recorded there as still standing rather than waived:
+  its first real run is the evidence, not its existence.
+
+  What this does **not** do is widen the declared subset. `DECLARED_TARGETS` is
+  still three modules of the twenty-eight in `SAFETY_MODULES`, so the six that
+  the 2026-09 wave added still have no mutation evidence; widening it is a
+  runtime decision ADR 0009 leaves open and this change does not take.
 
 ## [0.1.0] - 2026-09-02
 
