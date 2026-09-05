@@ -59,11 +59,21 @@ tools/publication-exposure-check.sh \
   --output <a file to append the dated record to>
 ```
 
-Exit 0 is every content surface absent with its own positive control served; 1
-is still served; 2 is a run that established neither and must be written down as
-*not established* rather than as closed; 64 is a usage error. It reads status
-codes and never a response body, so running it cannot be the thing that copies
-the content anywhere.
+Exit 0 is every content surface absent, with the commit probe not resolving the
+ref either and each surface serving its own positive control; 1 is still served;
+2 is a run that established neither and must be written down as *not
+established* rather than as closed; 64 is a usage error, which is a refusal to
+start rather than a fourth answer. No probe of the subject reads a response
+body — each is a status probe discarded to `/dev/null` — so running it cannot be
+the thing that copies the content anywhere; one further request reads the
+repository's own metadata for the fork count, and that body is scanned for a
+single integer and never printed or recorded.
+
+A detail that decides whether the tool can ever say "gone": the commits endpoint
+answers **422**, not 404, for a ref it cannot resolve, so the commit probe is
+read in its own vocabulary. Reading 422 as "could not classify" would have made
+exit 0 unreachable against this host, and the closure criterion for option A
+below unsatisfiable.
 
 ### What is no longer on the table
 
@@ -81,8 +91,8 @@ nonbinary people in a health data extract; a pricing document is not method,
 locator, or instance material in that sense, so the policy's classes do not
 decide this and the policy's interim rule — Class 2 may not be published while
 either governance chair seat is unfilled — has nothing to bite on. Meanwhile
-[§7.3](../17-PUBLICATION-POLICY.md) already states this project's own position
-on removal: git history, forks, archives, and search caches persist, removal is
+[§7, item 3](../17-PUBLICATION-POLICY.md) already states this project's own
+position on removal: git history, forks, archives, and search caches persist, removal is
 a forward-looking signal rather than an undo, and this repository's audit is the
 example it cites. The policy prefers "leave and own it" and reserves removal for
 material whose continued presence is actively harmful.
@@ -120,9 +130,9 @@ The reasoning, so that disagreeing with it is cheap:
    change what she quotes or to treat them as a public list price. If they are
    stale, the exposure is a footnote. Either way, a purge request does not
    change which of those two is true.
-3. **This project's own policy already leans this way.** §7.3 prefers "leave and
-   own it" and reserves removal for material whose continued presence is
-   actively harmful. Nothing in §6 argues this content is that.
+3. **This project's own policy already leans this way.** §7's third item
+   prefers "leave and own it" and reserves removal for material whose continued
+   presence is actively harmful. Nothing in §6 argues this content is that.
 4. **An accepted exposure recorded as accepted is consistent with everything
    else here.** A repository whose gates exist to say what they did not examine
    should be able to say "this is public, deliberately". It is the "closed" that
@@ -178,7 +188,8 @@ would put the content in a second place.
 
 - **If A is chosen:** the request above is sent, the outcome is recorded with a
   date, and `tools/publication-exposure-check.sh` is re-run afterwards — a
-  purge is not closed until a run says `NOT SERVED` with its controls served.
+  purge is not closed until a run says `NOT SERVED`, with its controls served
+  and its commit probe no longer resolving the ref.
   §6 and row 9 of the technical-gates table are updated with that dated
   verdict, and this record is marked accepted, naming A.
 - **If B is chosen:** §6 and row 9 gain a dated *accepted* line, the finding

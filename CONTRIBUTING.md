@@ -45,6 +45,10 @@ three because two is how a gate lies: **0** it examined what it claims to and
 found nothing, **1** it examined and found something, **2** it did not examine,
 so it has no answer. A gate that cannot run fails differently from a gate that
 failed. See [ADR 0008](docs/adr/0008-one-exit-code-contract-for-every-gate.md).
+Three states, not necessarily three codes: a program that takes arguments may
+also refuse to start, and those exit **64** — the CLI's `EXIT_USAGE_ERROR` — for
+a usage error. That is not a fourth answer about anything examined; it says the
+run never began, which is why it is kept out of the three.
 
 A change merges when the full gate is green. Reproduce it locally with:
 

@@ -744,6 +744,19 @@ rather than after it.
   commit names in §6 are unchanged, no id the audit did not already print was
   added, and none of the audit's findings was softened.
 
+  Two further stale claims in the same section, both found in review. The
+  recommendation at the end of §6 still argued for its option C on the grounds
+  that the repository had "zero forks, zero stars, and no published tag": the
+  host reported one fork and one star on 2026-09-05, and option C was retired by
+  publication. It is annotated in place and left standing, not edited, because
+  the audit's reasoning is what a reader arriving there needs to see. And the
+  correction itself is now pinned: `make claims` fails if
+  `docs/PUBLICATION-READINESS.md` loses the 2026-09-05 update or if §6's line
+  stops reading `MAINTAINER'S CALL, open`, which is the mechanism this
+  repository already had for a correction that must travel with the text it
+  corrects, and which nothing was holding this one to. The silent reversion that
+  produced the original defect is now a gate failure.
+
 - **The summariser refused, in whole and forever, any log two commands had
   written at once.** `append_event` derives a record's sequence by counting the
   file's lines and then appending, with no lock between the two, so commands
@@ -1165,9 +1178,12 @@ rather than after it.
 
   The script probes the three surfaces that serve the content — the contents
   API, the web blob view, the raw host — unauthenticated, because "served
-  without authentication" is the exposure being measured. It reads status codes
-  only and never a response body, so running it cannot be the thing that copies
-  the content somewhere new. Each surface carries a **positive control** in the
+  without authentication" is the exposure being measured. No probe of the
+  subject or of a control reads a response body: each is a status probe
+  discarded to `/dev/null`, so running it cannot be the thing that copies the
+  content somewhere new. One request in the run is not a probe — the
+  repository's own metadata, read for the fork count — and that body is scanned
+  for a single integer and never printed, stored, or put in the record. Each surface carries a **positive control** in the
   same run against a ref and path that must be served, because a 404 is also
   what a private, renamed, deleted or rate-limited repository looks like, and a
   negative subject result means "removed" only where its surface proved it was
@@ -1190,13 +1206,39 @@ rather than after it.
   script under `tools/` joins that file or the suite is a lie about its own
   coverage; the checker's "nothing was asked of the host" state is driven there
   with no `curl` on `PATH`. Its other states are
-  `tests/test_publication_exposure_check.py`, twenty-one cases driven through a
+  `tests/test_publication_exposure_check.py`, twenty-five cases driven through a
   stand-in `curl`, so the suite reaches the answers a live host will not produce
   on demand — a rate limit, an outage, a redirect, a control that stopped
   answering, a commit that outlived its path — and never touches the network.
-  It also asserts what the checker *asked for*: every status probe carries
-  `-o /dev/null` and no follow-redirects flag, so the property that running it
-  cannot copy the content anywhere is checked rather than described.
+  It also asserts what the checker *asked for*: the exact set of URLs it built,
+  which is how "the ref and path have no defaults" is checked rather than
+  grepped for; that every status probe carries `-o /dev/null` and no
+  follow-redirects flag; and that the one request reading a body is the
+  repository metadata call and nothing else.
+
+  Two defects were found in review before merge, and both were the checker's own
+  failure mode pointed at itself. **The clean verdict was unreachable against the
+  real host.** The commit probe was classified with the content surfaces'
+  vocabulary, and `api.github.com/repos/OWNER/NAME/commits/REF` answers **422**,
+  not 404, for a ref it cannot resolve — a 40-hex id the repository does not
+  have, a one-character typo of one it does, a branch that does not exist — while
+  the three content surfaces answer 404. So the single state a purge is meant to
+  produce came back `INCONCLUSIVE` with a diagnostic asserting that the commit
+  resolved, and exit 0 could not happen at all: ADR 0012's closure criterion for
+  a purge was unsatisfiable by the tool that criterion names. The commit probe
+  now has its own predicate (422, 404 and 410 do not resolve; 000, 403, 429 and
+  5xx say nothing and stay inconclusive) and each branch reports the status it
+  observed instead of asserting a state. **And a failed `--output` write
+  downgraded a found exposure.** The write error exited 2 unconditionally, so a
+  run in which a surface answered 200 printed `verdict: STILL SERVED` and then
+  told its caller "could not establish" — over an exposure it had measured, in
+  the one direction this whole tool exists to prevent. A write failure is now a
+  warning that cannot move a verdict a served surface already settled, and the
+  record is written before it is printed so the two never disagree. Both states
+  are covered by tests watched to fail without the fix. Two smaller corrections
+  with them: the fork-count parse no longer pipes into `head` under `pipefail`,
+  where a large enough body could have aborted the run between the probes and
+  the record, and `--help` exits 0 on stdout rather than 64.
 
 - **[ADR 0016](docs/adr/0016-removed-document-still-served.md), the decision
   that exposure puts to the maintainer, laid out and left unmade (issue #92).**

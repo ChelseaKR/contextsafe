@@ -588,6 +588,26 @@ def test_removing_the_adr_runtime_correction_is_a_finding(repo: Path) -> None:
     assert {f.where for f in findings} == {ADR}
 
 
+def test_reverting_section_six_to_closed_is_a_finding(repo: Path) -> None:
+    """The exact silent reversion that produced the original defect.
+
+    Section 6's line said "Closed since" over content the host was still
+    serving, and it survived a week because nothing in the tree read it. The
+    corrected wording is pinned, so putting the old claim back fails the gate
+    instead of waiting for the next reader.
+    """
+
+    _edit(
+        repo,
+        "docs/PUBLICATION-READINESS.md",
+        "**Docs — MAINTAINER'S CALL, open.**",
+        "**Docs — MAINTAINER'S CALL. Closed since: see the update at the top.**",
+    )
+    findings = gate.run_gate(repo)
+    assert _checks(findings) == {"required-note"}
+    assert "MAINTAINER'S CALL, open" in findings[0].detail
+
+
 # --- iteration-status -------------------------------------------------------
 
 

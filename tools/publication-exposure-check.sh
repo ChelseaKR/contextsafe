@@ -22,9 +22,15 @@
 # The audit already prints the ids by which the blob is addressed, and says that
 # printing them is itself part of the exposure surface. This script does not
 # restate them: the operator reads them out of section 6 and passes them in, so
-# that the checker adds no second pointer to anything. It never prints, stores,
-# or transmits any response body either — only HTTP status codes, the ref and
-# path it was handed, and a verdict.
+# that the checker adds no second pointer to anything.
+#
+# No probe reads a response body. Every probe of the subject and of a control is
+# a status probe under `-o /dev/null`, so running this cannot be the thing that
+# copies the exposed content anywhere. One request in the run is not a probe:
+# the repository's own metadata is read for the fork count, and that body is
+# scanned for a single integer and never printed, stored, or put in the record.
+# What leaves this process is HTTP status codes, the ref and path it was handed,
+# a fork count, and a verdict.
 #
 # ---------------------------------------------------------------------------
 # What it probes, and why a 404 alone proves nothing
@@ -53,7 +59,10 @@
 # request shape against a ref and path that must be served (the default branch
 # and `README.md`). A negative subject result means "removed" only when its
 # surface answered a control correctly in the same run. A failed control is not
-# a clean result and not a finding; it is exit 2.
+# a clean result and not a finding; it is exit 2. What a control establishes is
+# narrow and worth stating: the surface was answering. It runs against a
+# different ref and a different path, so it says nothing about whether the
+# subject's ref ever existed — that is the commit probe's job.
 #
 # ---------------------------------------------------------------------------
 # Usage
@@ -69,14 +78,22 @@
 #     --control-path PATH  path for the positive controls (default: README.md).
 #     --output FILE        append the record to FILE as well as printing it.
 #
-# Exit 0 when every content surface answered "absent", the commit answered
-# "absent" with them, and every control answered "served"; 1 when any content
-# surface found the document still served; 2 when the run could not establish
-# either — curl missing, a control that did not answer, a status the script will
-# not classify, a redirect it will not follow, a commit that outlived the path,
-# or a record it was asked to write and could not. That is the three-state contract
-# every gate in this repository uses (ADR 0008): "the probe could not look" can
-# never be read as "the content is gone". Exit 64 is a usage error.
+# Exit 0 when every content surface answered "absent", the commit probe did not
+# resolve the ref either, and every control answered "served"; 1 when any
+# content surface found the document still served; 2 when the run could not
+# establish either — curl missing, a control that did not answer, a status the
+# script will not classify, a redirect it will not follow, a commit that
+# outlived the path, a commit probe that said nothing either way, or a record it
+# was asked to write and could not. A finding outranks every one of those: a
+# `--output` write that fails on a run in which a surface answered 200 is a
+# warning printed beside exit 1, never a downgrade of a measured exposure to
+# "could not establish". That is the three-state contract every gate in this
+# repository uses (ADR 0008): "the probe could not look" can never be read as
+# "the content is gone".
+#
+# Exit 64 is a usage error. It is a fourth code rather than a fourth state
+# because it is not an answer about the host at all: the run never started.
+# `--help` prints this usage on stdout and exits 0.
 #
 # ---------------------------------------------------------------------------
 # What exit 0 does not mean
@@ -99,13 +116,25 @@ control_ref="HEAD"
 control_path="README.md"
 output=""
 
+usage_lines() {
+  echo "usage: tools/publication-exposure-check.sh --ref REF --path PATH"
+  echo "         [--repo OWNER/NAME] [--control-ref REF] [--control-path PATH]"
+  echo "         [--output FILE]"
+  echo "  The ref and path are deliberately not defaulted: read them from"
+  echo "  docs/PUBLICATION-READINESS.md section 6 rather than from this file."
+}
+
+# 64 is "you asked wrongly", and it goes to stderr because it accompanies a
+# refusal. A reader who asked for the usage got what they asked for, so that is
+# stdout and exit 0: help is not a failure of anything.
 usage() {
-  echo "usage: tools/publication-exposure-check.sh --ref REF --path PATH" >&2
-  echo "         [--repo OWNER/NAME] [--control-ref REF] [--control-path PATH]" >&2
-  echo "         [--output FILE]" >&2
-  echo "  The ref and path are deliberately not defaulted: read them from" >&2
-  echo "  docs/PUBLICATION-READINESS.md section 6 rather than from this file." >&2
+  usage_lines >&2
   exit 64
+}
+
+show_help() {
+  usage_lines
+  exit 0
 }
 
 while [ "$#" -gt 0 ]; do
@@ -116,7 +145,7 @@ while [ "$#" -gt 0 ]; do
     --control-ref) [ "$#" -ge 2 ] || usage; control_ref="$2"; shift 2 ;;
     --control-path) [ "$#" -ge 2 ] || usage; control_path="$2"; shift 2 ;;
     --output) [ "$#" -ge 2 ] || usage; output="$2"; shift 2 ;;
-    -h|--help) usage ;;
+    -h|--help) show_help ;;
     *) echo "publication-exposure-check: unknown argument '$1'." >&2; usage ;;
   esac
 done
@@ -176,6 +205,24 @@ classify() {
   esac
 }
 
+# The commit endpoint answers in a different vocabulary from the content
+# surfaces, and it has to be read in that vocabulary rather than in `classify`'s.
+# `/repos/OWNER/NAME/commits/REF` reports **422** — not 404 — for a ref it cannot
+# resolve: a 40-hex id that is not in the repository, a one-character typo of one
+# that is, a branch that does not exist. Reading 422 as "unknown" would file the
+# single state a purge is meant to produce under "could not establish", so exit 0
+# would be unreachable against the real host and the clean verdict would be
+# decorative — a check whose pass cannot happen is a check nobody can close a
+# finding with. A 404 here is the repository itself being unavailable, which the
+# content controls are what catch.
+classify_commit() {
+  case "$1" in
+    200) printf 'resolves' ;;
+    404|410|422) printf 'absent' ;;
+    *) printf 'unknown' ;;
+  esac
+}
+
 api="https://api.github.com/repos/${repo}"
 web="https://github.com/${repo}"
 raw="https://raw.githubusercontent.com/${repo}"
@@ -193,14 +240,17 @@ control_raw="$(probe "${raw}/${control_ref}/${control_path}")"
 # does not follow the content into somebody else's copy. Reported, never part of
 # the verdict, and "unknown" when the metadata could not be read — a number this
 # script guessed would be worse than no number.
+#
+# This is the one request that reads a body, and it is repository metadata
+# rather than the subject. It is matched in memory rather than piped through
+# `sed | head`: under `set -o pipefail` a reader that exits before the writer has
+# finished makes the pipeline non-zero, and `set -e` would then abort the run
+# after the probes were made and before the record was printed.
 forks="unknown"
 repo_meta="$(curl -sS --max-time "$PROBE_TIMEOUT" --retry 2 \
   -H 'Accept: application/vnd.github+json' "${api}" 2>/dev/null)" || repo_meta=""
-if [ -n "$repo_meta" ]; then
-  parsed="$(printf '%s' "$repo_meta" | tr ',' '\n' \
-    | sed -n 's/.*"forks_count"[[:space:]]*:[[:space:]]*\([0-9][0-9]*\).*/\1/p' \
-    | head -1)"
-  [ -z "$parsed" ] || forks="$parsed"
+if [[ "$repo_meta" =~ \"forks_count\"[[:space:]]*:[[:space:]]*([0-9]+) ]]; then
+  forks="${BASH_REMATCH[1]}"
 fi
 
 checked_at="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
@@ -238,12 +288,22 @@ done
 # purge did not reach it or that the path being probed is not the path in the
 # object. Neither of those is "gone", and the second is the likelier operator
 # error: a mistyped path 404s on all three surfaces from a repository that is
-# serving everything else perfectly.
-if [ "$exit_code" -eq 0 ] && [ "$(classify "$subject_commit")" != "absent" ]; then
-  inconclusive "the commit still resolves while the path does not; check the path against section 6"
+# serving everything else perfectly. Each branch reports the status it saw
+# rather than asserting a state, because the two branches are different
+# situations and the operator has to be sent to the right one.
+if [ "$exit_code" -eq 0 ]; then
+  case "$(classify_commit "$subject_commit")" in
+    resolves)
+      inconclusive "the commit probe answered ${subject_commit}, so the commit object still resolves while no content surface served the path; either a purge did not reach it, or the path being probed is not the path inside it — check the path against section 6"
+      ;;
+    unknown)
+      inconclusive "the commit probe answered ${subject_commit}, which corroborates nothing either way, so the three absences stand uncorroborated"
+      ;;
+  esac
 fi
 
-record="$(cat <<RECORD
+build_record() {
+  cat <<RECORD
 publication-exposure-check: record (version ${RECORD_VERSION})
   checked_at_utc:   ${checked_at}
   repo:             ${repo}
@@ -252,7 +312,7 @@ publication-exposure-check: record (version ${RECORD_VERSION})
   subject_api:      ${subject_api} ($(classify "$subject_api"))
   subject_web:      ${subject_web} ($(classify "$subject_web"))
   subject_raw:      ${subject_raw} ($(classify "$subject_raw"))
-  subject_commit:   ${subject_commit} ($(classify "$subject_commit"))
+  subject_commit:   ${subject_commit} ($(classify_commit "$subject_commit"))
   control_ref:      ${control_ref}
   control_path:     ${control_path}
   control_api:      ${control_api} ($(classify "$control_api"))
@@ -261,17 +321,28 @@ publication-exposure-check: record (version ${RECORD_VERSION})
   forks_count:      ${forks}
   verdict:          ${verdict}
 RECORD
-)"
+}
 
-printf '%s\n' "$record"
-
+# The file is written before the record is printed, because a write that fails
+# can still change the verdict: a run nobody can date establishes nothing
+# citable. What it may never change is a finding. `inconclusive` refuses to move
+# a verdict a served surface already settled, so a failed write on a run that
+# found the content is a warning beside exit 1 and `STILL SERVED` — the one
+# result this script exists to avoid softening.
+#
+# The write is one simple command rather than a redirected group, because bash
+# reports a failed redirection on `{ ...; } >>file` and still hands back the
+# status of the last command inside it: the group form makes an unwritable
+# `--output` look like a successful write.
 if [ -n "$output" ]; then
-  if ! printf '%s\n\n' "$record" >>"$output"; then
+  if ! printf '%s\n\n' "$(build_record)" >>"$output"; then
     echo "publication-exposure-check: could not append the record to '${output}'." >&2
     echo "  The probe ran; no dated record was written, so nothing here is citable." >&2
-    exit 2
+    inconclusive "the dated record could not be appended to the file it was given"
   fi
 fi
+
+build_record
 
 case "$exit_code" in
   1)
@@ -288,8 +359,12 @@ case "$exit_code" in
     ;;
   *)
     echo "publication-exposure-check: NOT SERVED on these surfaces as of ${checked_at}." >&2
-    echo "  Every subject probe was absent and every control was served, so the" >&2
-    echo "  negative is a measurement rather than an outage." >&2
+    echo "  Every subject probe was absent, the commit probe did not resolve the" >&2
+    echo "  ref either, and each surface served its own positive control in the" >&2
+    echo "  same run, so the negative is a measurement rather than an outage." >&2
+    echo "  The controls ran against a different ref and path: what they" >&2
+    echo "  establish is that these surfaces were answering, not anything about" >&2
+    echo "  the subject's ref." >&2
     echo "  It does not reach: the ${forks} fork(s) the host reports, any clone" >&2
     echo "  already taken, search or proxy caches, mirrors, or web archives." >&2
     echo "  It ages immediately. Cite the date above, or re-run it." >&2

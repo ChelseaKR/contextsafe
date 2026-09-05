@@ -180,7 +180,36 @@ def test_a_commit_that_outlived_the_path_is_not_a_clean_result(tmp_path: Path) -
 
     result = _run(tmp_path, commit="200")
     assert result.returncode == UNAVAILABLE, result.stdout
-    assert "the commit still resolves while the path does not" in result.stderr
+    assert "the commit probe answered 200" in result.stderr
+    assert "check the path against section 6" in result.stderr
+
+
+def test_the_status_a_host_gives_an_unresolvable_ref_is_absence(tmp_path: Path) -> None:
+    """422, not 404, is what the commits endpoint says about a ref it cannot find.
+
+    This is the state a purge is supposed to produce, and it is the only state
+    in which exit 0 may be reached against the real host: `/commits/REF` answers
+    422 for a 40-hex id the repository does not have, for a typo of one it does,
+    and for a branch that does not exist, while the three content surfaces
+    answer 404. A checker that read 422 as "could not classify" could never
+    print `NOT SERVED`, so the verdict ADR 0012 makes option A's closure
+    criterion would be unreachable and every purge would read as inconclusive.
+    """
+
+    result = _run(tmp_path, commit="422")
+    assert result.returncode == CLEAN, result.stderr
+    assert "verdict:          NOT SERVED" in result.stdout
+    assert "subject_commit:   422 (absent)" in result.stdout
+
+
+def test_a_commit_probe_that_says_nothing_is_not_a_clean_result(tmp_path: Path) -> None:
+    """A rate limit on the corroborating probe corroborates nothing."""
+
+    result = _run(tmp_path, commit="403")
+    assert result.returncode == UNAVAILABLE, result.stdout
+    assert "verdict:          INCONCLUSIVE" in result.stdout
+    assert "subject_commit:   403 (unknown)" in result.stdout
+    assert "the commit probe answered 403" in result.stderr
 
 
 @pytest.mark.parametrize("code", ["403", "429", "500", "000", "301"])
@@ -212,8 +241,14 @@ def test_no_probe_at_all_is_not_a_clean_result(tmp_path: Path) -> None:
     assert "not evidence the content is gone" in result.stderr
 
 
-def test_the_probe_never_asks_for_a_response_body(tmp_path: Path) -> None:
-    """Running the checker may not be the thing that copies the content."""
+def test_no_probe_of_the_subject_asks_for_a_response_body(tmp_path: Path) -> None:
+    """Running the checker may not be the thing that copies the content.
+
+    Seven of the eight requests are status probes and every one of them is
+    discarded to `/dev/null`; the eighth reads a body, and this pins that it is
+    the repository metadata request and nothing else, because "never a response
+    body" said of the whole run would be a claim the run does not keep.
+    """
 
     _run(tmp_path)
     argv = (tmp_path / "curl-argv.log").read_text(encoding="utf-8").splitlines()
@@ -222,6 +257,12 @@ def test_the_probe_never_asks_for_a_response_body(tmp_path: Path) -> None:
     for line in status_probes:
         assert "-o /dev/null" in line
         assert " -L" not in f" {line} "
+        assert "--location" not in line
+
+    body_reads = [line for line in argv if " -w " not in f" {line} "]
+    assert [line.rsplit(" ", 1)[-1] for line in body_reads] == [
+        f"https://api.github.com/repos/{REPO}"
+    ]
 
 
 def test_the_record_is_dated_and_appends(tmp_path: Path) -> None:
@@ -244,6 +285,27 @@ def test_a_record_that_could_not_be_written_is_not_a_result(tmp_path: Path) -> N
     result = _run(tmp_path, "--output", str(unwritable))
     assert result.returncode == UNAVAILABLE
     assert "nothing here is citable" in result.stderr
+    assert "verdict:          INCONCLUSIVE" in result.stdout
+
+
+def test_a_record_that_could_not_be_written_never_softens_a_finding(
+    tmp_path: Path,
+) -> None:
+    """A file the operator could not write is not evidence about the host.
+
+    The write failure is real and is reported, but downgrading a surface that
+    answered 200 to "could not establish" would be this repository's named
+    defect with its dangerous polarity: a caller branching on the exit code —
+    ADR 0012 has the maintainer paste the verdict beside the audit entry — would
+    read "not established" over an exposure the run measured.
+    """
+
+    unwritable = tmp_path / "no-such-directory" / "record.txt"
+    result = _run(tmp_path, "--output", str(unwritable), subject="200", commit="200")
+    assert result.returncode == FOUND, result.stdout
+    assert "verdict:          STILL SERVED" in result.stdout
+    assert "could not append the record" in result.stderr
+    assert "STILL SERVED as of" in result.stderr
 
 
 def test_the_fork_count_is_reported_and_never_decides(tmp_path: Path) -> None:
@@ -290,10 +352,48 @@ def test_a_usage_error_is_its_own_exit_code(tmp_path: Path, argv: list[str]) -> 
     assert result.returncode == USAGE, result.stdout
 
 
-def test_the_ref_and_path_have_no_defaults(tmp_path: Path) -> None:
-    """The checker adds no second pointer to what the audit already prints."""
+def test_it_probes_only_the_ref_and_path_it_was_handed(tmp_path: Path) -> None:
+    """The checker adds no second pointer to what the audit already prints.
 
-    source = CHECKER.read_text(encoding="utf-8")
-    assert 'ref=""' in source
-    assert 'path=""' in source
-    assert "11-GTM" not in source
+    Asserted over the URLs it actually built rather than over the source: a ref
+    or path defaulted under any spelling would appear here as a request nobody
+    asked for, and a refactor of the variable names would not hide it.
+    """
+
+    _run(tmp_path)
+    argv = (tmp_path / "curl-argv.log").read_text(encoding="utf-8").splitlines()
+    urls = {line.rsplit(" ", 1)[-1] for line in argv}
+    assert urls == {
+        f"https://api.github.com/repos/{REPO}/contents/{SUBJECT_PATH}?ref={SUBJECT_REF}",
+        f"https://github.com/{REPO}/blob/{SUBJECT_REF}/{SUBJECT_PATH}",
+        f"https://raw.githubusercontent.com/{REPO}/{SUBJECT_REF}/{SUBJECT_PATH}",
+        f"https://api.github.com/repos/{REPO}/commits/{SUBJECT_REF}",
+        f"https://api.github.com/repos/{REPO}/contents/{CONTROL_PATH}"
+        f"?ref={CONTROL_REF}",
+        f"https://github.com/{REPO}/blob/{CONTROL_REF}/{CONTROL_PATH}",
+        f"https://raw.githubusercontent.com/{REPO}/{CONTROL_REF}/{CONTROL_PATH}",
+        f"https://api.github.com/repos/{REPO}",
+    }
+    assert "11-GTM" not in CHECKER.read_text(encoding="utf-8")
+
+
+def test_asking_for_the_usage_is_not_a_failure(tmp_path: Path) -> None:
+    """64 is a refusal to run; a reader who asked for the usage got it."""
+
+    result = subprocess.run(
+        [BASH, str(CHECKER), "--help"],
+        cwd=tmp_path,
+        capture_output=True,
+        text=True,
+        check=False,
+        env=_stub_environment(
+            tmp_path,
+            subject="404",
+            commit="404",
+            control="200",
+            metadata="",
+            with_curl=True,
+        ),
+    )
+    assert result.returncode == CLEAN, result.stderr
+    assert "usage: tools/publication-exposure-check.sh" in result.stdout

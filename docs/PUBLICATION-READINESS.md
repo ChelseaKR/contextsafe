@@ -567,6 +567,18 @@ negotiating floor for free, and option C is the cheapest of the rewriting
 options because this repository has almost nothing external to break: zero
 forks, zero stars, and no published tag.
 
+**Superseded 2026-09-05, and left in place rather than edited, because the
+recommendation above is where the audit's reasoning is and hiding it would
+teach nobody.** Two of its premises stopped being true when the repository was
+published: the host reported one fork and one star on 2026-09-05, not zero of
+either, and only the "no published tag" clause still holds. Option C is retired
+with option B of that table — the history is public now, a rewrite does not
+reach objects the host serves by explicit id, and a fresh repository does not
+un-publish the one that exists — so the live pair is the one in
+[ADR 0012](adr/0012-removed-document-still-served.md): ask the host to purge, or
+accept the content as public. That record supersedes this paragraph and is
+itself undecided.
+
 ### §7 Clean-clone verification
 
 From a fresh clone of `main` at `09e0317`, in a directory unrelated to the

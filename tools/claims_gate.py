@@ -929,6 +929,21 @@ REQUIRED_NOTES: tuple[tuple[str, str, str], ...] = (
         "re-derives it, so the dated correction is what keeps a reader from "
         "inheriting the old ratio",
     ),
+    (
+        "docs/PUBLICATION-READINESS.md",
+        "Update, 2026-09-05",
+        "section 6's own line called itself closed for a week while the content was "
+        "served, because the 2026-08-29 correction lived four hundred lines above it "
+        "and nothing read either. The re-measurement that corrected it is dated and "
+        "has to stay with the finding",
+    ),
+    (
+        "docs/PUBLICATION-READINESS.md",
+        "**Docs — MAINTAINER'S CALL, open.**",
+        "this is the line that read 'Closed since' over a live exposure. Nothing "
+        "derives its status, so pinning the corrected wording is what stops the "
+        "silent reversion that produced the original defect",
+    ),
 )
 
 
