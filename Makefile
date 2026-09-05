@@ -1,6 +1,6 @@
-.PHONY: a11y a11y-full a11y-install audit claims format format-fix hygiene i18n lint mutants publication-sweep scope secret-scan sync test typecheck verify
+.PHONY: a11y a11y-full a11y-install audit claims format format-fix hygiene i18n lint mutants package publication-sweep scope secret-scan sync test typecheck verify
 
-SAFETY_MODULES := src/contextsafe/identifiers.py,src/contextsafe/models.py,src/contextsafe/validation.py,src/contextsafe/evaluator.py,src/contextsafe/receipt.py,src/contextsafe/contract_validation.py,src/contextsafe/jsonio.py,src/contextsafe/pack.py,src/contextsafe/plan.py,src/contextsafe/evidence.py,src/contextsafe/preflight.py,src/contextsafe/evidence_store.py,src/contextsafe/safe_value.py,src/contextsafe/diagnostics.py,src/contextsafe/eventlog.py,src/contextsafe/importers/__init__.py,src/contextsafe/importers/base.py,src/contextsafe/importers/canonical_json.py,src/contextsafe/importers/fhir_r4_json.py,src/contextsafe/importers/hl7v2_er7.py,src/contextsafe/importers/lis.py,src/contextsafe/importers/lis_csv.py,src/contextsafe/importers/mapping.py,src/contextsafe/mapping_profile.py,src/contextsafe/divergence.py
+SAFETY_MODULES := src/contextsafe/identifiers.py,src/contextsafe/models.py,src/contextsafe/validation.py,src/contextsafe/evaluator.py,src/contextsafe/receipt.py,src/contextsafe/contract_validation.py,src/contextsafe/jsonio.py,src/contextsafe/pack.py,src/contextsafe/plan.py,src/contextsafe/evidence.py,src/contextsafe/preflight.py,src/contextsafe/evidence_store.py,src/contextsafe/safe_value.py,src/contextsafe/diagnostics.py,src/contextsafe/eventlog.py,src/contextsafe/importers/__init__.py,src/contextsafe/importers/base.py,src/contextsafe/importers/canonical_json.py,src/contextsafe/importers/fhir_r4_json.py,src/contextsafe/importers/hl7v2_er7.py,src/contextsafe/importers/lis.py,src/contextsafe/importers/lis_csv.py,src/contextsafe/importers/mapping.py,src/contextsafe/mapping_profile.py,src/contextsafe/divergence.py,src/contextsafe/html_receipt.py,src/contextsafe/receipt_delta.py,src/contextsafe/review.py
 
 verify: sync lint format typecheck test audit hygiene scope publication-sweep i18n a11y claims
 
@@ -87,6 +87,22 @@ a11y-install:
 # it exits 1 on a finding and 2 when it could not examine anything.
 hygiene:
 	uv run python tools/hygiene_gate.py
+
+# The artifacts a release would ship, built the way release.yml and package.yml
+# build them: a clean dist/, `uv build` for the sdist and wheel, a CycloneDX
+# SBOM exported from the locked graph (`--locked` fails on drift; `--no-dev`
+# because the artifact carries no dev tool; the graph is the project alone,
+# since `[project] dependencies` is empty), and the wheel's contents listed so
+# a reviewer can see what shipped -- the reference fixtures were missing from it
+# until 2026-09-02 and nothing showed that. Not a gate and not in `verify`: it
+# builds, it does not judge. The judgment is `tools/fresh_install_gate.py`,
+# which package.yml runs against this output on Ubuntu, macOS and Windows and a
+# maintainer runs with `uv run python tools/fresh_install_gate.py --dist dist`.
+package:
+	rm -rf dist
+	uv build --out-dir dist
+	uv export --locked --no-dev --format cyclonedx1.5 --preview-features sbom-export --output-file dist/contextsafe-sbom.cdx.json
+	uv run python -m zipfile -l dist/*.whl
 
 # Every other gate can say "I looked and found nothing" and "I could not look".
 # None of them can say "nobody ever pointed me at that tree", which is what

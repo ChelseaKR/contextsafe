@@ -70,8 +70,8 @@ from the `verify` target in the `Makefile` and fails when they disagree.
 | Hygiene | `make hygiene` | no TODO/FIXME/HACK in tracked files under `src`/`tests`/`tools`; no stray tool config within two path segments of the root. Exit 1 on a finding, exit 2 when it could not examine anything, and the clean line says how many files it read and how many exemptions it honored. |
 | Scope | `make scope` | every tracked Python file is inside the trees each analysis claims, read from `[tool.mypy] files`, `[tool.coverage.run] source`, and the marker scan's own `MARKER_ROOTS`. A file nobody claims, a claim with nothing under it, and a declared exception that excuses nothing are each a finding; exit 2 when a claim cannot be read. |
 | Publication sweep | `make publication-sweep` | nothing unpublishable in tracked files: no personal filesystem path, no internal hostname, no pointer to a repository a reader cannot open, no relative link escaping the repository, and no source it listed and then could not read. Add `publication-sweep: allow` to a line only with a reason in review. |
-| Internationalization | `make i18n` | catalog parity, placeholder parity, message quality, and review consistency across the shipped locale catalogs; a machine-translated string may never reach a surface claiming human review. Fails rather than passing when it examined no catalog. |
-| Accessibility | `make a11y` | renders the receipt page in every shipped locale and checks structural validity, WCAG 2.2 contrast computed from the stylesheet, no colour-only status encoding, and print. Fails rather than passing when it examined no page. `make a11y-full` adds axe-core and is a separate CI job because it needs the node harness. |
+| Internationalization | `make i18n` | catalog parity, placeholder parity, message quality, and review consistency across the shipped locale catalogs; a machine-translated string may never reach a surface claiming human review; no hardcoded string on the pseudolocalized page, and the pseudolocale itself measured for expansion, diacritics, and placeholder parity. Fails rather than passing when it examined no catalog. |
+| Accessibility | `make a11y` | renders the receipt page in every shipped locale and checks structural validity, WCAG 2.2 contrast computed from the stylesheet, no colour-only status encoding, print (nothing hidden, headers repeating, no finding orphaned from its reason), and evidence minimization (only catalog text and pointer-named receipt values on the page, against a payload hash it recomputes). Fails rather than passing when it examined no page. `make a11y-full` adds axe-core and is a separate CI job because it needs the node harness. |
 | Claims | `make claims` | figures and lists the documents state, re-derived from the repository: this table against the `Makefile`, the ADR index against `docs/adr/`, the coverage floors against `make test`, the contract count against `schemas/`, and the standards table against the gates `verify` actually runs. Prints what it cannot see on every run. |
 
 A marker the hygiene gate must not report — the rule naming the words it bans is
@@ -88,6 +88,17 @@ minutes rather than a second:
 | --- | --- | --- |
 | Mutation evidence | `make mutants` | changes one operator or constant in a declared safety module and requires the suite to fail. Branch coverage says a line ran; this says a change to it would be noticed. Stdlib only, writes nothing into the working tree, and takes about two minutes, which is why it is not in `verify`. Exit 1 on a survivor, exit 2 when it produced no evidence. See [ADR 0009](docs/adr/0009-mutation-evidence-over-declared-safety-modules.md). |
 | Full-history secret scan | `make secret-scan` | gitleaks over every ref, every object in the object database (including unreachable ones and every commit message), and the working tree. Needs gitleaks 8.30.1 on `PATH` (`brew install gitleaks`); CI and the release pipeline run this same target. Exit 1 on a finding; exit 2 when gitleaks is absent, is not the pinned version, cannot read an object it enumerated, or enumerated zero blobs. Its three states are covered by `tests/test_gate_exit_contract.py`, which drives it with a stand-in scanner and therefore runs without gitleaks installed. |
+
+`make package` is not a gate: it builds the sdist and wheel, exports the
+CycloneDX SBOM from the locked graph, and lists the wheel's contents. The
+judgment over that output is `tools/fresh_install_gate.py`, which
+`.github/workflows/package.yml` runs on Ubuntu, macOS and Windows and which a
+maintainer runs with `uv run python tools/fresh_install_gate.py --dist dist`:
+`pip install --no-index` into an empty venv, the README Quickstart from outside
+the checkout, and the receipt document against the digest
+`tests/test_determinism.py` pins. Exit 1 on a finding; exit 2 when the wheel was
+not examined. `tests/test_wheel_quickstart.py` drives its real path on every
+`make verify`.
 
 ## Design constraints that reviews enforce
 

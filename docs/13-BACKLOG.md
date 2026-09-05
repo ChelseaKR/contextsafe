@@ -370,6 +370,62 @@ community reviewer has confirmed; the `mapping sign` command, a signer key,
 a trust manifest, and the enrolled ContextSafe interoperability reviewer it
 needs all wait on B-035; and the sibling `contextsafe-observation-v1`
 contract, which no runtime parser reads, carries no profile binding.
+
+Implementation note (2026-09-04, B-026 corrections): five defects adversarial
+review of B-026 found, none of which a gate would have caught. The
+canonical-JSON carrier table advertised `sex_parameter_for_clinical_use`
+though that importer's converter always refuses such a record, so a row
+naming it could never match; the key is gone, `tests/test_import.py` pins the
+table against the carriers a conversion actually emits a token under, and the
+published contract's canonical-json carrier enum lost the same value. That
+narrowing does remove documents the contract accepted: a profile whose one
+row read that carrier as that concept and bound it to a synthetic
+sex-parameter value passed `mapping validate` at exit 0 and compiled with
+`valid_for_signing: true`, and the same file is now
+`mapping_profile_carrier_unknown` at `$.rows[0].source.carrier`
+(`tests/test_mapping_profile.py` stands on the refusal). Such a row could
+never bind anything — no token is emitted under that carrier — so no import
+changes behaviour, but inert is not invalid and the acceptance boundary of
+`contextsafe.mapping-profile/1.0.0` moved without the version moving with
+it. That is left as it stands rather than decided here: the published
+versioning rule in `schemas/README.md` covers a closed set that widens, not
+one that narrows, and no ContextSafe version has been tagged, so every
+document of the removed class was written against an untagged working tree.
+Whether the mapping-profile contract should move for a narrowing, and to
+what, is open and is the maintainer's; nothing here should be read as that
+decision having been made. The SPCU prohibition now runs ahead of the
+source checks rather than first among the target checks: `_source` ran before
+`_target`, so a row that both named a carrier its concept is never read as
+*and* targeted SPCU reported `mapping_profile_carrier_concept_mismatch`, and
+the three sentences promising `prohibited_spcu_mapping` first and by name
+were true only among the target checks. They are true as written now, and a
+doubly-invalid row is pinned to the prohibition. `PRONOUN_SET_PATTERN` said
+no name could be written in its shape: `jordan/rivera` satisfies it, and the
+boundary scan does not catch it either. The claim is narrowed to what the
+shape guarantees — exactly two or three segments of one to twelve lowercase
+ASCII letters, so no capital, digit, space, or other punctuation — rather
+than the shape narrowed to the claim, because separating a name from a
+pronoun set needs a published list of pronouns and publishing one is a
+community judgment nobody here has made; the property test draws that case
+now instead of filtering it away, which is why nothing caught it, and the
+residual is stated rather than closed. The row bound is tested from the
+accepting side at exactly `MAX_ROWS`, so an off-by-one making the bound
+exclusive would now fail. And `mapping_profile_row_unmatched` reaches an
+operator: the `--log-dir` event record carries the closed warning codes the
+command produced, so a `--mapping` profile that binds nothing is visible at
+exit 0, where the profile can still be fixed, rather than one artifact later
+as a finding about the data. The warning's trigger is any token the profile
+left unbound, not only a profile that binds none of them; a profile that
+binds nothing is the loudest case of it rather than the condition, and the
+partial case an operator will actually meet is tested too. A record whose
+outcome is `rejected` carries no warnings, including the reachable case
+where the conversion succeeded and the command was then rejected writing
+`--output`: the codes describe a conversion the command delivered, so the
+field's meaning does not depend on where in the command the failure landed.
+That widened the event record's field set, so its schema version moved to
+`contextsafe.event-log/0.2.0`; no new output document was invented, and
+whether an import report is ever published stays the maintainer's decision.
+
 Implementation note (2026-09-04, B-028): the identity, name-to-use, pronoun,
 and recorded-sex-or-gender predicates of A-005 and A-008 to A-015 exist as
 mechanism. A rule set declaring `contextsafe.rule-set/0.2.0` may name one of a
@@ -509,6 +565,134 @@ independent security review of the receipt contract has happened, and structural
 validity is not verification — hash, approval, and signature checking remain
 B-036.
 
+Implementation note (2026-09-04, B-035 and B-036): the design is recorded in
+[ADR 0010](adr/0010-signing-layer-dependency-and-trust-model.md), status
+proposed. It names the decision that gates both items and that only the
+maintainer can make — the standard library has no Ed25519, so the first `sign`
+command is the first runtime dependency or the first optional extra — sets out
+`cryptography`, `PyNaCl`, a fail-closed `contextsafe[signing]` extra and a
+rejected pure-Python implementation with their supply-chain consequences as
+read from PyPI and OSV on 2026-09-04, recommends the extra backed by `PyNaCl`
+with the reason and the counterweight, and fixes the option-independent
+design: draft detached-signature and trust-manifest fragments held in the ADR
+and not in `schemas/`, subject hashes as the signed thing, rotation overlap
+bounded at 90 days, 31-day revocation freshness against a caller-declared
+`--as-of`, compromise recovery, per-purpose thresholds with holder and
+organization distinctness, a closed error-category set for `sign` and
+`verify`, and what verification does not prove without RFC 3161 time. B-035
+and B-036 are not closed and have not started: the maintainer has not chosen
+the dependency, no module, command, schema, fixture, key or test exists, the
+security/privacy design review of the trust model (B-040) has not happened,
+the four departures from [Architecture §6.6](04-ARCHITECTURE.md) that the ADR
+flags — opaque holder and organization tokens in place of names, customer keys
+confined to plan enrolment, the 90-day overlap bound, and the rejection of an
+all-purpose key — await the maintainer's confirmation, and every artifact the
+tool emits still says `not_signed` or `not_verified`.
+
+Implementation note (2026-09-04, B-037): `contextsafe receipt diff --before
+A.json --after B.json --output delta.json` now exists, under a new `receipt`
+command group (`render` stays top-level for now and may move here later). The
+delta is the document named in [Architecture §7](04-ARCHITECTURE.md), published
+as `schemas/contextsafe-receipt-delta-v0.1.schema.json` and implemented in
+`src/contextsafe/receipt_delta.py`, a declared safety module. Compatibility is
+fail-closed: identical `case_id`, `rule_set_sha256`, receipt schema versions,
+concept and checkpoint sets, rule identifiers, and per-rule bindings, or exit 2
+with an `incompatible_receipts` error that names the field class and never a
+value. Each receipt is parsed strictly against the published shape first, its
+`payload_sha256` must cover its payload, and its summary must count its results.
+The delta lists per rule the status and reason in each receipt, a `changed`
+flag, an `evidence_sha256s_changed` flag, and a closed change code; counts of
+regressed, improved, unchanged, and changed_other that partition the rules; the
+two payload hashes; and a pinned limitation set. Property tests in
+`tests/test_receipt_delta.py` hold that `diff(A, A)` is all-unchanged, that the
+delta is invariant under reordering of results, and that swapping the inputs
+mirrors it; `tests/test_receipt_delta_schema.py` is the schema/runtime
+agreement gate, and the artifact is in the determinism matrix with a pinned
+digest. B-037 is not closed: its dependency B-036 does not exist, so the two
+receipts are unsigned and unverified and the delta proves nothing about which
+run came first — there is no trusted time, and `before` and `after` are the
+caller's labels, which the delta's own limitations say. Hash agreement is an
+internal-consistency check, not verification. The row's "compatible partner
+profiles" are not modelled, because no partner profile exists yet (B-016 and
+the plan's `partner_profile` field are ahead of this slice); compatibility is
+decided on the receipt fields that exist today. The contract is reference-only
+and ungoverned: no clinical, community, laboratory, legal, security, or
+accessibility review of it has happened, and none is claimed.
+
+Implementation note (2026-09-04, B-032): the review, finding, and disposition
+state machine in [Architecture §6.5](04-ARCHITECTURE.md) exists as
+`src/contextsafe/review.py`, `contextsafe finding review`, and `contextsafe
+finding list`, with the event contract published as
+`schemas/contextsafe-review-event-v1.schema.json` (the pre-signature shape of
+the `contextsafe-review-v1.schema.json` that §8 lists) and the derived state as
+`schemas/contextsafe-review-state-v1.schema.json`. An event binds an outcome
+(rule, case, checkpoint, concept) and the receipt's payload and rule-set hashes
+to a decision from a closed set, a severity from a closed label set, an owner as
+a role plus the SHA-256 of an opaque handle, a rationale code from a closed
+vocabulary, an optional external reference under the ADR 0006 grammar, and
+declared signers as a role plus an organization label. There is no free-text
+field, by construction; a name-shaped token that fits an ADR 0006 grammar is
+accepted, and that residual is tested as such. The transition table and the
+per-decision rules are data, pinned as literals in `tests/test_review.py` so
+that a change to either must confront the test rather than re-derive it, and
+every pair the table does not contain is enumerated as an
+`illegal_transition` test. The log is append-only: one canonical line per
+event, each carrying the event hash and the hash of the record before it, and
+every read re-hashes and replays the whole file before anything is appended.
+B-032 is not closed: the deliverable asks for role *and signature* checks, and
+the signature half does not exist — every event and every signer says
+`signature_status: not_verified`, the two-signer threshold on an accepted
+residual risk is a shape check on a declaration, and a declared signer
+authorizes nothing until B-035 supplies keys, the trust manifest, and
+plan-enrolled reviewer registries. The decision, severity, owner-role,
+signer-role, and rationale vocabularies are reference-only and ungoverned; the
+approved severity rubric is B-010 and none of them has had clinical, community,
+legal, or security review. Dispositions are not bound into any receipt (the
+receipt contract is unchanged), `finding review` reads the receipt for its
+hashes and finding outcomes rather than verifying it (B-036), the log has no
+governed cleanup or retention path, and the disputed-findings flow of
+[Service design §9](03-SERVICE-DESIGN.md) — freeze, two independent reviewers,
+majority and dissent — has no representation here. Three further limits are
+recorded rather than closed. The hash chain cannot detect a record removed from
+the end of the log: a log cut back to an earlier line replays as a valid
+shorter log, and only an external record of the state document's
+`log_head_sha256`, taken after each append, can show the cut. A `remediated`
+decision binds no rerun receipt hash, so `remediation_verified_by_rerun` is a
+declaration the tool cannot check, exactly as a declared signer is. And
+`accepted_residual_risk` has no `withdrawn` exit: the transition table lets an
+acceptance move only to `remediated`, so an acceptance entered in error cannot
+be marked `entered_in_error`, which is reachable only through `withdrawn`. That
+is the table's shape today, recorded here rather than governed: an acceptance
+is the state two declared signers stood behind, and whether one event may undo
+it, or only the §9 disputed-findings flow may, is a decision that flow must
+take when it exists. Two more are stated as limits of the tool rather than
+closed. The size check between the read and the append is a comparison, not a
+lock: it narrows the window in which a second writer can append without
+closing it, so one writer at a time is an operating assumption, and a log two
+writers reach is refused on its next read as `log_chain_broken` rather than
+repaired. And `finding review` refuses a receipt whose result carries a
+`status` outside the published algebra as `invalid_enum`, rather than reading
+it as "not a finding", because an unsupported value is never quietly the safe
+case; that is a shape check on the fields review reads, not verification.
+Before merge, `--output` naming the review log was found to reach `main`'s
+truncating write after the append and replace the log with exit 0; both
+commands now refuse it as `output_path_unsafe` before the log is opened. A
+second review found that refusal comparing path strings and, only where both
+files existed, inodes, so a log that did not exist yet could be named two ways
+(`/tmp/x/review.jsonl` and `/private/tmp/x/review.jsonl`, a symlinked
+parent, `REVIEW.jsonl` on a case-insensitive filesystem) and the first
+`finding review` created, appended, and then overwrote it. The check now
+lives in `review.py`, compares by inode when the log exists and by
+parent-directory inode plus case- and normalization-folded leaf name when it
+does not, over-refuses a case variant on a case-sensitive filesystem rather
+than probing which kind it is on, and runs again after `finding review` has
+appended. Two more operational edges are stated rather than closed: a
+`finding review` whose `--output` cannot be written after the append exits 2
+with `output_io_error` having recorded the event, so the same event is then
+refused as `illegal_transition` and `finding list` derives the state; and a
+first event refused at the transition after the receipt binding held leaves
+a new, empty log behind, which replays to the empty state.
+
 ## Phase 5 — trust and operations
 
 | ID | Trace | Deliverable and acceptance | Owner | Dependency | Estimate |
@@ -609,6 +793,70 @@ audit, so coverage of the surfaces in
 gate is a substitute for B-044, and the Spanish page is auditable but its
 wording is still unreviewed (B-042).
 
+Implementation note (2026-09-04, B-038 and B-041): audited first, then
+completed only where the audit found a gap. Already there: the generated
+`qps-ploc` pseudolocale with diacritics and bracketing (`i18n.pseudolocalize`),
+placeholder parity for shipped locales (`placeholder-parity`), a
+`hardcoded-string` rule over the pseudolocalized page, a print block that never
+hides a disclosure (`check_print`), and a gate that checks the page's
+`data-cs-payload-sha256` against the receipt (`assert_subject`). Not there:
+expansion was 30 percent against the 35 in
+[Accessibility §6](08-ACCESSIBILITY-I18N.md) with nothing measuring it;
+`hardcoded-string` and `undisclosed-machine-translation` had no negative
+control although `docs/I18N.md` said every rule did; the print block had no
+repeated-header or keep-together rule and the gate checked only `display:
+none`; the renderer read `payload_sha256` from the document instead of
+recomputing it and rendered around unknown fields; and nothing enforced that
+the page carries only what substantiates an outcome (A-036, F-027).
+
+Now `PSEUDO_MINIMUM_EXPANSION` is 0.35 and `tools/i18n_gate.py` measures the
+generated catalog (`pseudolocale-fidelity`: expansion, no accentable letter
+left plain outside a placeholder, placeholder parity;
+`test_the_gate_catches_a_pseudolocale_that_lost_a_property`, whose controls
+include a transform that accents one letter per message, and a Hypothesis
+property in `tests/test_i18n.py`); `hardcoded-string` judges each
+run under the `lang` in force so an unmarked copy of a catalog sentence is a
+finding (`test_the_gate_catches_a_hardcoded_string`); the print stylesheet
+declares `thead` a repeating header group, keeps `tr`, `li`, `.notice` and
+`.source-text` on one page and headings with what follows, and
+`tools/a11y_gate.py`'s `print` check fails without each of those
+(`test_a_print_layout_that_could_orphan_a_finding_is_caught`) and on any
+print rule but the skip link's that hides by any technique `HIDING_TECHNIQUES`
+names, not only `display` and `visibility` and not only under five named
+selectors, since `li { display: none; }` had walked past those
+(`test_hiding_a_disclosure_in_print_is_caught`). Review of that check found
+three more ways past it, fixed the same day with a control each: it read one
+block spelled exactly `@media print {` and filed every other print block under
+screen (`test_a_print_block_spelled_another_way_is_still_read`; every block
+whose query reaches the printer is print now, and one the gate cannot classify
+is a finding); it compared declarations verbatim, so `DISPLAY: NONE` and
+`display: none !important` were not findings and `visibility: collapse` was
+not `hidden`; and it counted only `absolute` and `fixed` as positioned and
+`-50em` as the number 50, so `position: relative; left: -9999px` sat in the
+accepting test. It also now refuses any print rule that sets a break property
+or a `thead` display to another value on any selector
+(`test_a_print_rule_that_undoes_a_keep_together_rule_is_caught`), reads
+`title`, `aria-label` and `alt` as text for `minimization`, and `make i18n`
+measures expansion on the body without the brackets, which a four-letter label
+had met on its brackets alone
+(`test_the_expansion_floor_is_measured_without_the_brackets`);
+`html_receipt.render_receipt_page` recomputes the payload hash
+(`receipt_payload_hash_mismatch`) and refuses unknown fields at every level
+(`test_a_field_the_contract_does_not_publish_is_refused`, pinned against the
+schema's closed objects); and the a11y gate's new `minimization` check allows
+only pointer-named receipt values beside catalog text, lets a catalog
+placeholder hold nothing but one of those values, and recomputes the hash it
+expects (`test_a_receipt_value_the_page_does_not_need_is_caught`, and
+`test_the_expected_hash_is_recomputed_not_read`, which forges the field and a
+page carrying it so that a gate reading the field would audit the page and
+the recomputing gate refuses it). `html_receipt.py` is now a declared safety
+module in the Makefile because it validates a document. B-038 is not closed: the
+print protections are computed from the stylesheet and the markup, no browser
+has printed the page under test, and the print-preview row of
+[Accessibility §7](08-ACCESSIBILITY-I18N.md) is B-044's manual task. B-041 is
+not closed: no locale was added, the pseudolocale is gate-only, and es-US is
+still an unreviewed machine translation until B-042 happens.
+
 Implementation note (2026-08-15, B-046): `contextsafe diagnostics`, `contextsafe
 cleanup`, `contextsafe support-bundle`, and an opt-in local event log
 (`--log-dir` on every command). B-018 and B-020, the dependencies, are both in
@@ -645,8 +893,10 @@ holding a retained entry is retained with it.
 The local log is deliberately minimal. It is off unless `--log-dir` is passed
 and is never enabled from the environment, because output that varies with the
 environment is what `tests/test_determinism.py` exists to prevent. A record is
-a closed vocabulary — command, outcome, error code — with no message field, so
-there is nowhere for an exception string or a path to land. It carries no
+a closed vocabulary — command, outcome, error code, and (since
+`contextsafe.event-log/0.2.0`) the closed warning codes the command carried,
+sorted and never repeated — with no message field, so there is nowhere for an
+exception string or a path to land. It carries no
 clock reading: the runner does not read a clock anywhere else and a log is not
 a good reason to start, so records carry a per-file sequence number instead.
 That is a real limitation and correlating these records with anything external
@@ -710,6 +960,33 @@ library and makes no population-sensitivity claim; and the 41/41 detection
 and localization figure the row requires cannot be computed until the
 seventeen waiting rows have a mechanism and the five hidden faults have an
 author.
+
+Implementation note (2026-09-04, B-045): the part CI can do.
+`.github/workflows/package.yml` builds the sdist and wheel with `uv build`,
+exports a CycloneDX SBOM from the locked graph with `uv export`, records
+checksums, and then installs the wheel with `pip install --no-index` into an
+empty virtual environment on `ubuntu-24.04`, `macos-15` and `windows-2025`,
+runs `fixtures export` and the README Quickstart from a directory outside the
+checkout, and requires the receipt document to reproduce the digest
+`tests/test_determinism.py` pins. Build provenance is attested over the
+recorded checksums only after every platform passes. The gate is
+`tools/fresh_install_gate.py` (stdlib, three exit codes, a report of digests
+and codes with no path in it); `tests/test_wheel_quickstart.py` drives its
+real path on every `make verify`, and `make package` builds the same artifacts
+locally and lists the wheel. Review before merge found the gate fail-open on
+a working directory whose `outside/` was gone but whose `venv/` remained:
+venv creation and `pip install` of an already-installed version both exit 0,
+so the clean line would have named a wheel that was never installed. The gate
+now refuses any pre-existing working directory, with `--clear` and
+`--force-reinstall` as second guards, and the workflow's tag trigger matches
+`release.yml`'s `vX.Y.Z` shape so no tag can carry provenance without the
+release gate having a chance to run. B-045 is not closed: the matrix runs GitHub's
+server images, not the Windows 11 and macOS desktop fresh installs RG-15
+names, and that half needs a person with those machines; the artifacts are
+unsigned, because build provenance says which workflow produced the bytes and
+nothing about who authorized them, and the signing path is B-035; the SBOM is
+derived from `uv.lock` and is not byte-reproducible run to run; and the
+workflow has never fired, since no tag exists.
 
 ## Phase 6 — pilot and v1
 

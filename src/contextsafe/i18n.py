@@ -33,7 +33,9 @@ fixed language; ``test_i18n.py`` pins that they do not vary by locale.
 from __future__ import annotations
 
 import json
-from collections.abc import Iterator, Mapping
+import math
+import re
+from collections.abc import Collection, Iterator, Mapping
 from dataclasses import dataclass
 from enum import StrEnum
 from pathlib import Path
@@ -54,15 +56,31 @@ text in a pseudolocalized render that is still readable English is a string
 somebody hardcoded instead of externalizing, which is the whole point.
 """
 
+PSEUDO_MINIMUM_EXPANSION = 0.35
+"""The least a pseudolocalized string may grow over its source, as a fraction.
+
+``docs/08-ACCESSIBILITY-I18N.md`` section 6 sets the floor at 35 percent, which
+is the growth a German or Finnish rendering of short English labels commonly
+shows. The padding is computed from this constant and the gate measures every
+generated message against it, so the two cannot drift apart.
+"""
+
 _PSEUDO_PREFIX = "⟦"
 _PSEUDO_SUFFIX = "⟧"
 _PSEUDO_PAD = "‧"
-_PSEUDO_EXPANSION = 0.3
 
-_PSEUDO_MAP = str.maketrans(
-    "aeiounpcsyAEIOUNPCSY",
-    "áéíóúñþçšýÁÉÍÓÚÑÞÇŠÝ",
-)
+_PSEUDO_PLAIN = "aeiounpcsyAEIOUNPCSY"
+_PSEUDO_ACCENTED = "áéíóúñþçšýÁÉÍÓÚÑÞÇŠÝ"
+_PSEUDO_MAP = str.maketrans(_PSEUDO_PLAIN, _PSEUDO_ACCENTED)
+
+PSEUDO_ACCENTABLE = frozenset(_PSEUDO_PLAIN)
+"""Source characters the pseudolocale replaces with an accented form."""
+
+PSEUDO_ACCENTED = frozenset(_PSEUDO_ACCENTED)
+"""The accented forms, so a gate can tell a transformed string from a copy."""
+
+PSEUDO_BRACKETS: tuple[str, str] = (_PSEUDO_PREFIX, _PSEUDO_SUFFIX)
+"""The brackets around a pseudolocalized string, which its expansion excludes."""
 
 
 class ReviewStatus(StrEnum):
@@ -130,6 +148,30 @@ def _placeholders(text: str) -> frozenset[str]:
     )
 
 
+def _message_pattern(
+    text: str, values: Collection[str] | None = None
+) -> re.Pattern[str]:
+    """Return a pattern matching ``text`` with a value in each placeholder.
+
+    With ``values`` unspecified a placeholder matches any non-empty run. With
+    ``values`` given it matches exactly one of them, and an empty collection
+    matches nothing: a placeholder with no value permitted is a placeholder
+    that no run may have filled.
+    """
+
+    if values is None:
+        filler = "(?s:.+?)"
+    elif values:
+        filler = "(?:" + "|".join(re.escape(value) for value in sorted(values)) + ")"
+    else:
+        filler = "(?!)"
+    parts = [
+        re.escape(literal) + (filler if field is not None else "")
+        for literal, field, _, _ in Formatter().parse(text)
+    ]
+    return re.compile("".join(parts))
+
+
 @dataclass(frozen=True, slots=True)
 class TranslationReview:
     """The catalog-level record of who checked this locale, and when."""
@@ -184,6 +226,25 @@ class Catalog:
         """Return every message key in this catalog."""
 
         return frozenset(self.messages)
+
+    def accounts_for(self, text: str, values: Collection[str] | None = None) -> bool:
+        """Whether ``text`` is one of this catalog's messages, values filled in.
+
+        Without ``values`` a placeholder matches any non-empty run, and the
+        question answered is "could this run have come from the catalog",
+        which is what a gate looking for text that was never externalized
+        needs. With ``values`` a placeholder matches only one of them, and
+        the question becomes "is this run a catalog message carrying nothing
+        but a value the caller allows", which is what a gate looking for a
+        value that should not be on the page needs: a message with a
+        placeholder must not be a wildcard prefix that any free text can hide
+        behind.
+        """
+
+        return any(
+            _message_pattern(message.text, values).fullmatch(text) is not None
+            for message in self.messages.values()
+        )
 
 
 @dataclass(frozen=True, slots=True)
@@ -360,7 +421,9 @@ def pseudolocalize(text: str) -> str:
             rendered = f"{rendered}:{spec}"
         parts.append("{" + rendered + "}")
     body = "".join(parts)
-    padding = _PSEUDO_PAD * max(1, round(len(body) * _PSEUDO_EXPANSION))
+    # Rounding up, never to nearest: a floor that rounding could dip under is
+    # not a floor, and the two brackets are not counted towards it.
+    padding = _PSEUDO_PAD * max(1, math.ceil(len(body) * PSEUDO_MINIMUM_EXPANSION))
     return f"{_PSEUDO_PREFIX}{body}{padding}{_PSEUDO_SUFFIX}"
 
 

@@ -20,6 +20,8 @@ LEGACY_IP_PATTERN = re.compile(
     r"(?:\.(?:0x[0-9a-f]+|0[0-7]*|[0-9]+)){0,3}$"
 )
 ID_PATTERN = re.compile(r"^[A-Z][A-Z0-9-]{2,63}$")
+CASE_ID_PATTERN = re.compile(r"^CTP-[A-Z0-9]{3,16}$")
+RULE_ID_PATTERN = re.compile(r"^A-I[0-9]{2}$")
 RELATIVE_PATH_PATTERN = re.compile(r"^[A-Za-z0-9_.-]+(?:/[A-Za-z0-9_.-]+)*$")
 SAFE_TOKEN_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9:/_.-]{0,127}$")
 SEMVER_PATTERN = re.compile(

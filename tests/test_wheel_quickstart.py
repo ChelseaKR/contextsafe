@@ -20,15 +20,25 @@ fails, a README with no Quickstart to run -- fails the test with a message
 that says the wheel path was **not examined**, which reads differently from
 the quickstart failing. It never skips: a skipped test here would be a green
 mark over the one path nobody looked at.
+
+Since B-045 the install-and-run half is ``tools/fresh_install_gate.py``, the
+same gate ``.github/workflows/package.yml`` runs on Ubuntu, macOS and Windows:
+``python -m venv``, ``pip install --no-index``, the Quickstart parsed from the
+README, and the receipt document checked against the digest
+``tests/test_determinism.py`` pins. This test builds the wheel, drives that
+gate through its real subprocess runner, and then makes the two comparisons
+only a checkout can make: the exported fixtures against the tree's bytes, and
+the wheel's receipt payload against one produced in process.
 """
 
+import importlib.util
 import json
 import os
-import shlex
 import shutil
 import subprocess
 import sys
 from pathlib import Path
+from types import ModuleType
 
 import pytest
 
@@ -37,6 +47,20 @@ from contextsafe.reference_fixtures import REFERENCE_FILES, REFERENCE_ROOT
 
 ROOT = Path(__file__).resolve().parents[1]
 README = ROOT / "README.md"
+
+
+def _load_gate() -> ModuleType:
+    spec = importlib.util.spec_from_file_location(
+        "fresh_install_gate_for_wheel", ROOT / "tools" / "fresh_install_gate.py"
+    )
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[spec.name] = module
+    spec.loader.exec_module(module)
+    return module
+
+
+gate = _load_gate()
 
 NOT_EXAMINED = "the installed-wheel path was NOT examined"
 """Marks a harness failure, so it reads differently from a quickstart failure."""
@@ -83,75 +107,8 @@ def _harness(argv: list[str], cwd: Path | None = None) -> str:
     return result.stdout
 
 
-def quickstart_commands(readme_text: str) -> list[list[str]]:
-    """The ``contextsafe`` invocations in the README's Quickstart, as argv tails.
-
-    Reads the first ``sh`` block under ``## Quickstart``, joins backslash
-    continuations, drops ``#`` comments and the ``make`` line, and requires
-    every remaining line to be ``uv run contextsafe ...``: a line this test
-    cannot run from a wheel is a failure, not a silent omission.
-    """
-
-    heading = readme_text.find("\n## Quickstart\n")
-    if heading < 0:
-        pytest.fail(f"README.md has no `## Quickstart` section; {NOT_EXAMINED}")
-    fence = "```sh\n"
-    start = readme_text.find(fence, heading)
-    end = readme_text.find("```", start + len(fence)) if start >= 0 else -1
-    if start < 0 or end < 0:
-        pytest.fail(f"README.md Quickstart has no closed ```sh block; {NOT_EXAMINED}")
-    logical: list[str] = []
-    pending = ""
-    for line in readme_text[start + len(fence) : end].splitlines():
-        stripped = line.rstrip()
-        if stripped.endswith("\\"):
-            pending += stripped[:-1] + " "
-            continue
-        logical.append(pending + stripped)
-        pending = ""
-    commands: list[list[str]] = []
-    for text in logical:
-        tokens = shlex.split(text, comments=True)
-        if not tokens or tokens[0] == "make":
-            continue
-        if tokens[:3] != ["uv", "run", "contextsafe"]:
-            pytest.fail(
-                f"Quickstart line is not a `uv run contextsafe` command, so this "
-                f"test cannot run it from a wheel: {text!r}"
-            )
-        commands.append(tokens[3:])
-    if not commands:
-        pytest.fail(
-            f"README.md Quickstart names no contextsafe command; {NOT_EXAMINED}"
-        )
-    return commands
-
-
-def test_quickstart_parser_reads_continuations_comments_and_the_make_line() -> None:
-    text = (
-        "# Title\n\n## Quickstart\n\nWith uv:\n\n```sh\n"
-        "make verify   # stage list\n"
-        "uv run contextsafe fixtures export   # into ./fixtures/reference\n"
-        "uv run contextsafe evaluate \\\n"
-        "  --case fixtures/reference/case.json \\\n"
-        "  --output receipt.json           # unsigned\n"
-        "```\n\nMore prose.\n"
-    )
-
-    assert quickstart_commands(text) == [
-        ["fixtures", "export"],
-        [
-            "evaluate",
-            "--case",
-            "fixtures/reference/case.json",
-            "--output",
-            "receipt.json",
-        ],
-    ]
-
-
 def test_the_readme_quickstart_still_names_the_commands_this_test_runs() -> None:
-    commands = quickstart_commands(README.read_text(encoding="utf-8"))
+    commands = gate.quickstart_commands(README.read_text(encoding="utf-8"))
 
     assert [argv[0] for argv in commands] == ["fixtures", "evaluate", "render"]
 
@@ -168,9 +125,7 @@ def test_the_documented_quickstart_runs_from_an_installed_wheel(
 ) -> None:
     uv = _uv()
     dist = tmp_path / "dist"
-    venv = tmp_path / "venv"
-    outside = tmp_path / "outside"
-    outside.mkdir()
+    workdir = tmp_path / "fresh-install"
 
     _harness(
         [
@@ -184,50 +139,43 @@ def test_the_documented_quickstart_runs_from_an_installed_wheel(
             str(ROOT),
         ]
     )
-    wheels = sorted(dist.glob("contextsafe-*.whl"))
-    if len(wheels) != 1:
-        pytest.fail(f"expected one wheel, found {len(wheels)}; {NOT_EXAMINED}")
-    _harness([uv, "venv", "--python", sys.executable, str(venv)])
-    bin_dir = venv / ("Scripts" if os.name == "nt" else "bin")
-    python = bin_dir / ("python.exe" if os.name == "nt" else "python")
-    _harness([uv, "pip", "install", "--python", str(python), str(wheels[0])])
 
-    # The denominator: the interpreter about to run the quickstart imports the
-    # wheel's package, not this checkout's.
+    # The gate's real path: python -m venv, pip install --no-index, the
+    # Quickstart from the README, the receipt document against the pin. It
+    # raises, rather than reporting, for every state in which the wheel was
+    # not examined, so a harness failure still reads as NOT examined.
+    try:
+        report = gate.run_gate(dist=dist, workdir=workdir, root=ROOT)
+    except gate.GateUnavailable as exc:
+        pytest.fail(f"{exc}; {NOT_EXAMINED}")
+    assert report.findings == (), [str(f) for f in report.findings]
+    assert report.commands_run == 3
+    assert report.receipt_document_sha256 == report.pinned_receipt_document_sha256
+
+    # The denominator: the interpreter that ran the quickstart imports the
+    # wheel's package, not this checkout's. The gate checks this too; this is
+    # the same fact asserted from outside it.
+    venv = workdir / "venv"
+    python, _ = gate.venv_layout(venv)
     located = Path(
         _harness(
             [str(python), "-c", "import contextsafe; print(contextsafe.__file__)"],
-            cwd=outside,
+            cwd=workdir / "outside",
         ).strip()
     ).resolve()
     assert located.is_relative_to(venv.resolve()), (
         f"the fresh venv imported {located}, not the installed wheel; {NOT_EXAMINED}"
     )
 
-    contextsafe = bin_dir / ("contextsafe.exe" if os.name == "nt" else "contextsafe")
-    commands = quickstart_commands(README.read_text(encoding="utf-8"))
-    for argv in commands:
-        result = subprocess.run(
-            [str(contextsafe), *argv],
-            cwd=outside,
-            env=_clean_env(),
-            capture_output=True,
-            text=True,
-            timeout=HARNESS_TIMEOUT_SECONDS,
-            check=False,
-        )
-        assert result.returncode == EXIT_SUCCESS, (
-            f"`contextsafe {' '.join(argv)}` exited {result.returncode} from an "
-            f"installed wheel, outside the repository:\n{result.stderr}"
-        )
-
     # What the wheel exported is what the tree carries, byte for byte.
+    outside = workdir / "outside"
     for name in REFERENCE_FILES:
         assert (outside / "fixtures" / "reference" / name).read_bytes() == (
             REFERENCE_ROOT / name
         ).read_bytes()
 
     # And the wheel's receipt payload is the checkout's receipt payload.
+    commands = gate.quickstart_commands(README.read_text(encoding="utf-8"))
     by_command = {argv[0]: argv for argv in commands}
     produced = json.loads(
         (outside / _output_of(by_command["evaluate"])).read_text(encoding="utf-8")
@@ -251,5 +199,6 @@ def test_the_documented_quickstart_runs_from_an_installed_wheel(
     )
     expected = json.loads(expected_path.read_text(encoding="utf-8"))
     assert produced["payload"] == expected["payload"]
+    assert produced["payload_sha256"] == report.payload_sha256
     rendered = (outside / _output_of(by_command["render"])).read_text(encoding="utf-8")
     assert "<html" in rendered

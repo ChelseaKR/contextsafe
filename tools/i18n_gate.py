@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Localization gate: catalogs stay in parity, and no unreviewed string lies.
 
-Six rules, each of which exists because the alternative is a defect somebody
+Eight rules, each of which exists because the alternative is a defect somebody
 would only find in front of a reader.
 
 ``catalog-parity``
@@ -43,7 +43,22 @@ would only find in front of a reader.
     A run of visible text on the rendered page that no catalog message
     accounts for and that does not come from the receipt document. Found by
     rendering the pseudolocale, where every externalized string is accented and
-    bracketed, so anything still legible was never externalized.
+    bracketed, so anything still legible was never externalized. Source-locale
+    wording is legitimate on that page only where the renderer marks it as a
+    source-locale original (``lang`` equal to the source locale): a run of
+    English under any other ``lang`` is hardcoded even when it happens to
+    repeat a catalog sentence.
+
+``pseudolocale-fidelity``
+    The generated pseudolocale is what the rule above sees through, so it is
+    measured rather than trusted: every message must grow by at least
+    ``PSEUDO_MINIMUM_EXPANSION`` over its source with the two brackets set
+    aside, so a short label cannot meet the floor on its brackets alone; must
+    leave no letter the
+    transform accents unaccented outside a placeholder, and must keep the
+    source's ``{placeholder}`` set exactly. A pseudolocale that stopped
+    expanding would hide every layout defect it exists to expose, and one
+    that mangled a placeholder would be testing its own transform.
 
 Exit 0 when clean, 1 when anything is found, 2 on a usage error.
 """
@@ -52,7 +67,6 @@ from __future__ import annotations
 
 import argparse
 import json
-import re
 import sys
 from collections.abc import Iterable, Iterator, Mapping, Sequence
 from dataclasses import dataclass
@@ -69,7 +83,11 @@ from contextsafe.errors import ContextSafeError  # noqa: E402
 from contextsafe.evaluator import evaluate  # noqa: E402
 from contextsafe.html_receipt import render_receipt_page  # noqa: E402
 from contextsafe.i18n import (  # noqa: E402
+    PSEUDO_ACCENTABLE,
+    PSEUDO_ACCENTED,
+    PSEUDO_BRACKETS,
     PSEUDO_LOCALE,
+    PSEUDO_MINIMUM_EXPANSION,
     SOURCE_LOCALE,
     Catalog,
     ReviewClaim,
@@ -86,6 +104,9 @@ REFERENCE = REFERENCE_ROOT
 
 _IGNORED_TEXT = frozenset({"✔", "✖", "▣", "—", "?"})
 
+_VOID_TAGS = frozenset({"br", "col", "hr", "img", "input", "link", "meta", "wbr"})
+_UNRENDERED_TAGS = frozenset({"style", "script", "head", "title"})
+
 
 @dataclass(frozen=True, slots=True)
 class Finding:
@@ -101,25 +122,60 @@ class Finding:
         return f"  {self.rule}: {self.locale}: {self.detail}"
 
 
+@dataclass(frozen=True, slots=True)
+class VisibleRun:
+    """One run of reader-visible text and the language it is marked as."""
+
+    text: str
+    lang: str | None
+
+
 class _VisibleText(HTMLParser):
-    """Collect text a reader would see, skipping head, style, and script."""
+    """Collect text a reader would see, with the ``lang`` in force for each run.
+
+    Head, style, script, and title are skipped. ``lang`` is inherited the way
+    a browser inherits it, so a run's language is that of the nearest marked
+    ancestor, or none if the page never marked one.
+    """
 
     def __init__(self) -> None:
         super().__init__(convert_charrefs=True)
-        self.runs: list[str] = []
+        self.runs: list[VisibleRun] = []
+        self.stray: list[str] = []
+        """End tags that closed nothing. Recorded, and they move no language."""
         self._suppress = 0
+        self._frames: list[tuple[str, str | None]] = [("", None)]
 
-    def handle_starttag(self, tag: str, attrs: object) -> None:
-        """Start suppressing text inside non-rendered elements."""
+    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        """Push the element with its language and start suppressing unrendered text."""
 
-        if tag in ("style", "script", "head", "title"):
+        if tag in _VOID_TAGS:
+            return
+        lang = dict(attrs).get("lang")
+        self._frames.append((tag, lang if lang else self._frames[-1][1]))
+        if tag in _UNRENDERED_TAGS:
             self._suppress += 1
 
     def handle_endtag(self, tag: str) -> None:
-        """Stop suppressing at the close of a non-rendered element."""
+        """Pop the element by name, closing anything left open inside it.
 
-        if tag in ("style", "script", "head", "title") and self._suppress:
-            self._suppress -= 1
+        Popping whatever was on top, whatever the end tag said, let a stray
+        end tag shift the language every following run was judged under,
+        and the accepting bucket is the source locale. Matching by name, a
+        stray end tag closes nothing.
+        """
+
+        if tag in _VOID_TAGS:
+            return
+        if all(frame[0] != tag for frame in self._frames[1:]):
+            self.stray.append(tag)
+            return
+        while True:
+            closed, _ = self._frames.pop()
+            if closed in _UNRENDERED_TAGS:
+                self._suppress -= 1
+            if closed == tag:
+                return
 
     def handle_data(self, data: str) -> None:
         """Record one run of visible text."""
@@ -128,11 +184,11 @@ class _VisibleText(HTMLParser):
             return
         text = data.strip()
         if text:
-            self.runs.append(text)
+            self.runs.append(VisibleRun(text=text, lang=self._frames[-1][1]))
 
 
-def visible_text(html: str) -> list[str]:
-    """Return every run of reader-visible text on ``html``."""
+def visible_text(html: str) -> list[VisibleRun]:
+    """Return every run of reader-visible text on ``html`` with its language."""
 
     parser = _VisibleText()
     parser.feed(html)
@@ -144,6 +200,38 @@ def _placeholders(text: str) -> frozenset[str]:
     return frozenset(
         name for _, name, _, _ in Formatter().parse(text) if name is not None
     )
+
+
+def _literals(text: str) -> str:
+    """Return ``text`` with every ``{placeholder}`` removed."""
+
+    return "".join(literal for literal, _, _, _ in Formatter().parse(text))
+
+
+def _diacritic_findings(
+    locale: str, key: str, original: str, generated: str
+) -> Iterator[Finding]:
+    """Every accentable letter outside a placeholder must have been accented.
+
+    "Some diacritic somewhere" was the earlier rule, and a transform that
+    accented one letter per message satisfied it while leaving the rest of the
+    sentence legible English. Legible English on the pseudolocalized page is
+    exactly what ``hardcoded-string`` reads as a defect, so the pseudolocale
+    may not produce any.
+    """
+
+    plain = sorted(PSEUDO_ACCENTABLE & set(_literals(generated)))
+    if plain:
+        yield Finding(
+            "pseudolocale-fidelity",
+            locale,
+            f"{key}: leaves {len(plain)} accentable letter(s) plain, so it is "
+            "legible where it should carry a diacritic",
+        )
+    elif PSEUDO_ACCENTABLE & set(_literals(original)) and not (
+        PSEUDO_ACCENTED & set(generated)
+    ):
+        yield Finding("pseudolocale-fidelity", locale, f"{key}: carries no diacritic")
 
 
 def reference_document() -> dict[str, JsonValue]:
@@ -173,17 +261,6 @@ def _document_strings(value: object) -> Iterator[str]:
         return
     elif isinstance(value, str | int):
         yield str(value)
-
-
-def _message_patterns(catalog: Catalog) -> tuple[re.Pattern[str], ...]:
-    patterns: list[re.Pattern[str]] = []
-    for message in catalog.messages.values():
-        parts = [
-            re.escape(literal) + ("(?s:.+?)" if field is not None else "")
-            for literal, field, _, _ in Formatter().parse(message.text)
-        ]
-        patterns.append(re.compile("".join(parts)))
-    return tuple(patterns)
 
 
 def check_parity(catalog: Catalog) -> Iterator[Finding]:
@@ -325,7 +402,14 @@ def check_disclosure(
 
 
 def check_hardcoded_strings(document: Mapping[str, object]) -> Iterator[Finding]:
-    """Find visible text on the page that no catalog message accounts for."""
+    """Find visible text on the page that no catalog message accounts for.
+
+    A run marked as the source locale may be a source-locale message, because
+    that is how the renderer shows the original beside an unreviewed
+    translation. Under any other ``lang`` only a pseudolocalized message will
+    do: English there was never externalized, even English that repeats a
+    catalog sentence word for word.
+    """
 
     catalog = load_catalog(PSEUDO_LOCALE)
     page, failure = _render(PSEUDO_LOCALE, document)
@@ -337,17 +421,65 @@ def check_hardcoded_strings(document: Mapping[str, object]) -> Iterator[Finding]
         )
         return
     allowed = frozenset(_document_strings(document)) | _IGNORED_TEXT
-    patterns = _message_patterns(catalog) + _message_patterns(source_catalog())
-    for run in visible_text(page):
-        if run in allowed:
+    source = source_catalog()
+    for index, run in enumerate(visible_text(page)):
+        if run.text in allowed:
             continue
-        if any(pattern.fullmatch(run) for pattern in patterns):
+        accounting = source if run.lang == SOURCE_LOCALE else catalog
+        if accounting.accounts_for(run.text):
             continue
+        # Named by position, size, and the language it was judged under,
+        # never quoted: the run this rule catches on a real page is exactly
+        # the text that must not be copied into a report.
         yield Finding(
             "hardcoded-string",
             catalog.locale,
-            f"visible text no message accounts for: {run!r}",
+            f"visible text run {index} ({len(run.text)} characters) under "
+            f"lang={run.lang!r} is accounted for by no message",
         )
+
+
+def check_pseudolocale(catalog: Catalog) -> Iterator[Finding]:
+    """Measure the pseudolocale against the floor it is supposed to hold.
+
+    Three properties, each with a way to fail: expansion below
+    ``PSEUDO_MINIMUM_EXPANSION``, an accentable letter left plain anywhere
+    outside a placeholder, and a placeholder set that differs from the
+    source. Expansion is measured on the body with the two brackets set
+    aside, the measure the transform pads to and the property test uses:
+    counted, the brackets alone were 40 percent of a four-letter status
+    word, so a transform that stopped padding passed the floor on exactly
+    the short labels where expansion matters. The catalog is a parameter so
+    a negative control can hand in a weakened one. An empty source message
+    is ``message-quality``'s finding, so it is skipped here rather than
+    divided by.
+    """
+
+    source = source_catalog()
+    opening, closing = PSEUDO_BRACKETS
+    for key in sorted(source.keys() - catalog.keys()):
+        yield Finding("pseudolocale-fidelity", catalog.locale, f"missing key {key}")
+    for key in sorted(source.keys() & catalog.keys()):
+        original = source.message(key).text
+        generated = catalog.message(key).text
+        if not original:
+            continue
+        body = generated.removeprefix(opening).removesuffix(closing)
+        growth = (len(body) - len(original)) / len(original)
+        if growth < PSEUDO_MINIMUM_EXPANSION:
+            yield Finding(
+                "pseudolocale-fidelity",
+                catalog.locale,
+                f"{key}: expanded {growth:.0%}, below {PSEUDO_MINIMUM_EXPANSION:.0%}",
+            )
+        yield from _diacritic_findings(catalog.locale, key, original, generated)
+        if _placeholders(original) != _placeholders(generated):
+            yield Finding(
+                "pseudolocale-fidelity",
+                catalog.locale,
+                f"{key}: placeholders {sorted(_placeholders(generated))} differ "
+                f"from {sorted(_placeholders(original))}",
+            )
 
 
 def run_gate(catalogs: Iterable[Catalog]) -> list[Finding]:
@@ -365,6 +497,7 @@ def run_gate(catalogs: Iterable[Catalog]) -> list[Finding]:
         findings.extend(check_disclosure(catalog, document))
     if seen == 0:
         raise GateUnavailable("no catalog was examined, so nothing was proved")
+    findings.extend(check_pseudolocale(load_catalog(PSEUDO_LOCALE)))
     findings.extend(check_hardcoded_strings(document))
     return findings
 

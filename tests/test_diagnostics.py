@@ -40,6 +40,7 @@ from contextsafe.errors import ContextSafeError
 from contextsafe.eventlog import (
     LOG_FILE_NAME,
     MAX_LOG_BYTES,
+    WARNING_CODES,
     Outcome,
     append_event,
 )
@@ -47,6 +48,7 @@ from contextsafe.evidence_store import (
     EvidenceStore,
     store_internal_synthetic_evidence,
 )
+from contextsafe.importers.base import ImportWarningCode
 from contextsafe.preflight import identifier_hits
 
 CYRILLIC_A = "\N{CYRILLIC SMALL LETTER A}"
@@ -450,7 +452,7 @@ def _all_files(root: Path) -> list[Path]:
 def test_the_log_records_a_closed_vocabulary(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    """One line per run: command, outcome, error code. Nothing else."""
+    """One line per run: command, outcome, error code, warnings. Nothing else."""
 
     log_dir = tmp_path / "logs"
     assert main(["diagnostics", "--log-dir", str(log_dir)]) == EXIT_SUCCESS
@@ -476,10 +478,96 @@ def test_the_log_records_a_closed_vocabulary(
     assert [record["sequence"] for record in records] == [0, 1]
     assert all(
         set(record)
-        == {"command", "error_code", "outcome", "schema_version", "sequence"}
+        == {
+            "command",
+            "error_code",
+            "outcome",
+            "schema_version",
+            "sequence",
+            "warnings",
+        }
         for record in records
     )
+    assert [record["warnings"] for record in records] == [[], []]
     assert str(tmp_path) not in "".join(lines)
+
+
+def test_the_log_refuses_a_warning_code_that_is_a_message(tmp_path: Path) -> None:
+    """The warning list is codes; there is still nowhere for a sentence."""
+
+    with pytest.raises(ContextSafeError) as excinfo:
+        append_event(
+            tmp_path,
+            command="import",
+            outcome=Outcome.ACCEPTED,
+            warnings=["profile CSYN-PRONOUN-THEY-THEM bound nothing"],
+        )
+    assert excinfo.value.code == "unloggable_warning_code"
+    assert excinfo.value.path == "$.warnings"
+    assert not (tmp_path / LOG_FILE_NAME).exists()
+
+
+def test_the_log_refuses_a_warning_code_it_does_not_publish(tmp_path: Path) -> None:
+    """The warning list is a list, not a shape, exactly as the command is.
+
+    ``str.isalnum`` is Unicode-aware, so a shape check alone admitted any
+    lowercase word and any script: a name written without a separator, or in
+    Cyrillic, or in fullwidth Latin, would have been written to the file
+    verbatim. Nothing passes such a value today, and the record says its
+    codes are drawn from a closed vocabulary, so membership is what enforces
+    the sentence.
+    """
+
+    fullwidth = "\uff2a\uff2f\uff32\uff24\uff21\uff2e"
+    """FULLWIDTH LATIN CAPITAL J O R D A N, written by codepoint for the same
+    reason ``CYRILLIC_A`` is: the homoglyph is the fixture, and pasting it
+    would need an exemption from the linter's ambiguous-character rule."""
+    for code in ("jordanrivera", f"p{CYRILLIC_A}tient", fullwidth):
+        with pytest.raises(ContextSafeError) as excinfo:
+            append_event(
+                tmp_path, command="import", outcome=Outcome.ACCEPTED, warnings=[code]
+            )
+        assert excinfo.value.code == "unloggable_warning_code"
+        assert excinfo.value.path == "$.warnings"
+    assert not (tmp_path / LOG_FILE_NAME).exists()
+
+
+def test_the_published_warning_codes_are_the_importers_warning_codes() -> None:
+    """The log writes them out rather than importing them; this pins the two."""
+
+    assert {code.value for code in ImportWarningCode} == WARNING_CODES
+
+
+def test_the_log_refuses_a_repeated_warning_code(tmp_path: Path) -> None:
+    """A code says one thing; saying it twice would say a count instead."""
+
+    with pytest.raises(ContextSafeError) as excinfo:
+        append_event(
+            tmp_path,
+            command="import",
+            outcome=Outcome.ACCEPTED,
+            warnings=["mapping_profile_row_unmatched"] * 2,
+        )
+    assert excinfo.value.code == "unloggable_warning_code"
+
+
+def test_the_logged_warnings_are_sorted_whatever_order_they_arrive_in(
+    tmp_path: Path,
+) -> None:
+    """The list is a set of codes, so the record does not vary with order."""
+
+    forward = tmp_path / "forward"
+    reverse = tmp_path / "reverse"
+    codes = ["plan_binding_not_checked", "mapping_profile_not_bound"]
+    append_event(forward, command="import", outcome=Outcome.ACCEPTED, warnings=codes)
+    append_event(
+        reverse, command="import", outcome=Outcome.ACCEPTED, warnings=codes[::-1]
+    )
+    assert (forward / LOG_FILE_NAME).read_bytes() == (
+        reverse / LOG_FILE_NAME
+    ).read_bytes()
+    record = json.loads((forward / LOG_FILE_NAME).read_text(encoding="utf-8"))
+    assert record["warnings"] == sorted(codes)
 
 
 def test_the_log_refuses_a_command_it_does_not_publish(tmp_path: Path) -> None:

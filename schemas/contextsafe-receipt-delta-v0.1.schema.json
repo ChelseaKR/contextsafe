@@ -1,0 +1,139 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://contextsafe.invalid/schemas/contextsafe-receipt-delta-v0.1.schema.json",
+  "title": "ContextSafe receipt delta 0.1",
+  "$comment": "The output of `contextsafe receipt diff` (B-037, docs/04-ARCHITECTURE.md section 7): a deterministic, envelope-free, value-minimized comparison of two compatible contextsafe-receipt-v0.1 documents. Reference-only and ungoverned: no clinical, community, laboratory, legal, security, or accessibility review of this contract has happened. JSON Schema validates structure only; the runtime additionally requires both receipts to share case_id, rule_set_sha256, schema versions, concept and checkpoint sets, and rule bindings, and rejects the pair otherwise.",
+  "x-contextsafe-semantic-constraints": [
+    "receipts.before.payload_sha256 and receipts.after.payload_sha256 are the recomputed payload hashes of the two input documents, each of which had to match the hash the document declared; agreement is an internal-consistency check and verifies no signature, approval, or evidence",
+    "both receipts are unsigned and carry no trusted time, so before and after are the caller's labels and the delta proves nothing about which run came first",
+    "rules is ordered by rule_id and contains exactly the rule identifiers both receipts share; the runtime refuses a pair whose rule sets differ",
+    "every rule lands in exactly one summary count, so the summary values sum to the length of rules",
+    "changed is true exactly when change is not unchanged; evidence_sha256s_changed compares the sorted evidence hash lists and is independent of changed"
+  ],
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "case_id",
+    "limitations",
+    "receipts",
+    "rule_set_sha256",
+    "rules",
+    "runner_version_changed",
+    "summary"
+  ],
+  "properties": {
+    "schema_version": {"const": "contextsafe.receipt-delta/0.1.0"},
+    "case_id": {"$ref": "#/$defs/case_id"},
+    "limitations": {
+      "$comment": "Closed like the compiled-plan and compiled-pack limitation sets: slugs in a fixed order, no room for free text. Changing them requires a new contract version.",
+      "type": "array",
+      "minItems": 3,
+      "maxItems": 3,
+      "prefixItems": [
+        {"const": "receipts-are-unsigned"},
+        {"const": "run-order-is-not-established"},
+        {"const": "payload-hash-agreement-is-not-verification"}
+      ],
+      "items": false
+    },
+    "receipts": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["after", "before"],
+      "properties": {
+        "after": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["payload_sha256"],
+          "properties": {"payload_sha256": {"$ref": "#/$defs/sha256"}}
+        },
+        "before": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["payload_sha256"],
+          "properties": {"payload_sha256": {"$ref": "#/$defs/sha256"}}
+        }
+      }
+    },
+    "rule_set_sha256": {"$ref": "#/$defs/sha256"},
+    "rules": {
+      "type": "array",
+      "minItems": 1,
+      "items": {"$ref": "#/$defs/rule_delta"}
+    },
+    "runner_version_changed": {
+      "$comment": "Whether the two receipts name different runner versions. A flag rather than the versions themselves: the delta says that the runner changed, and the receipts say what it changed from and to.",
+      "type": "boolean"
+    },
+    "summary": {
+      "$comment": "One count per change code; a code may not be silently dropped from or added to a delta summary.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["changed_other", "improved", "regressed", "unchanged"],
+      "properties": {
+        "changed_other": {"type": "integer", "minimum": 0},
+        "improved": {"type": "integer", "minimum": 0},
+        "regressed": {"type": "integer", "minimum": 0},
+        "unchanged": {"type": "integer", "minimum": 0}
+      }
+    }
+  },
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "case_id": {"type": "string", "pattern": "^CTP-[A-Z0-9]{3,16}$"},
+    "outcome_status": {
+      "enum": ["pass", "fail", "indeterminate", "blocked", "not_applicable"]
+    },
+    "outcome_reason": {
+      "enum": [
+        "affirmative_evidence_match",
+        "ambiguous_evidence",
+        "missing_evidence",
+        "overwritten_by_other_concept",
+        "predeclared_not_applicable",
+        "record_count_changed",
+        "record_count_preserved",
+        "semantic_mismatch",
+        "status_not_preserved",
+        "status_preserved",
+        "value_changed_across_checkpoints",
+        "value_coerced",
+        "value_not_coerced",
+        "value_not_overwritten",
+        "value_not_present",
+        "value_present",
+        "value_preserved_across_checkpoints"
+      ]
+    },
+    "rule_change": {
+      "$comment": "regressed is pass to fail, indeterminate, or blocked; improved is the mirror; changed_other is any other difference in status or reason, including a move into or out of not_applicable, which the shared rule set does not explain.",
+      "enum": ["unchanged", "regressed", "improved", "changed_other"]
+    },
+    "rule_delta": {
+      "$comment": "Statuses, reasons, flags, and a closed change code. No expected, observed, or evidence hash is copied through, and no semantic value can appear.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "change",
+        "changed",
+        "evidence_sha256s_changed",
+        "reason_after",
+        "reason_before",
+        "rule_id",
+        "status_after",
+        "status_before"
+      ],
+      "properties": {
+        "change": {"$ref": "#/$defs/rule_change"},
+        "changed": {"type": "boolean"},
+        "evidence_sha256s_changed": {"type": "boolean"},
+        "reason_after": {"$ref": "#/$defs/outcome_reason"},
+        "reason_before": {"$ref": "#/$defs/outcome_reason"},
+        "rule_id": {"type": "string", "pattern": "^A-I[0-9]{2}$"},
+        "status_after": {"$ref": "#/$defs/outcome_status"},
+        "status_before": {"$ref": "#/$defs/outcome_status"}
+      }
+    }
+  }
+}

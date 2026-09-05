@@ -8,6 +8,8 @@ service that would run it against a real health system is a plan, not a
 product.**
 
 The tool is here now. Twelve subcommands, no network access, committed synthetic
+
+The tool is here now. Eleven subcommands, no network access, committed synthetic
 fixtures that ship inside the package. With
 [`uv`](https://docs.astral.sh/uv/) installed, this returns a full receipt:
 
@@ -323,8 +325,9 @@ The same iteration adds the operator surface (the B-046 slice):
   it. The assembled bundle is scanned again before it is written, as a check on
   the construction rather than as the thing that makes it safe;
 - every command accepts `--log-dir`, which appends one closed-vocabulary record
-  (command, outcome, error code) to a local append-only log. Off unless asked,
-  never enabled from the environment, no message field, and no clock reading.
+  (command, outcome, error code, and the closed warning codes the command
+  carried) to a local append-only log. Off unless asked, never enabled from the
+  environment, no message field, and no clock reading.
 
 ### B-022: canonical JSON import and the importer registry
 
@@ -518,8 +521,11 @@ one target reject (both stay distinct observations, which evaluate as
 ambiguous), a target outside the synthetic grammar rejects, and a
 sex-parameter row binds the value token only — never an order context or a
 supporting observation. A token with no row stays verbatim and the result
-says so. The reference profiles are synthetic bindings for the reference
-fixtures, not the mapping of any real system; no interoperability,
+says so, and with `--log-dir` the event record says so too — one unbound
+token is enough to raise it, and a profile that binds nothing is the
+loudest case rather than the condition — so the profile is visible while it
+can still be fixed. The reference profiles are synthetic bindings for the
+reference fixtures, not the mapping of any real system; no interoperability,
 clinical, laboratory, or community reviewer has seen one; HL7 null flavors
 and an LIS's empty cell are still not bound to presence states; and the
 recording context a profile binds (a `PID-8` value to the `government-id`
@@ -692,6 +698,177 @@ of 36 is deterministic corpus coverage over the published library — not a
 sensitivity estimate over faults the library does not contain, and not a
 population claim of any kind. Nothing here is governed content, and no
 clinical, laboratory, or community review has looked at any fixture.
+
+### B-035 and B-036: the signing layer is designed, not built
+
+[ADR 0010](docs/adr/0010-signing-layer-dependency-and-trust-model.md) writes
+the signing layer down before any of it exists, and stops at the decision only
+the maintainer can make: the standard library has no Ed25519, so the first
+`sign` command is the first runtime dependency of a project whose
+`dependencies = []` is a supply-chain claim. The record lays out
+`cryptography`, `PyNaCl`, an optional `contextsafe[signing]` extra whose
+commands fail closed with `signing_unavailable` when the backend is absent, and
+a pure-Python implementation that is rejected outright, with the `pip-audit`,
+per-platform wheel and Windows consequences of each as read on 2026-09-04; it
+recommends the extra backed by `PyNaCl` and says why. It then fixes what B-035
+and B-036 must implement under any option: detached-signature and
+trust-manifest shapes as draft fragments inside the ADR and not in `schemas/`,
+subject hashes as the signed thing, rotation with a bounded overlap, 31-day
+revocation freshness measured against a caller-declared `--as-of` and never a
+clock, compromise recovery, the per-purpose thresholds from Architecture §6.6,
+and what a verified result would and would not prove without RFC 3161 time.
+Its status is proposed. Nothing in the tool changes: no command signs or
+verifies, no schema is published, no key or dependency is added, no security
+review of the trust model has happened, and every artifact still says
+`not_signed` or `not_verified`, which the design commits to never relabeling.
+
+### B-045: packaging and fresh-install evidence
+
+`.github/workflows/package.yml` builds the sdist and wheel, exports a CycloneDX
+SBOM from the locked graph, and on Ubuntu, macOS and Windows installs that
+wheel with `pip install --no-index` into an empty virtual environment, runs the
+Quickstart above from a directory outside the checkout, and requires the
+receipt document to reproduce the digest `tests/test_determinism.py` pins.
+Build provenance is attested over the recorded checksums only after every
+platform passes. The gate is `tools/fresh_install_gate.py`; it reads the pin
+rather than restating it, exits 2 rather than 0 for anything it could not
+examine (including a working directory that existed before it ran, since a
+kept environment would report a wheel it never installed), and its report
+carries digests, counts and codes and no path.
+`make package` builds the same artifacts locally and lists the wheel. The
+limits: these are GitHub's server images, not the desktop fresh installs RG-15
+names; the artifacts are unsigned, and provenance says which workflow produced
+them, not that anyone authorized them (B-035); the SBOM is derived from
+`uv.lock`, not read out of the wheel; and no tag exists, so it has not fired.
+
+### B-038 and B-041
+
+Audited on 2026-09-04 and completed where the audit found a gap:
+
+- **Print (B-038).** Every table has a `<thead>` and the print rules declare it
+  a repeating header group; a result row, a limitation with its source-locale
+  original, and the translation notice are each kept on one page, and a heading
+  or caption stays with what follows it. `make a11y` fails when any of those
+  declarations is missing, when a table has no header group, when any print
+  rule on any selector sets a break property or a `thead` display to anything
+  else, or when any print rule but the skip link's hides by any technique the
+  gate names: `display`, `visibility` (`hidden` or `collapse`), zero opacity, a
+  font below a pixel, a clip, a collapsed box with its overflow cut off, a
+  positioned box pushed off the sheet, `content-visibility`, a transform that
+  scales to nothing or translates off the sheet, or a negative indent or
+  margin past the edge. Every `@media` block whose query reaches the printer
+  is read as print rules, a block the gate cannot classify is a finding,
+  declarations are read the way CSS reads them (case-insensitively, with
+  `!important` set aside), and lengths are measured in their unit. The gate
+  does not try to know which selectors cover a disclosure; hiding anything
+  else is the finding.
+- **Evidence-minimized presentation (A-036).** The renderer recomputes
+  `payload_sha256` from the payload and refuses a document whose hash does not
+  cover it, and refuses any object carrying a field the receipt contract does
+  not publish rather than rendering around it. `make a11y` adds a
+  `minimization` check: every visible run of text is catalog text or one of the
+  receipt values the page may present, named by pointer, and a catalog message
+  with a placeholder counts only when the placeholder holds one of those
+  values, so no message is a prefix that free text can hide behind. A result's
+  expected, observed, and evidence hashes stay in the JSON and off the page,
+  and the hash the gate expects is recomputed, never read from the document:
+  the negative control forges the field and a page that carries it, which a
+  gate reading the field would audit and the recomputing gate refuses.
+- **Pseudolocale (B-041).** `qps-ploc` expands every message by at least 35
+  percent, and `make i18n` measures that floor on the body without its
+  brackets, that no accentable letter outside a placeholder is left plain, and
+  placeholder parity on the generated catalog (`pseudolocale-fidelity`)
+  instead of trusting the transform. `hardcoded-string` accepts source-locale
+  wording only where the page marks it as a source-locale original.
+
+What this does not claim: the print checks are computed from the stylesheet
+and the markup, not from a browser that printed the page, so the print-preview
+task in [Accessibility §7](docs/08-ACCESSIBILITY-I18N.md) remains B-044's. No
+locale was added; the pseudolocale is never shipped to a reader, and `es-US`
+remains an unreviewed machine translation (B-042).
+
+### B-037: the receipt delta
+
+`contextsafe receipt diff --before A.json --after B.json --output delta.json`
+compares two receipt documents rule by rule and emits a deterministic,
+envelope-free delta
+([contract](schemas/contextsafe-receipt-delta-v0.1.schema.json)): per rule,
+the status and reason in each receipt, whether the outcome changed, whether
+the evidence hashes changed, and a closed change code; counts of regressed
+(pass to fail, indeterminate, or blocked), improved, unchanged, and
+changed_other; and the payload hash of each receipt. Compatibility is
+fail-closed — identical case, rule-set hash, schema versions, concept and
+checkpoint sets, and rule bindings, or exit 2 with an `incompatible_receipts`
+error that names the field class and never a value — and each receipt is first
+parsed strictly against the published shape, with its `payload_sha256`
+required to cover its payload. `render` stays a top-level command for now and
+may move under `receipt` later.
+
+Its limits, which the delta states in its own limitations: both receipts are
+unsigned and carry no trusted time, so `before` and `after` are the caller's
+labels and **a delta over unsigned receipts proves nothing about which run
+came first**; swapping the inputs mirrors the delta exactly. Payload-hash
+agreement is an internal-consistency check, not verification — no signature,
+approval, or evidence is verified (B-036). The contract is reference-only and
+ungoverned, and a regression it reports is a finding for a reviewer, not a
+verdict.
+
+### B-032
+
+`contextsafe finding review --receipt R.json --event E.json --log LOG.jsonl`
+records one declared review decision about one finding in an append-only
+log, and `contextsafe finding list --log LOG.jsonl` derives the current
+disposition per outcome from it; both print the same derived state document
+and accept `--output`. An event binds the outcome and the receipt's payload
+and rule-set hashes to a decision from a closed set (`confirmed`, `rejected`,
+`severity_changed`, `owner_assigned`, `remediated`, `accepted_residual_risk`,
+`withdrawn`), a severity from a closed label set, an owner as a role plus the
+SHA-256 of an opaque handle, a rationale *code*, an optional external
+reference under the [ADR 0006](docs/adr/0006-provenance-token-grammar-and-boundary-scan.md)
+grammar, and declared signers as a role plus an organization label. **There
+is no free-text field, by construction**, as with the support bundle, and the
+residual is stated rather than implied: a name-shaped token still fits the
+ADR 0006 grammars (`Jordan.Rivera` is a well-formed provenance label,
+`JORDAN-RIVERA` a well-formed system label), only the configured canaries and
+direct-identifier shapes are scanned for, and a grammar cannot see ordinary
+letters. The closed shape removes the field a name would be typed into, not
+the possibility of typing one into a label. The state machine is data, the
+table and the per-decision rules are pinned as literals a change must
+confront, and every transition the table does not contain is tested as a
+refusal. The log is one canonical line per event, hash-chained; every read
+re-hashes and replays the whole file before anything is appended, a single
+changed byte anywhere in it is refused, no line is ever rewritten, and
+`--output` naming the log is refused as `output_path_unsafe`: by device and
+inode when the log exists (a symlink or a hard link to it, from anywhere),
+and by parent-directory inode plus case- and normalization-folded leaf name
+when it does not yet exist (`/tmp/x/log` against `/private/tmp/x/log`, a
+symlinked parent, `REVIEW.jsonl` against `review.jsonl`). The fold is applied
+on every filesystem rather than probing which kind the log is on, so on a
+case-sensitive one it over-refuses a name that is a different file; the check
+runs before the log is opened and, for `finding review`, again after the
+append. What the chain cannot see is a record removed from its end: a log cut
+back to an earlier line is a valid shorter log. Detecting that needs an
+external record of the state document's `log_head_sha256`, which is one
+reason the document carries it. Two operational edges are stated rather than
+closed: a `finding review` whose `--output` cannot be written after the
+append exits 2 with `output_io_error` having recorded the event, so the next
+attempt to record the same event is refused as `illegal_transition` and
+`finding list` is the way to get the state; and a first event that is
+refused at the transition after the receipt binding held leaves a new,
+empty log file behind, which replays to the empty state. Its limits are the
+point: **signers are declared, not verified.**
+Every event and every signer says `signature_status: not_verified`, an
+accepted residual risk needs two declared signers with distinct roles and
+organizations or is refused, and **a declared signer authorizes nothing** —
+review signatures are B-035. A `remediated` decision binds no rerun receipt,
+so its rationale code is a declaration the tool cannot check, exactly like a
+signer. The vocabularies are reference-only and
+ungoverned, not the approved rubric. Dispositions are not bound into any
+receipt; the receipt contract is unchanged. Like the other descriptor-anchored
+commands, both fail closed with `input_path_unsupported` where the platform
+lacks `O_NOFOLLOW`. Contracts:
+[review event](schemas/contextsafe-review-event-v1.schema.json) and
+[review state](schemas/contextsafe-review-state-v1.schema.json).
 
 The durable evidence store has no CLI import route; `contextsafe import` writes
 only an observation-set document and never an evidence record. Every iteration-3 evidence record says
@@ -883,6 +1060,7 @@ A successful v1 allows one design partner to:
 - [ADR 0007: every analysis declares the tree it examines](docs/adr/0007-declared-analysis-scope.md)
 - [ADR 0008: one exit-code contract for every gate](docs/adr/0008-one-exit-code-contract-for-every-gate.md)
 - [ADR 0009: mutation evidence over the declared safety modules](docs/adr/0009-mutation-evidence-over-declared-safety-modules.md)
+- [ADR 0010: the signing layer, its first dependency and its trust model (proposed, decision pending)](docs/adr/0010-signing-layer-dependency-and-trust-model.md)
 
 ## Working principles
 

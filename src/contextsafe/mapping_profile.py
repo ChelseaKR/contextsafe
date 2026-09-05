@@ -24,8 +24,10 @@ read the token as; the target names the concept the observation carries.
 The two must be the same, and a row whose target is sex parameter for
 clinical use while its source is gender identity or recorded sex or gender
 is refused first and by name (``prohibited_spcu_mapping``, A-020 and
-A-021), before any other check, so that the prohibition is what a reader
-finds when they try it. A row whose target is a different concept for any
+A-021), before any other check on the row's contents -- ahead of the
+carrier table, the token grammar, and the target grammar alike -- so that
+the prohibition is what a reader finds when they try it, whatever else is
+wrong with the row. A row whose target is a different concept for any
 other reason is refused as ``concept_type_mismatch``.
 
 **No row invents a context.** A sex parameter for clinical use row binds
@@ -114,9 +116,23 @@ PRONOUN_SET_PATTERN = re.compile(r"^[a-z]{1,12}/[a-z]{1,12}(?:/[a-z]{1,12})?$")
 
 The one target form without a synthetic prefix, admitted because the case
 contract's own reference pronouns value is ``they/them`` and a profile must
-be able to bind a token to it. It is a shape, not a list: no closed set of
-pronouns is published here, and it admits no capital, digit, or space, so no
-name can be written in it.
+be able to bind a token to it.
+
+What the shape guarantees, stated as narrowly as it holds: exactly two or
+three segments of one to twelve lowercase ASCII letters joined by ``/``,
+and nothing else -- no capital, no digit, no space, no other punctuation --
+so free text, a date, a record number, and a name written the way a name is
+written are all outside it.
+
+What it does not guarantee, though this said it did until 2026-09-04: that
+no name can be written in it. ``jordan/rivera`` satisfies it. Telling a
+pronoun set from any other two lowercase words joined by a slash needs a
+published list of pronouns; publishing one is a community judgment nobody
+here has made, and inventing one to close a documentation defect would be
+the worse error. So the claim is narrowed to the shape rather than the
+shape to the claim, and what holds this form to synthetic values is the
+rest of the target grammar and the boundary scan every target string goes
+through -- not this pattern alone.
 """
 
 RSG_CONTEXTS = frozenset(
@@ -374,18 +390,57 @@ def _source(
     return SourceToken(concept=concept, carrier=carrier, token=token)
 
 
-def _require_same_concept(source: ConceptKind, target: ConceptKind, path: str) -> None:
-    """The prohibition first and by name, then the general rule."""
+def _declared_concept(value: object) -> ConceptKind | None:
+    """The concept a row half declares, read before the row is parsed.
 
+    ``None`` when the half is not an object or does not name a concept the
+    contract knows. Nothing is decided from ``None``: the structural parse a
+    moment later refuses that half with its own code and location.
+    """
+
+    if not isinstance(value, dict):
+        return None
+    declared = value.get("concept")
+    if not isinstance(declared, str) or declared not in _CONCEPT_NAMES:
+        return None
+    return ConceptKind(declared)
+
+
+def _refuse_prohibited_spcu_row(data: Mapping[str, object], path: str) -> None:
+    """Refuse a GI-or-RSG-to-SPCU row before any other check on its contents.
+
+    The prohibition is decided from the two declared concepts alone, which
+    is why it can run here. It used to sit inside the target checks, and
+    ``_source`` runs before ``_target``, so a row that both named a carrier
+    its concept is never read as *and* targeted SPCU reported the carrier
+    mismatch: true, and not the sentence a reader who tried the prohibition
+    needed to find. A doubly-invalid row now reports
+    ``prohibited_spcu_mapping``.
+    """
+
+    source = _declared_concept(data.get("source"))
+    target = _declared_concept(data.get("target"))
+    if source is None or target is None:
+        return
     if (
         target is ConceptKind.SEX_PARAMETER_FOR_CLINICAL_USE
         and source in _PROHIBITED_SPCU_SOURCES
     ):
         raise contract_error(
             "prohibited_spcu_mapping",
-            path,
+            f"{path}.target",
             "GI and RSG can never be mapped into SPCU",
         )
+
+
+def _require_same_concept(source: ConceptKind, target: ConceptKind, path: str) -> None:
+    """The general rule. The prohibition it carves out is refused earlier.
+
+    By the time this runs, ``_refuse_prohibited_spcu_row`` has read both
+    declared concepts, so a GI or RSG source with an SPCU target has already
+    been refused by name and cannot arrive here as a type mismatch.
+    """
+
     if source is not target:
         raise contract_error(
             "concept_type_mismatch",
@@ -532,6 +587,7 @@ def _row(
 ) -> MappingRow:
     data = object_value(value, path)
     exact_keys(data, frozenset({"source", "target"}), path)
+    _refuse_prohibited_spcu_row(data, path)
     source = _source(data["source"], f"{path}.source", carriers)
     concept, target = _target(data["target"], f"{path}.target", source.concept)
     return MappingRow(source=source, target_concept=concept, target=target)

@@ -869,6 +869,220 @@ def test_mapping_validate_rejection_is_deterministic(tmp_path: Path) -> None:
     }
 
 
+def test_render_page_is_byte_identical_across_runs_environments_and_paths(
+    tmp_path: Path,
+) -> None:
+    """The rendered page joins the matrix: same receipt, same locale, same bytes.
+
+    ``tests/test_html_receipt.py`` already spreads the render across three
+    environments; this row adds the working-directory and input-path spread
+    the other commands get, so a path or locale leak into the page fails
+    here with the rest.
+    """
+
+    receipt = tmp_path / "receipt.json"
+    assert main([*_evaluate_argv(REFERENCE), "--quiet", "--output", str(receipt)]) == 0
+    runs = _three_runs(
+        tmp_path,
+        lambda reference: ["render", "--receipt", str(receipt), "--lang", "es-US"],
+        with_output=True,
+    )
+    _assert_identical(runs)
+    assert runs[0].returncode == 0
+    artifact = runs[0].artifact
+    assert artifact is not None
+    assert artifact.startswith(b"<!DOCTYPE html>")
+    assert b'lang="es-US"' in artifact
+    assert str(tmp_path).encode("utf-8") not in artifact
+
+
+RECEIPT_DELTA_SHA256 = (
+    "a0ec5e5e67da7272129ae8f26149bc7bf58835c2d5ae67a2a573cd12ad2a7380"
+)
+"""SHA-256 of ``receipt diff`` over the reference receipt against itself.
+
+Pinned for the same reason as ``RECEIPT_DOCUMENT_SHA256`` and changing under
+the same conditions: it moves when the receipt payload, the delta contract, or
+the runner version moves, and at no other time.
+"""
+
+
+def _receipt_diff_scenario(tmp_path: Path) -> tuple[Path, Path]:
+    """Write the two receipts the diff scenarios read, in process."""
+
+    before = tmp_path / "before-receipt.json"
+    assert main([*_evaluate_argv(REFERENCE), "--output", str(before)]) == 0
+    observations = json.loads(
+        (REFERENCE / "observations.json").read_text(encoding="utf-8")
+    )
+    observations["observations"][4]["value"]["value"] = "ze/hir"
+    contradicted = tmp_path / "contradicted-observations.json"
+    contradicted.write_text(json.dumps(observations), encoding="utf-8")
+    after = tmp_path / "after-receipt.json"
+    argv = _evaluate_argv(REFERENCE)
+    argv[4] = str(contradicted)
+    assert main([*argv, "--output", str(after)]) == 0
+    return before, after
+
+
+def test_receipt_diff_artifact_is_byte_identical_and_matches_stdout(
+    tmp_path: Path,
+) -> None:
+    """The delta is an artifact too: same bytes in every environment."""
+
+    before, after = _receipt_diff_scenario(tmp_path)
+    argv = ["receipt", "diff", "--before", str(before), "--after", str(after)]
+    runs = _three_runs(tmp_path, lambda _reference: argv, with_output=True)
+    _assert_identical(runs)
+    artifact = runs[0].artifact
+    assert artifact is not None
+    assert runs[0].returncode == 0
+    assert runs[0].stdout == b""
+    assert runs[0].stderr == b""
+    _assert_canonical_line(artifact)
+    delta = json.loads(artifact.decode("utf-8"))
+    assert delta["summary"]["regressed"] == 1
+    for fragment in (str(tmp_path), str(ROOT), "Kiritimati", "en_US", "ze/hir"):
+        assert fragment.encode("utf-8") not in artifact
+
+    printed = _three_runs(tmp_path / "printed", lambda _reference: argv)
+    _assert_identical(printed)
+    assert printed[0].stdout == artifact
+
+
+def test_receipt_diff_digest_is_pinned_on_every_platform(tmp_path: Path) -> None:
+    """One constant digest for the self-delta of the reference receipt."""
+
+    before, _ = _receipt_diff_scenario(tmp_path)
+    argv = ["receipt", "diff", "--before", str(before), "--after", str(before)]
+    runs = _three_runs(tmp_path, lambda _reference: argv, with_output=True)
+    _assert_identical(runs)
+    artifact = runs[0].artifact
+    assert artifact is not None
+    assert hashlib.sha256(artifact).hexdigest() == RECEIPT_DELTA_SHA256
+
+
+def test_incompatible_receipts_rejection_is_deterministic(tmp_path: Path) -> None:
+    """A compatibility rejection names a field class, identically, every run."""
+
+    before, after = _receipt_diff_scenario(tmp_path)
+    document = json.loads(after.read_text(encoding="utf-8"))
+    document["payload"]["case_id"] = "CTP-I02"
+    document["payload_sha256"] = hashlib.sha256(
+        json.dumps(document["payload"], sort_keys=True, separators=(",", ":")).encode(
+            "utf-8"
+        )
+    ).hexdigest()
+    after.write_text(json.dumps(document), encoding="utf-8")
+    argv = ["receipt", "diff", "--before", str(before), "--after", str(after)]
+    runs = _three_runs(tmp_path, lambda _reference: argv)
+    _assert_identical(runs)
+    assert runs[0].returncode == 2
+    assert runs[0].stdout == b""
+    _assert_canonical_line(runs[0].stderr)
+    error = json.loads(runs[0].stderr.decode("utf-8"))["error"]
+    assert error["code"] == "incompatible_receipts"
+    assert b"CTP-I0" not in runs[0].stderr
+
+
+def _finding_inputs(root: Path) -> tuple[Path, Path]:
+    """A receipt with one fail outcome and a confirmed event bound to it."""
+
+    observations = json.loads(
+        (REFERENCE / "observations.json").read_text(encoding="utf-8")
+    )
+    observations["observations"][4]["value"]["value"] = "ze/hir"
+    observations_path = root / "mismatched-observations.json"
+    observations_path.write_text(json.dumps(observations), encoding="utf-8")
+    receipt_path = root / "receipt.json"
+    argv = _evaluate_argv(REFERENCE)
+    argv[4] = str(observations_path)
+    assert main([*argv, "--output", str(receipt_path)]) == 0
+    receipt = json.loads(receipt_path.read_text(encoding="utf-8"))
+    event_path = root / "event.json"
+    event_path.write_text(
+        json.dumps(
+            {
+                "schema_version": "contextsafe.review-event/1.0.0",
+                "outcome": {
+                    "rule_id": "A-I05",
+                    "case_id": "CTP-I01",
+                    "checkpoint": "ehr",
+                    "concept": "pronouns",
+                },
+                "receipt": {
+                    "payload_sha256": receipt["payload_sha256"],
+                    "rule_set_sha256": receipt["payload"]["hashes"]["rule_set_sha256"],
+                },
+                "decision": "confirmed",
+                "severity": "cs2_high",
+                "owner": None,
+                "rationale_code": "evidence_verified_against_source",
+                "external_reference": "ticket.synthetic-a",
+                "signers": [
+                    {
+                        "role": "contextsafe_clinical_safety_chair",
+                        "organization_id": "ORG-CONTEXTSAFE-TEST",
+                        "signature_status": "not_verified",
+                    }
+                ],
+                "signature_status": "not_verified",
+            }
+        ),
+        encoding="utf-8",
+    )
+    return receipt_path, event_path
+
+
+@pytest.mark.skipif(os.name == "nt", reason=_WINDOWS_UNSUPPORTED)
+def test_finding_review_and_list_are_byte_identical_across_runs(
+    tmp_path: Path,
+) -> None:
+    """A review log and the state derived from it carry no clock and no path.
+
+    Each run appends to its own fresh log, so the three logs must be
+    byte-identical too: the file a later item would bind into a receipt is
+    reproducible from the events alone.
+    """
+
+    receipt_path, event_path = _finding_inputs(tmp_path)
+    logs = [tmp_path / f"review-{index}.jsonl" for index in range(3)]
+    handed_out = iter(logs)
+    runs = _three_runs(
+        tmp_path,
+        lambda _reference: [
+            "finding",
+            "review",
+            "--receipt",
+            str(receipt_path),
+            "--event",
+            str(event_path),
+            "--log",
+            str(next(handed_out)),
+        ],
+        with_output=True,
+    )
+    _assert_identical(runs)
+    assert runs[0].returncode == 0
+    assert runs[0].stderr == b""
+    artifact = runs[0].artifact
+    assert artifact is not None
+    _assert_canonical_line(artifact)
+    assert logs[0].read_bytes() == logs[1].read_bytes() == logs[2].read_bytes()
+    _assert_canonical_line(logs[0].read_bytes())
+    for fragment in (str(tmp_path), "Kiritimati", "en_US"):
+        assert fragment.encode("utf-8") not in artifact
+        assert fragment.encode("utf-8") not in logs[0].read_bytes()
+
+    listed = _three_runs(
+        tmp_path / "listed",
+        lambda _reference: ["finding", "list", "--log", str(logs[0])],
+    )
+    _assert_identical(listed)
+    assert listed[0].returncode == 0
+    assert listed[0].stdout == artifact
+
+
 def test_platforms_without_descriptor_relative_open_fail_closed(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

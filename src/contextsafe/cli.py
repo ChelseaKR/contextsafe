@@ -33,9 +33,15 @@ from contextsafe.pack import compile_pack
 from contextsafe.plan import parse_plan, validate_plan
 from contextsafe.preflight import preflight_source
 from contextsafe.receipt import build_receipt_document, input_payload, render_receipt
+from contextsafe.receipt_delta import diff_receipts, parse_receipt_document
 from contextsafe.reference_fixtures import (
     DEFAULT_EXPORT_DIRECTORY,
     export_reference_fixtures,
+)
+from contextsafe.review import (
+    append_review_event,
+    derive_review_state,
+    refuse_output_over_log,
 )
 from contextsafe.validation import parse_bundle, parse_case
 
@@ -115,8 +121,9 @@ def _mode_flags() -> "_Parser":
         help=(
             "append one closed-vocabulary event record to a local log in this "
             "directory. Off unless given, never read from the environment, and "
-            "the record carries the command, the outcome, and the error code "
-            "only: no message, no path, no clock reading"
+            "the record carries the command, the outcome, the error code, and "
+            "the command's own warning codes only: no message, no path, no "
+            "clock reading"
         ),
     )
     return parent
@@ -163,6 +170,38 @@ def _parser() -> argparse.ArgumentParser:
         help=_HELP.text("cli.flag.lang"),
     )
     render_parser.add_argument("--output", type=Path)
+    # `render` stays a top-level command for now; it may move under the
+    # `receipt` group in a later pass, and its arguments would not change.
+    receipt_parser = subparsers.add_parser(
+        "receipt",
+        help="Compare receipt documents; verification and signing are not here.",
+    )
+    receipt_subparsers = receipt_parser.add_subparsers(
+        dest="receipt_command", required=True
+    )
+    diff_help = (
+        "emit the deterministic delta between two compatible receipt "
+        "documents: per rule, the status and reason in each, whether the "
+        "outcome changed, and whether the evidence hashes changed. Both "
+        "receipts are unsigned, so 'before' and 'after' are the caller's "
+        "labels and prove nothing about which run came first"
+    )
+    receipt_diff = receipt_subparsers.add_parser(
+        "diff", parents=[modes], help=diff_help, description=diff_help
+    )
+    receipt_diff.add_argument(
+        "--before",
+        required=True,
+        type=Path,
+        help="the receipt document the caller treats as the earlier one",
+    )
+    receipt_diff.add_argument(
+        "--after",
+        required=True,
+        type=Path,
+        help="the receipt document the caller treats as the later one",
+    )
+    receipt_diff.add_argument("--output", type=Path)
     pack_parser = subparsers.add_parser("pack", help=_HELP.text("cli.command.pack"))
     pack_subparsers = pack_parser.add_subparsers(dest="pack_command", required=True)
     pack_validate = pack_subparsers.add_parser(
@@ -247,6 +286,40 @@ def _parser() -> argparse.ArgumentParser:
     )
     mapping_validate.add_argument("--profile", required=True, type=Path)
     mapping_validate.add_argument("--output", type=Path)
+
+    finding_parser = subparsers.add_parser(
+        "finding",
+        help=(
+            "record and derive unsigned finding dispositions in an append-only "
+            "review log; every event is declared, not verified"
+        ),
+    )
+    finding_subparsers = finding_parser.add_subparsers(
+        dest="finding_command", required=True
+    )
+    finding_review = finding_subparsers.add_parser(
+        "review",
+        parents=[modes],
+        help=(
+            "validate one review event against a receipt and the log's prior "
+            "state, then append one canonical line; refuses an out-of-order "
+            "transition and a log whose earlier lines do not re-hash"
+        ),
+    )
+    finding_review.add_argument("--receipt", required=True, type=Path)
+    finding_review.add_argument("--event", required=True, type=Path)
+    finding_review.add_argument("--log", required=True, type=Path)
+    finding_review.add_argument("--output", type=Path)
+    finding_list = finding_subparsers.add_parser(
+        "list",
+        parents=[modes],
+        help=(
+            "derive the current disposition per outcome from a review log "
+            "without changing it"
+        ),
+    )
+    finding_list.add_argument("--log", required=True, type=Path)
+    finding_list.add_argument("--output", type=Path)
     fixtures_parser = subparsers.add_parser(
         "fixtures",
         help="Work with the synthetic reference fixtures the package carries.",
@@ -358,6 +431,8 @@ def _operator_command(args: argparse.Namespace) -> str | None:
                 "unsupported_command", "$", "fixtures command is unsupported"
             )
         return f"{canonical_json(export_reference_fixtures(args.directory))}\n"
+    if args.command == "finding":
+        return _finding_command(args)
     return None
 
 
@@ -367,8 +442,11 @@ def _import_command(args: argparse.Namespace) -> str:
     Read-only: the source is opened once through the evidence boundary
     scan, never copied, indexed, or logged, and the only thing emitted is
     the document ``evaluate --observations`` accepts. The result's counts
-    and closed-vocabulary warnings stay in process because that contract
-    has no field for them.
+    stay in process because that contract has no field for them; its
+    closed-vocabulary warnings are handed to the event log, which is the one
+    surface that already carries closed codes, so a profile that binds
+    nothing is visible to an operator who asked for a log rather than to the
+    test suite alone.
     """
 
     mapping_path: Path | None = args.mapping
@@ -380,6 +458,7 @@ def _import_command(args: argparse.Namespace) -> str:
         checkpoint=checkpoint_value(args.checkpoint, "$.checkpoint"),
         profile=profile,
     )
+    args.event_warnings = tuple(item.value for item in result.warnings)
     return f"{canonical_json(result.observation_set())}\n"
 
 
@@ -396,6 +475,27 @@ def _mapping_command(args: argparse.Namespace) -> str:
             "unsupported_command", "$", "mapping command is unsupported"
         )
     return f"{canonical_json(compile_profile(load_json(args.profile)).to_dict())}\n"
+
+
+def _finding_command(args: argparse.Namespace) -> str:
+    """Append one declared review event, or derive the log's current state.
+
+    Both print the derived state document: the disposition of every outcome
+    the log has seen, the log head hash, and the pinned limitations. The
+    receipt is read for its hashes and its finding outcomes only, and it is
+    never changed.
+    """
+
+    refuse_output_over_log(args.output, args.log)
+    if args.finding_command == "review":
+        state = append_review_event(
+            args.log, load_json(args.event), load_json(args.receipt)
+        )
+        refuse_output_over_log(args.output, args.log)
+        return f"{canonical_json(state.to_dict())}\n"
+    if args.finding_command == "list":
+        return f"{canonical_json(derive_review_state(args.log).to_dict())}\n"
+    raise ContextSafeError("unsupported_command", "$", "finding command is unsupported")
 
 
 def _render_command(args: argparse.Namespace) -> str:
@@ -421,13 +521,31 @@ def _conversion_command(args: argparse.Namespace) -> str | None:
     return None
 
 
-def _run(args: argparse.Namespace) -> str:
-    operator = _operator_command(args)
-    if operator is not None:
-        return operator
-    conversion = _conversion_command(args)
-    if conversion is not None:
-        return conversion
+def _receipt_command(args: argparse.Namespace) -> str | None:
+    """Handle the commands that read receipt documents, or return None."""
+
+    if args.command == "render":
+        return _render_command(args)
+    if args.command != "receipt":
+        return None
+    if args.receipt_command != "diff":
+        raise ContextSafeError(
+            "unsupported_command", "$", "receipt command is unsupported"
+        )
+    before = parse_receipt_document(load_json(args.before), path="$.before")
+    after = parse_receipt_document(load_json(args.after), path="$.after")
+    return f"{canonical_json(diff_receipts(before, after).to_dict())}\n"
+
+
+def _governance_command(args: argparse.Namespace) -> str | None:
+    """Run a pack, plan, or evidence command, or return None for another.
+
+    These three share a shape: a subcommand this iteration does not implement
+    is refused rather than ignored, and each emits one canonical artifact.
+    They live here rather than in ``_run`` so that adding a command group
+    does not push the dispatcher past the complexity the gate allows.
+    """
+
     if args.command == "pack":
         if args.pack_command != "validate":
             raise ContextSafeError(
@@ -472,6 +590,23 @@ def _run(args: argparse.Namespace) -> str:
         )
         result = preflight_source(args.source, scope)
         return f"{canonical_json(result.to_dict())}\n"
+    return None
+
+
+def _run(args: argparse.Namespace) -> str:
+    operator = _operator_command(args)
+    if operator is not None:
+        return operator
+    conversion = _conversion_command(args)
+    if conversion is not None:
+        return conversion
+
+    receipt = _receipt_command(args)
+    if receipt is not None:
+        return receipt
+    governance = _governance_command(args)
+    if governance is not None:
+        return governance
     case_value, observation_value, rule_value = _validated_inputs(args)
     bundle = parse_bundle(case_value, observation_value, rule_value)
     if args.command == "validate":
@@ -555,14 +690,31 @@ def _log(args: argparse.Namespace, outcome: Outcome, error_code: str | None) -> 
     reasons, and turning "the log directory is read-only" into "your evaluation
     failed" would be its own defect. The failure is reported on stderr as a
     structured error and nothing else changes.
+
+    ``event_warnings`` is set by the command that ran, if it carried any:
+    only ``import`` does. They are read here only for an accepted record.
+    A conversion can succeed and the command be rejected afterwards --
+    ``--output`` over a directory raises ``output_io_error`` after
+    ``import`` returned, with its warnings still on ``args`` -- and a record
+    saying the command produced nothing may not also carry findings about an
+    artifact nobody received. So a rejected record's warning list is empty
+    whatever the command got through first, and the field means one thing
+    rather than depending on where the failure landed.
     """
 
     log_dir: Path | None = getattr(args, "log_dir", None)
     if log_dir is None:
         return
+    warnings: tuple[str, ...] = (
+        getattr(args, "event_warnings", ()) if outcome is Outcome.ACCEPTED else ()
+    )
     try:
         append_event(
-            log_dir, command=args.command, outcome=outcome, error_code=error_code
+            log_dir,
+            command=args.command,
+            outcome=outcome,
+            error_code=error_code,
+            warnings=warnings,
         )
     except ContextSafeError as exc:
         failure: dict[str, JsonValue] = {"error": as_json_value(exc.to_dict())}

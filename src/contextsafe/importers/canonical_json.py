@@ -98,13 +98,27 @@ is not an observation set with some records left out; it is a source this
 importer cannot convert.
 """
 
+_UNCONVERTIBLE_FIELD_CODES = frozenset({"sex_parameter_for_clinical_use"})
+"""Field codes this table maps and this importer never converts a record of.
+
+The converter below raises ``import_concept_not_convertible`` for each of
+them, so no observation and no source token is ever emitted under one.
+"""
+
 CANONICAL_JSON_CARRIERS: Mapping[str, frozenset[ConceptKind]] = {
-    code: frozenset({concept}) for code, concept in _FIELD_CODE_CONCEPTS.items()
+    code: frozenset({concept})
+    for code, concept in _FIELD_CODE_CONCEPTS.items()
+    if code not in _UNCONVERTIBLE_FIELD_CODES
 }
 """What a mapping profile for this format may name as a carrier: a field code.
 
 Each reads as exactly the concept it names, so a profile row cannot read a
 ``recorded_sex_or_gender`` record as anything else.
+``sex_parameter_for_clinical_use`` is absent for the same reason the FHIR
+reader omits the sex-parameter extension URL: the converter always refuses
+that record, so this importer emits no token under that carrier and a row
+naming it could never match. A table whose purpose is to say what an
+importer can emit may not name a carrier it never emits.
 """
 
 _STATUS_CODES: Mapping[str, ValueStatus] = {
