@@ -14,7 +14,7 @@ rather than after it.
 - **The SAST gate reads the scan instead of the scanner's exit code, and a file
   its parser could not finish now fails the security workflow by design.**
   Semgrep had been partially analyzing `src/contextsafe/validation.py` — a
-  safety module, one of the twenty-eight the 95% coverage floor covers — and
+  safety module, one of the twenty-nine the 95% coverage floor covers — and
   exiting 0, because a partial parse is reported at level `warn`. `--strict`,
   chosen in ADR 0004 so that "a scan that cannot run can no longer report
   success", did not convert it: the job was green on `main` for as long as the
@@ -42,12 +42,31 @@ rather than after it.
   `make sast` is the maintainer's entry point and `.github/workflows/security.yml`
   runs the same program, so the argv lives in one place; like `make secret-scan`
   it is deliberately outside `make verify`, which stays runnable on a clean
-  clone. `tests/test_sast_gate.py` drives every state with recorded report
-  shapes and a stand-in scanner, and therefore runs with no semgrep installed;
+  clone.
+  **The scanner is pinned as well as the invocation**, because a shared argv is
+  not a shared scan while the parsers differ — which is this defect one layer
+  over. Semgrep 1.175.0 parses `def _enum[T: StrEnum]` with no error, while the
+  1.168.0 container the job is pinned to is the version the partial-parse
+  warning came from, so an unpinned `make sast` would report clean over exactly
+  the construct CI cannot finish reading. The gate reads the `version` semgrep
+  writes at the top of its own report, refuses a report that does not name its
+  scanner, exits 2 naming both versions on a mismatch, and takes
+  `ALLOW_SEMGREP_VERSION_DRIFT=1` as the deliberate override — the same pin and
+  the same escape hatch as `make secret-scan`'s gitleaks. A test reads the
+  version out of the workflow's container comment, so the pin and the image
+  cannot drift apart silently.
+  The denominator the gate holds the scan to is tracked *and present*: a source
+  deleted from the working tree and not yet staged is still in the index, and
+  nothing could have scanned it.
+  `tests/test_sast_gate.py` drives every state with recorded report shapes and a
+  stand-in scanner, and therefore runs with no semgrep installed;
   `tests/test_gate_exit_contract.py` now drives this gate into "examined
   nothing" alongside the other ten. ADR 0008 had recorded Semgrep as out of that
   contract's reach, which was right about the exit code and wrong about the
-  gate. Refs #114, ADR 0012.
+  gate. What the gate still cannot see is stated in ADR 0012 rather than left to
+  a passing run: a parse failure the scanner does not report at all, and a rule
+  set that comes back smaller than expected — it declares its file denominator
+  and not its rule denominator. Refs #114, ADR 0012.
 - **The rule that this codebase may not use PEP 695 type parameters on a
   function or class is recorded and asserted, not left in a lint comment.**
   It lived only beside the `UP047` ignore in `pyproject.toml`. ADR 0012 states

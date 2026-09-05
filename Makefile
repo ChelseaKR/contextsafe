@@ -55,8 +55,12 @@ secret-scan:
 # not happen at all is exit 2. Deliberately not part of `verify`, exactly as
 # `secret-scan` is not: semgrep is not in uv.lock, a clean clone does not have
 # it, and `--config auto` is a network call. `.github/workflows/security.yml`
-# runs this same program, so CI and a maintainer judge the same scan. See
-# ADR 0012.
+# runs this same program, and the gate is pinned to the scanner version that
+# workflow's container is pinned to -- a shared argv is not a shared scan while
+# the parsers differ, which is what #114 was about. A different semgrep is exit
+# 2 naming both versions; ALLOW_SEMGREP_VERSION_DRIFT=1 accepts it with a
+# warning, exactly as `secret-scan` treats a gitleaks that is not the pinned
+# one. See ADR 0012.
 sast:
 	uv run python tools/sast_gate.py
 

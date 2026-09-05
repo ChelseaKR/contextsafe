@@ -114,14 +114,40 @@ Exactly as `make secret-scan` is wired. The scanner is not in `uv.lock`, a clean
 clone does not have it, and `--config auto` is a network call, while `make verify`
 must stay the byte-for-byte gate `ci.yml` runs on a clean checkout. `make sast` is
 the maintainer's entry point and `.github/workflows/security.yml` runs the same
-program — the scanner's argv lives in `SEMGREP_ARGV` in the gate and nowhere else,
-so the job cannot pass while the gate a maintainer runs scans something different.
+program — the scanner's argv lives in `SEMGREP_ARGV` in the gate and nowhere else.
 The three states are covered by `tests/test_sast_gate.py` with recorded report
 shapes and a stand-in scanner, which run inside `make verify` on a machine with
 no semgrep installed, and `tests/test_gate_exit_contract.py` now drives this gate
 into state 2 along with the other ten.
 
-### 4. While this scanner is the SAST gate, no function or class here carries PEP 695 type parameters
+### 4. The scanner is pinned, because a shared argv is only half of a shared scan
+
+`make sast` and the SAST job run one program with one invocation, which removes
+one kind of drift and not the one this ADR is about. The other half of "the same
+scan" is *which scanner ran it*, and a scanner's parser is the entire subject
+here: measured on 2026-09-05, semgrep 1.175.0 parses `def _enum[T: StrEnum]`
+with `errors: []`, while the 1.168.0 container the job is pinned to is the
+version the `PartialParsing` warning above came from. An unpinned `make sast`
+therefore answers "clean" about exactly the construct the pinned CI scan cannot
+finish reading — the defect of this ADR, one layer over, in the gate written to
+close it.
+
+So `tools/sast_gate.py` carries `PINNED_SCANNER_VERSION` and reads the
+`"version"` key semgrep writes at the top level of its own report, which means
+the version checked is the one that produced the result being judged rather than
+whatever a second `--version` call would answer. A different version is exit 2,
+in the same state as any other scan this gate cannot vouch for, and
+`ALLOW_SEMGREP_VERSION_DRIFT=1` is the deliberate local override that warns and
+goes on. That is `make secret-scan`'s treatment of a gitleaks that is not 8.30.1,
+spelled the same way and for the same reason. A report with no readable
+`"version"` is also exit 2: an unnamed scanner cannot be shown to be the pinned
+one.
+
+`tests/test_sast_gate.py::test_the_pinned_scanner_is_the_one_the_workflow_runs`
+reads the version out of the workflow's own container comment rather than
+trusting the constant, so the pin and the image cannot drift apart quietly.
+
+### 5. While this scanner is the SAST gate, no function or class here carries PEP 695 type parameters
 
 `def f[T](...)` and `class C[T]:` are banned in `src` and `tools`. `TypeVar` is
 how a generic is written here. The PEP 695 `type` alias form is unaffected and is
@@ -140,8 +166,11 @@ version: measured on 2026-09-05, semgrep 1.175.0 parses `def _enum[T: StrEnum]`
 without complaint, while the CI container is pinned to 1.168.0, which is the
 version the warning above came from. So the ban is not "this syntax is bad"; it
 is "the gate cannot read it, and a gate that cannot read a safety module is worse
-than the syntax is good". It is reviewable the day the pinned scanner parses it,
-and the gate — not the ban — is what makes the next unparsable construct visible.
+than the syntax is good". It is reviewable the day the *pinned* scanner parses
+it — which is why section 4 pins it and refuses to judge a report from anything
+else: the version at which the constraint can be lifted is a version this gate
+now names rather than one a maintainer happens to have. The gate, not the ban,
+is what makes the next unparsable construct visible.
 
 ## Consequences
 
@@ -168,18 +197,49 @@ and the gate — not the ban — is what makes the next unparsable construct vis
   written in Python and limits itself to git-tracked files, so both are strongly
   implied and neither is proved here. If either is absent the job fails loudly on
   its first execution rather than passing quietly, which is the right direction
-  for a gate to be wrong in.
-- **What this gate still cannot see**, measured rather than assumed: with a
-  syntax error at the end of a file and nothing after it, semgrep 1.175.0
-  reported no error at all and `~100.0%` parsed lines, while the same error with
-  code following it produced the `PartialParsing` entry this gate reads. So the
-  gate detects an unparsable construct that has code after it — the case in
-  `validation.py`, and the case that matters, since the unread remainder is the
-  exposure — and cannot detect one that silently truncates a file's tail. Stated
-  because a gate that does not say what it misses is the thing this repository
-  keeps finding.
+  for a gate to be wrong in. A third joins them with the pin: that the pinned
+  container's report writes `"version": "1.168.0"` exactly. Semgrep 1.175.0 was
+  checked here on 2026-09-05 and writes its own version at the top level in that
+  form; 1.168.0 is not installed on this machine and is not asserted from one. A
+  mismatch is exit 2 with both strings printed, so the first run says what it
+  found rather than passing over it.
+- **What this gate still cannot see.** It reads the scanner's report, so its
+  reach is exactly what the scanner reports. Two limits follow, and both are
+  stated rather than left to be inferred from a passing run, because a gate that
+  does not say what it misses is the thing this repository keeps finding:
+  - **A parse failure the scanner does not report is invisible here.** The gate
+    detects the `PartialParsing` entry, which is what the case in
+    `validation.py` produced and the case that matters, since the unread
+    remainder is the exposure. A construct a given version parses *wrongly*, or
+    stops on without saying so, produces no entry and no coverage gap: the file
+    is in `paths.scanned` and the report is clean. This ADR previously recorded
+    a measured example of that shape; the measurement named no file, was not
+    re-derivable from what it said, and did not reproduce on re-testing, so it
+    is withdrawn rather than restated. The limit is real whether or not that
+    example was; what is not claimed is a number for it.
+  - **The gate declares its file denominator and not its rule denominator.**
+    It fails when a tracked source is missing from what was scanned, and says
+    nothing about a ruleset that came back smaller than usual. A `--config auto`
+    resolution returning a reduced set still ends in an unqualified
+    "0 finding(s)". The literal zero-rule case is caught, because the scanner
+    then scans nothing and `paths.scanned` is empty; a partial ruleset is not.
+    This is not a regression — `--error --strict` had the same gap — but it is
+    the same shape as the file denominator one axis over, and the honest place
+    for it is here rather than in a reader's assumption.
 - Three gates now sit outside `make verify` rather than two, and `CONTRIBUTING.md`
   states the count that `make claims` re-derives from its own table.
+- `make sast` now needs the pinned scanner, so a maintainer with a different
+  semgrep gets exit 2 and a line naming both versions instead of a verdict. That
+  is the intended cost: the alternative is a local "clean" about a scan CI does
+  not run. `ALLOW_SEMGREP_VERSION_DRIFT=1` buys the old behaviour with the
+  divergence printed on the run.
+- **The gate's output is bounded but is not limited to paths and rule ids.** A
+  `PartialParsing` message embeds the source line the parser stopped at, so a
+  failing run puts up to 200 characters of this repository's own source into a
+  CI log. That is the repository's code, not a value from an input, so it is
+  outside what the receipt and diagnostics contracts minimise; it is written
+  down because "what does this gate print" is a question worth having an answer
+  to rather than a discovery.
 
 ## Rejected alternatives
 
@@ -210,6 +270,14 @@ and the gate — not the ban — is what makes the next unparsable construct vis
 - **Have the workflow keep its own semgrep command and pipe it into the gate.**
   Two copies of one invocation, which is the drift the pip-audit job was changed
   to avoid in the same file. The argv lives in the gate.
+- **Say the argv is shared and leave the scanner unpinned.** The honest version
+  of the unpinned gate: state that CI and a maintainer share an invocation and
+  not a parser, and stop claiming they judge the same scan. It would have been
+  true, and it would have left `make sast` able to report clean over the one
+  construct the pinned job cannot read — a gate whose local answer differs from
+  its CI answer on precisely its own subject. The secret scan had already made
+  this call for the same reason, so the pin is the existing posture rather than
+  a new one.
 - **Have the gate parse the scanner's human-readable output.** Cheaper to write
   and unbounded to maintain: the banner text is not a contract, and a gate whose
   detection depends on a `[WARN]` string is the same fragility one layer over.

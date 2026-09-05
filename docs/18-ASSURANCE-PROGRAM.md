@@ -244,7 +244,7 @@ can see a workflow run, and this document does not date one.
 
 ### Phase 5 — Evidence that the suite can detect a regression
 
-**Status: built,** over a declared subset of three of the twenty-eight modules
+**Status: built,** over a declared subset of three of the twenty-nine modules
 named in `SAFETY_MODULES`, and wired into CI on 2026-09-04
 (`.github/workflows/mutation.yml`); its first run has not been observed. See
 [ADR 0009](adr/0009-mutation-evidence-over-declared-safety-modules.md),
@@ -253,7 +253,7 @@ on any pull request touching the package, the suite or the gate. Configuration
 is not execution, and this document does not treat it as such: the evidence
 that the mutation gate runs in CI is its first run, which nobody has watched
 yet. What is proved today is proved by `make mutants` locally. Widening the
-declared subset is a runtime decision and has not been taken; twenty-five safety
+declared subset is a runtime decision and has not been taken; twenty-six safety
 modules still have no mutation evidence.
 
 Everything above proves a gate can fail. None of it proves the *test suite* can
@@ -350,7 +350,7 @@ Built, as of 2026-09-05:
 | 2 | built | ADR 0006; provenance grammars and the boundary scan on `parse_evidence_metadata`, closing issue #35 |
 | 3 | built | ADR 0007; `make scope` |
 | 4 | built, with one substitution, and widened to the SAST gate on 2026-09-05 | ADR 0008 and ADR 0012; the three-state contract, proved locally rather than by a CI job nobody has watched run, now including the scan whose partial parse used to leave a safety module read in part and reported clean (#114) |
-| 5 | built over three of twenty-eight safety modules | ADR 0009; `make mutants`, wired into `.github/workflows/mutation.yml` on 2026-09-04, first run not yet observed |
+| 5 | built over three of twenty-nine safety modules | ADR 0009; `make mutants`, wired into `.github/workflows/mutation.yml` on 2026-09-04, first run not yet observed |
 | 6 | **blocked on people and money** | nothing, deliberately |
 
 Phase 6 is blocked on people and money, not on code. Nothing in this repository

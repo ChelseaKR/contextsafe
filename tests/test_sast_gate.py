@@ -31,8 +31,9 @@ import importlib.util
 import json
 import subprocess
 import sys
+import tomllib
 from collections.abc import Sequence
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from types import ModuleType
 from typing import Any
 
@@ -83,11 +84,17 @@ def _report(
     scanned: Sequence[str] = SOURCES,
     errors: Sequence[dict[str, Any]] = (),
     results: Sequence[dict[str, Any]] = (),
+    version: str = gate.PINNED_SCANNER_VERSION,
 ) -> dict[str, Any]:
-    """A report in the scanner's own shape."""
+    """A report in the scanner's own shape.
+
+    ``version`` defaults to the pinned one because every other case here is
+    about something else; the pin has its own tests below. The key is where
+    semgrep writes it, at the top level of the `--json` document.
+    """
 
     return {
-        "version": "1.175.0",
+        "version": version,
         "results": list(results),
         "errors": list(errors),
         "paths": {"scanned": list(scanned)},
@@ -113,10 +120,12 @@ RULE_MATCH: dict[str, Any] = {
 }
 
 
-def _judge(repo: Path, report: dict[str, Any], tmp_path: Path) -> int:
+def _judge(
+    repo: Path, report: dict[str, Any], tmp_path: Path, *, extra: Sequence[str] = ()
+) -> int:
     path = tmp_path / "report.json"
     path.write_text(json.dumps(report), encoding="utf-8")
-    return int(gate.main(["--root", str(repo), "--report", str(path)]))
+    return int(gate.main(["--root", str(repo), "--report", str(path), *extra]))
 
 
 # --- the three states -------------------------------------------------------
@@ -129,6 +138,7 @@ def test_a_fully_parsed_scan_with_no_match_is_clean(
     out = capsys.readouterr().out
     assert "2 file(s) scanned and fully parsed" in out
     assert "2 tracked source(s)" in out
+    assert f"semgrep {gate.PINNED_SCANNER_VERSION}" in out
 
 
 def test_a_rule_match_is_a_finding(repo: Path, tmp_path: Path) -> None:
@@ -212,8 +222,34 @@ def test_a_source_the_scanner_never_opened_is_a_hole(
     assert "unscanned-source: tools/gate.py" in capsys.readouterr().err
 
 
-def test_a_scan_of_nothing_is_not_a_clean_scan(repo: Path, tmp_path: Path) -> None:
+def test_a_scan_of_nothing_is_not_a_clean_scan(
+    repo: Path, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """ADR 0004's Defect 2 -- a green SAST check over zero scanned files.
+
+    The exit code alone does not test this guard: with nothing scanned, the
+    coverage check below already emits a finding per tracked source and would
+    carry the same exit 2 with the guard deleted. So the assertion is on the
+    guard's own message, and removing it changes this result.
+    """
+
     assert _judge(repo, _report(scanned=[]), tmp_path) == UNAVAILABLE
+    assert "zero scanned files" in capsys.readouterr().err
+
+
+def test_a_source_deleted_from_the_working_tree_is_not_demanded_of_the_scanner(
+    repo: Path, tmp_path: Path
+) -> None:
+    """`git ls-files` lists the index, and the scanner walks the working tree.
+
+    A tracked file deleted and not yet staged is in one and not the other. The
+    gate would otherwise fail by name over a file nothing can read because it is
+    not there -- fail-closed, but a denominator that counts absent files is not
+    the denominator it claims.
+    """
+
+    (repo / "tools" / "gate.py").unlink()
+    assert _judge(repo, _report(scanned=["src/pkg/module.py"]), tmp_path) == CLEAN
 
 
 def test_a_report_that_does_not_say_what_it_scanned_is_refused(
@@ -300,6 +336,119 @@ def test_a_report_missing_a_key_this_gate_reads_is_refused(
     report = _report()
     del report[key]
     assert _judge(repo, report, tmp_path) == UNAVAILABLE
+
+
+# --- which scanner the verdict is about -------------------------------------
+
+
+def test_a_report_from_an_unpinned_scanner_is_not_a_clean_scan(
+    repo: Path, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """A shared argv is not a shared scan while the parsers differ.
+
+    This is #114 one layer over. The pinned CI scanner cannot read a PEP 695
+    generic function; a newer one reads it without complaint. If this gate took
+    whatever semgrep is on a maintainer's PATH, `make sast` would report clean
+    over exactly the construct the job cannot finish -- a green result about a
+    scan CI never ran.
+    """
+
+    assert _judge(repo, _report(version="1.175.0"), tmp_path) == UNAVAILABLE
+    err = capsys.readouterr().err
+    assert "semgrep 1.175.0 produced this report" in err
+    assert gate.PINNED_SCANNER_VERSION in err
+    assert "not a clean result" in err
+
+
+def test_running_an_unpinned_scanner_can_be_chosen_and_is_then_declared(
+    repo: Path, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """The secret scan's escape hatch, spelled the same and just as loud."""
+
+    code = _judge(
+        repo, _report(version="1.175.0"), tmp_path, extra=["--allow-version-drift"]
+    )
+    assert code == CLEAN
+    captured = capsys.readouterr()
+    assert "WARNING - semgrep 1.175.0 is not the pinned" in captured.err
+    assert "semgrep 1.175.0" in captured.out
+
+
+def test_the_drift_override_is_taken_from_the_environment(
+    repo: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv(gate.VERSION_DRIFT_ENV, "1")
+    assert _judge(repo, _report(version="1.175.0"), tmp_path) == CLEAN
+    monkeypatch.setenv(gate.VERSION_DRIFT_ENV, "yes")
+    assert _judge(repo, _report(version="1.175.0"), tmp_path) == UNAVAILABLE
+
+
+@pytest.mark.parametrize("version", [None, "", "   ", 1168, ["1.168.0"]])
+def test_a_report_that_does_not_name_its_scanner_is_refused(
+    repo: Path, tmp_path: Path, version: Any
+) -> None:
+    """Fail closed on the pin too: an unnamed scanner cannot be the pinned one."""
+
+    report = _report()
+    if version is None:
+        del report["version"]
+    else:
+        report["version"] = version
+    assert _judge(repo, report, tmp_path) == UNAVAILABLE
+
+
+def test_the_pinned_scanner_is_the_one_the_workflow_runs() -> None:
+    """Re-derived from the workflow, not kept in step by hand.
+
+    The container is pinned by digest, so the version it is lives in the comment
+    beside it -- which `tests/test_ci_workflows.py` already requires every pinned
+    image and action to carry. Reading it here is what keeps the gate's pin and
+    the job's image from drifting apart silently, which is the failure this whole
+    gate is about wearing a different hat.
+    """
+
+    workflow = (REPO_ROOT / ".github" / "workflows" / "security.yml").read_text(
+        encoding="utf-8"
+    )
+    pinned = [
+        line.split("#", 1)[1].strip()
+        for line in workflow.splitlines()
+        if "image: semgrep/semgrep@sha256:" in line and "#" in line
+    ]
+    assert pinned == [gate.PINNED_SCANNER_VERSION], (
+        "the SAST job's container and tools/sast_gate.py PINNED_SCANNER_VERSION "
+        f"disagree: the workflow names {pinned}"
+    )
+
+
+def test_the_gate_claims_the_trees_the_other_analyses_do() -> None:
+    """`SCAN_ROOTS` is a fourth copy of a scope `make scope` does not read.
+
+    `make scope` reads `[tool.mypy] files`, `[tool.coverage.run] source` and the
+    marker scan's own tuple, so a third tree of Python adopted by those would
+    satisfy it while quietly falling outside this gate's denominator. This is
+    what holds the copy to the claims: every tree either configuration names
+    must be inside a root this gate scans, and every root this gate scans must
+    be named by one of them.
+    """
+
+    with (REPO_ROOT / "pyproject.toml").open("rb") as handle:
+        config = tomllib.load(handle)
+    claimed = tuple(config["tool"]["mypy"]["files"]) + tuple(
+        config["tool"]["coverage"]["run"]["source"]
+    )
+    for tree in claimed:
+        assert any(
+            PurePosixPath(tree).parts[: len(PurePosixPath(root).parts)]
+            == PurePosixPath(root).parts
+            for root in gate.SCAN_ROOTS
+        ), f"{tree} is analysed elsewhere and outside the SAST gate's SCAN_ROOTS"
+    for root in gate.SCAN_ROOTS:
+        assert any(
+            PurePosixPath(tree).parts[: len(PurePosixPath(root).parts)]
+            == PurePosixPath(root).parts
+            for tree in claimed
+        ), f"{root} is claimed by the SAST gate and by no other analysis"
 
 
 # --- driving the scanner ----------------------------------------------------
@@ -441,6 +590,23 @@ def _tracked_python() -> list[Path]:
     return files
 
 
+def _pep695_offenders(source: str, label: str) -> list[str]:
+    """Every PEP 695 type parameter list on a function or class in ``source``.
+
+    One predicate, used by both tests below: the constraint over the real tree,
+    and the two directions that show what the constraint is. A second copy of
+    the rule written for the second test would be a check that cannot disagree
+    with the first, which is the shape this gate exists to remove.
+    """
+
+    kinds = (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)
+    return [
+        f"{label}:{node.lineno}"
+        for node in ast.walk(ast.parse(source))
+        if isinstance(node, kinds) and node.type_params
+    ]
+
+
 def test_no_source_uses_pep695_type_parameters_on_a_function_or_class() -> None:
     """ADR 0012's constraint, asserted rather than left in a config comment.
 
@@ -449,13 +615,13 @@ def test_no_source_uses_pep695_type_parameters_on_a_function_or_class() -> None:
     is unaffected and is deliberately not what this checks.
     """
 
-    offenders = []
-    for path in _tracked_python():
-        tree = ast.parse(path.read_text(encoding="utf-8"))
-        for node in ast.walk(tree):
-            kinds = (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)
-            if isinstance(node, kinds) and node.type_params:
-                offenders.append(f"{path.relative_to(REPO_ROOT)}:{node.lineno}")
+    offenders = [
+        offender
+        for path in _tracked_python()
+        for offender in _pep695_offenders(
+            path.read_text(encoding="utf-8"), str(path.relative_to(REPO_ROOT))
+        )
+    ]
     assert offenders == [], (
         "PEP 695 type parameters on a function or class; the SAST parser stops "
         "there and reports the rest of the module as partially analyzed. Use a "
@@ -464,9 +630,18 @@ def test_no_source_uses_pep695_type_parameters_on_a_function_or_class() -> None:
     )
 
 
-def test_the_type_alias_form_is_not_what_the_constraint_bans() -> None:
-    """The check above must not have banned the construct four modules use."""
+def test_the_constraint_bans_the_generic_form_and_not_the_type_alias() -> None:
+    """Both directions of the predicate the check above runs, not a copy of it.
 
-    tree = ast.parse("type Rows = list[str]\n")
-    offending = [n for n in ast.walk(tree) if isinstance(n, ast.FunctionDef)]
-    assert offending == []
+    The ban has to catch `def f[T](...)` and it must not catch `type X = ...`,
+    which four modules use. Asserting the second against a re-implemented,
+    weaker predicate would pass no matter what the real one did.
+    """
+
+    assert _pep695_offenders("type Rows = list[str]\n", "alias.py") == []
+    assert _pep695_offenders("def f[T](x: T) -> T: ...\n", "generic.py") == [
+        "generic.py:1"
+    ]
+    assert _pep695_offenders("class C[T]:\n    pass\n", "generic.py") == [
+        "generic.py:1"
+    ]

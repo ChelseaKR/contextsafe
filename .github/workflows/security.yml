@@ -79,6 +79,16 @@ jobs:
       # rather than through `make` because this container ships semgrep and its
       # Python, not the repository's toolchain, and the gate is stdlib-only for
       # exactly that reason.
+      #
+      # The gate is also pinned to the version of the image above, read out of
+      # the report the scan writes. The argv being shared is not enough: 1.168.0
+      # is the parser that stops at a PEP 695 generic function and a later one
+      # does not, so an unpinned local `make sast` would answer "clean" about the
+      # very construct this job cannot finish reading. A mismatch between this
+      # image and PINNED_SCANNER_VERSION fails the gate at exit 2, and
+      # tests/test_sast_gate.py reads the version comment beside the `image:`
+      # line above, so bumping the digest without the constant (or the reverse)
+      # fails in `make verify` before it reaches here.
       - run: python3 tools/sast_gate.py
 
   secret-scan:
