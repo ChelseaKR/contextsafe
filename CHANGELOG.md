@@ -23,14 +23,19 @@ rather than after it.
   Three things the assembly turned up that the issues do not carry. A tag ends
   the argument that a published contract may be narrowed without a version
   move, which `schemas/README.md`, ADR 0006 and `docs/13-BACKLOG.md` each rest
-  on and which #109 is the live instance of; `.github/workflows/package.yml`
-  has never fired either, and can be exercised today by `workflow_dispatch`
-  without any tag or version claim. `contextsafe events summarize` counts
+  on and which #109 is the live instance of — though `schemas/README.md` rests
+  the same freedom on being pre-1.0 as well, which a `0.x` tag does not touch.
+  `.github/workflows/package.yml` has never fired either, and its
+  `workflow_dispatch` trigger can exercise the pipeline without a tag — but not
+  without a version claim: its `provenance` job carries no ref guard, so a
+  dispatch attests `contextsafe-0.1.0-py3-none-any.whl` against this
+  repository. `contextsafe events summarize` counts
   command, outcome and error code and not the warning codes the 0.2.0 record
   now carries, so the surface the import warnings were routed to does not
   count them yet. And the accessibility gate's rendered page already carries a
   `data-cs-status` marker for every one of the five statuses, not only the
-  `pass` the reference receipt's results use, so the coverage argument for
+  `pass` the reference receipt's results use — one per status in the summary
+  table, five `pass` in the results table — so the coverage argument for
   more subjects is weaker than `docs/08` §7's fixture list implies.
 
 ### Changed
@@ -154,6 +159,14 @@ rather than after it.
   checked by hand and by nothing else. B-048 is not closed and its
   acceptance statement has not moved: there is still no hidden-fault set, no
   independent fault author, and no independent QA.
+
+- **`tools/claims_gate.py`'s "outside this gate" disclosure names the second
+  document of measurements it cannot re-derive.** It named the figures in
+  `docs/PUBLICATION-READINESS.md` section 7; `docs/OPEN-DECISIONS.md` now
+  carries counts, digests and byte counts of the same kind, and a disclosure
+  that lists one document and not the other understates what the gate is
+  silent about. No check changed and nothing was exempted: the entry is a
+  statement of what is not covered, printed on every run.
 
 - **The local event log's record carries the command's warning codes, and its
   schema version moves to `contextsafe.event-log/0.2.0`.** A record was
@@ -709,9 +722,14 @@ rather than after it.
   `date-released`.** It has carried both since `d472f76` ("release: prepare
   0.1.0"). The Release and Versioning row of the standards table now says what
   the two files hold and that the tag they were written for is still an open
-  question, and it records that `package.yml` has never fired for the same
-  reason `release.yml` has not. The sentence was false whichever way #100 is
+  question, and it records that `package.yml` has never fired either, on
+  neither of its two triggers — the tag shape and `workflow_dispatch`. The
+  sentence was false whichever way #100 is
   decided, so it is corrected here rather than left to wait for the decision.
+  `tests/test_ci_workflows.py` now reads both files' `on:` blocks and requires
+  any document explaining that silence to name every trigger the workflow has,
+  because the first attempt at this row gave the two workflows one reason and
+  `package.yml` has two triggers.
 
 - **The summariser refused, in whole and forever, any log two commands had
   written at once.** `append_event` derives a record's sequence by counting the

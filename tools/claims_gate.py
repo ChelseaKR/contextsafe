@@ -245,9 +245,11 @@ UNCOVERED: tuple[Uncovered, ...] = (
         "docs/I18N.md and docs/08-ACCESSIBILITY-I18N.md",
     ),
     Uncovered(
-        "the figures in docs/PUBLICATION-READINESS.md section 7",
-        "they are measurements of one run at the commit that section names, correct "
-        "for that run; re-running the command is the only thing that answers them",
+        "the figures in docs/PUBLICATION-READINESS.md section 7 and the counts, "
+        "digests and byte counts in docs/OPEN-DECISIONS.md",
+        "they are measurements of one run at the commit each document names, correct "
+        "for that run; re-running the command is the only thing that answers them. "
+        "Both documents say so themselves, and this gate cannot re-derive either set",
     ),
     Uncovered(
         "the seconds in docs/18-ASSURANCE-PROGRAM.md's measurement section",

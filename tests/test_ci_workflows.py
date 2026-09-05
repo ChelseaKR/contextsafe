@@ -1,6 +1,6 @@
 """What the workflows claim, re-derived from the workflows.
 
-Three properties of `.github/workflows/` are load-bearing and none of them was
+Four properties of `.github/workflows/` are load-bearing and none of them was
 asserted anywhere, so each drifted or could have:
 
 * **`ci.yml` runs on every pull request.** It carried `paths-ignore` for
@@ -15,6 +15,14 @@ asserted anywhere, so each drifted or could have:
 * **Every action is pinned to a full SHA, and to the same SHA everywhere.** Two
   files pinning `actions/checkout` to two different commits is the drift shape
   that let two pins sit behind upstream for three weeks (#91).
+* **A document that explains why a workflow has never fired names every
+  trigger it has, and prices what running it would assert.** `package.yml`
+  fires on a tag *and* on `workflow_dispatch`, and its `provenance` job has no
+  ref guard, so a dispatch attests a wheel carrying `pyproject.toml`'s
+  version. Documents said it had never fired "for the same reason
+  `release.yml` has not", and recommended dispatching it as an act costing no
+  version claim -- two sentences that cannot both be checked by reading prose
+  (#100).
 
 What this file cannot see, stated rather than implied: whether a pinned SHA is
 the current upstream release. That is a fact about GitHub, not about this tree,
@@ -232,3 +240,162 @@ def test_one_action_is_pinned_to_one_sha_everywhere() -> None:
 
     disagreeing = {a: sorted(refs) for a, refs in _pins().items() if len(refs) > 1}
     assert disagreeing == {}
+
+
+# --- #100: a workflow's triggers, and the prose that explains its silence ----
+
+
+def _on_block(name: str) -> str:
+    """The `on:` mapping of one workflow, comments dropped.
+
+    Read by indentation rather than with a YAML parser, because this
+    repository has no runtime or test dependency on one and a trigger list is
+    two levels deep.
+    """
+
+    lines = _uncommented(_text(name)).splitlines()
+    start = next(i for i, line in enumerate(lines) if line.rstrip() == "on:")
+    block: list[str] = []
+    for line in lines[start + 1 :]:
+        if line.strip() and not line.startswith((" ", "\t")):
+            break
+        block.append(line)
+    assert block, f"{name}: the `on:` block read as empty"
+    return "\n".join(block)
+
+
+def _triggers(name: str) -> set[str]:
+    return {
+        match.group(1)
+        for match in re.finditer(r"^  ([a-z_]+):", _on_block(name), re.MULTILINE)
+    }
+
+
+def test_package_yml_has_a_trigger_that_needs_nobodys_tag() -> None:
+    """The premise every sentence below has to account for.
+
+    `release.yml` has one trigger and it has not occurred. `package.yml` has
+    two, and one of them is a button. "It has never fired" is therefore true
+    of both files for different reasons, and a document that gives them the
+    same reason is wrong about the second.
+    """
+
+    assert _triggers("release.yml") == {"push"}
+    assert _triggers("package.yml") == {"push", "workflow_dispatch"}
+
+
+NEVER_FIRED = re.compile(r"\b(?:never fired|has never (?:fired|run|executed))\b")
+
+EXPLAINS_SILENCE = (
+    REPO_ROOT / "README.md",
+    REPO_ROOT / "CHANGELOG.md",
+    REPO_ROOT / "docs" / "OPEN-DECISIONS.md",
+)
+
+
+def _blocks(text: str) -> list[str]:
+    """Paragraphs, with a Markdown table row counting as one.
+
+    A standards-table row is a single line carrying a whole argument, so
+    splitting on blank lines alone would let a row make a claim and then be
+    judged against the rest of the table.
+    """
+
+    blocks: list[str] = []
+    for paragraph in re.split(r"\n\s*\n", text):
+        blocks.extend(paragraph.splitlines() if "|" in paragraph else [paragraph])
+    return blocks
+
+
+def test_no_document_explains_package_yml_silence_by_the_missing_tag() -> None:
+    """Saying why `package.yml` has not fired means naming both its triggers.
+
+    The Release and Versioning row said it "triggers on the same tag shape",
+    and the changelog said it "has never fired for the same reason
+    `release.yml` has not". Both omit `workflow_dispatch` -- the trigger the
+    recommendation in `docs/OPEN-DECISIONS.md` then proposes using, so one
+    change both hid the trigger and relied on it.
+    """
+
+    if "workflow_dispatch" not in _triggers("package.yml"):
+        return  # the shorter claim would be accurate; nothing to require
+    examined = 0
+    for path in EXPLAINS_SILENCE:
+        for block in _blocks(path.read_text(encoding="utf-8")):
+            if "package.yml" not in block or not NEVER_FIRED.search(block):
+                continue
+            examined += 1
+            assert "workflow_dispatch" in block, f"{path.name}: {block[:200]}"
+    assert examined, "no document explained the silence, so nothing was examined"
+
+
+PROVENANCE_GUARD = re.compile(r"^\s+if:.*github\.ref", re.MULTILINE)
+
+PROJECT_VERSION = re.compile(r'^version = "([^"]+)"', re.MULTILINE)
+
+
+def _job(text: str, name: str) -> str:
+    lines = _uncommented(text).splitlines()
+    start = next(i for i, line in enumerate(lines) if line.rstrip() == f"  {name}:")
+    block: list[str] = []
+    for line in lines[start + 1 :]:
+        if line.strip() and not line.startswith("    "):
+            break
+        block.append(line)
+    assert block, f"the {name} job read as empty"
+    return "\n".join(block)
+
+
+def test_the_memo_prices_the_dispatch_it_recommends() -> None:
+    """A dispatch that mints a signed attestation is not a free experiment.
+
+    `package.yml`'s `provenance` job needs `build` and `fresh-install` and
+    nothing else, so on `workflow_dispatch` it reaches
+    `actions/attest-build-provenance` with `attestations: write` and stores a
+    signed statement over the wheel `make package` built -- which carries
+    `pyproject.toml`'s version. Either the job is guarded by the ref, or the
+    document recommending the dispatch says what the dispatch would assert.
+    """
+
+    provenance = _job(_text("package.yml"), "provenance")
+    if "attest-build-provenance" not in provenance:
+        return  # nothing is minted, so there is nothing to price
+    if PROVENANCE_GUARD.search(provenance):
+        return  # a dispatch cannot reach the attestation
+    recommendation = _recommendation(
+        (REPO_ROOT / "docs" / "OPEN-DECISIONS.md").read_text(encoding="utf-8")
+    )
+    proposing = [
+        block
+        for block in _blocks(recommendation)
+        if "workflow_dispatch" in block and "package.yml" in block
+    ]
+    if not proposing:
+        return  # the memo no longer proposes a dispatch, so it owes no price
+    version = PROJECT_VERSION.search(
+        (REPO_ROOT / "pyproject.toml").read_text(encoding="utf-8")
+    )
+    assert version is not None
+    for block in proposing:
+        assert "attest" in block, (
+            f"a dispatch proposed without its attestation: {block}"
+        )
+        assert version.group(1) in block, (
+            f"the version the attested wheel would carry is unnamed: {block}"
+        )
+
+
+def _recommendation(memo: str) -> str:
+    """Section 1's recommendation, and only that.
+
+    A cost stated in the section that describes the workflows is not the same
+    as a cost stated beside the thing being recommended: a reader acting on
+    the recommendation reads the recommendation.
+    """
+
+    section = memo.split("\n## 1. ", 1)
+    assert len(section) == 2, "the memo no longer carries a section 1"
+    body = section[1].split("\n## ", 1)[0]
+    parts = body.split("\n### Recommendation\n", 1)
+    assert len(parts) == 2, "section 1 no longer carries a recommendation"
+    return parts[1]

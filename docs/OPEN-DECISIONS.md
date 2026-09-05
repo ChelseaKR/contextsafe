@@ -66,12 +66,14 @@ document rather than left to wait for a decision.
 
 ### What a tag would actually run
 
-A pushed `v*.*.*` tag triggers exactly two workflows.
-[`ci.yml`](../.github/workflows/ci.yml) and
-[`security.yml`](../.github/workflows/security.yml) are `pull_request` and
-`push` to `main` only, so the Semgrep job and the CI determinism matrix do not
-run at a tag; `mutation.yml` runs weekly and on pull requests that touch the
-package, the suite, or the gate.
+A pushed `v*.*.*` tag triggers exactly two workflows. None of the other three
+lists a tag among its triggers:
+[`ci.yml`](../.github/workflows/ci.yml) is `pull_request` and `push` to `main`;
+[`security.yml`](../.github/workflows/security.yml) is those two and a weekly
+`0 7 * * 0` cron; `mutation.yml` is a weekly `0 9 * * 0` cron,
+`workflow_dispatch`, and pull requests touching the package, the suite, or the
+gate. So the Semgrep job, the CI determinism matrix and the mutation gate do
+not run at a tag.
 
 [`release.yml`](../.github/workflows/release.yml), in order:
 
@@ -110,6 +112,20 @@ passed, because the two workflows run independently on the same tag.
 So a first tag is also the first execution of two pipelines nobody has watched
 run. That is a separable risk, and section 1's recommendation separates it.
 
+**One property of `package.yml` bears on how separable it actually is.** Its
+`provenance` job carries `needs: [build, fresh-install]` and no `if:` at all,
+so nothing about it is conditioned on the ref. On a `workflow_dispatch` run
+from a branch, the job still reaches
+`actions/attest-build-provenance` with `id-token: write` and
+`attestations: write`, and stores a Sigstore-signed statement against this
+repository over `dist/SHA256SUMS`. Those checksums are of the artifacts
+`make package` built from `pyproject.toml`, whose `version` is `0.1.0` today,
+so the wheel in the statement is `contextsafe-0.1.0-py3-none-any.whl`. A
+dispatch is therefore not free of a version claim: it mints a durable,
+publicly verifiable record naming 0.1.0 for a release that does not exist.
+Nothing in this document proposes changing that guard; whether the job should
+be gated on `startsWith(github.ref, 'refs/tags/')` is itself part of #100.
+
 ### What a tag would assert
 
 - The changelog heading's date, as the date of that release.
@@ -145,6 +161,16 @@ decision; it is the moment the versioning policy in `schemas/README.md` starts
 having someone on the other side of it. Whether that is a cost or the point is
 the maintainer's call.
 
+**The foreclosure is narrower than that sounds, and the difference matters.**
+`schemas/README.md` lines 90–91 rest the same freedom on a second footing a
+tag does not touch: "These are pre-1.0. `v0.1` in a filename means the shape
+may still change; `v1` means the shape is settled for the v1 boundary but the
+project itself is pre-release." A `v0.1.0` tag retires the untagged sentence
+quoted above and leaves the pre-1.0 one standing. So what a first tag ends is
+the *this costs nobody anything* argument, not the pre-release status the
+filenames encode — a `0.x` tag and a stability guarantee are different
+promises, and only the first is on the table here.
+
 ### The options
 
 **A. Tag `v0.1.0` now.** Requires a preparatory commit first, because the
@@ -168,9 +194,13 @@ and saying in the 0.1.0 section that it was prepared and never released —
 without that last part, the file still names a release date on which nothing
 was released, which is exactly what #100 reports.
 *Cost:* 0.1.0 becomes a version number no artifact ever carried, and the
-version metadata jumps from an untagged 0.1.0 to a tagged 0.2.0.
+version metadata jumps from an untagged 0.1.0 to a tagged 0.2.0. That first
+half stops being true the moment `package.yml` is dispatched while
+`pyproject.toml` still says 0.1.0: the run leaves an attested
+`contextsafe-0.1.0-py3-none-any.whl` behind, so a 0.1.0 artifact would exist
+and be signed for, without a release. The order of the two matters.
 *Forecloses:* the same narrowing argument, and any possibility of a 0.1.0
-artifact.
+release artifact.
 
 **C. Restate the 0.1.0 heading as prepared rather than released, and leave
 tagging as a later decision.** The `-F` grep makes the heading text after
@@ -191,10 +221,24 @@ is the reason #100 exists.
 
 Two things that are independent, and separating them is most of the value here:
 
-1. **Exercise `package.yml` by `workflow_dispatch` now.** It costs no version
-   claim, no tag, and no changelog edit, and it converts "the packaging pipeline
-   has never fired" into evidence — or into a bug report — before any tag
-   depends on it. This is available today and nothing blocks it.
+1. **Exercise `package.yml`, and price the dispatch before pressing it.** A
+   `workflow_dispatch` run converts "the packaging pipeline has never fired"
+   into evidence — or into a bug report — before any tag depends on it, and it
+   needs no tag and no changelog edit. It is not, however, free of a version
+   claim, which is the part the earlier draft of this line got wrong: the
+   `provenance` job has no ref guard, so a dispatch reaches
+   `actions/attest-build-provenance` and leaves a signed statement over
+   `contextsafe-0.1.0-py3-none-any.whl` stored against this repository. That
+   is a durable public assertion about 0.1.0, and it interacts with option B
+   above. Two ways to get the evidence without the assertion, neither of them
+   decided here: gate the `provenance` job on
+   `startsWith(github.ref, 'refs/tags/')` first — a change to `package.yml`,
+   and therefore part of #100 rather than of this memo — or run `make package`
+   and then `uv run python tools/fresh_install_gate.py --dist dist` locally,
+   the pair the `Makefile` already documents, which exercises the build, the
+   SBOM export and one platform's fresh install and attests nothing. What
+   cannot be had, as the workflow stands, is the three-platform matrix without
+   the attestation step.
 2. **Prefer C now and B at the wave merge.** C removes the false sentence at
    once and holds every other option open; B makes the tag land on a boundary
    that means something, rather than on a version prepared before the wave that
@@ -254,7 +298,8 @@ both measurable:
 
 - **The log's only reader does not count them.** `contextsafe events summarize
   --directory logs` on that same log returns `counts_by_command`,
-  `counts_by_error_code`, `counts_by_outcome`, `record_count` and `log_sha256`,
+  `counts_by_error_code`, `counts_by_outcome`, `log_sha256`, `record_count`
+  and `schema_version`,
   and no warning counts at all: `EventLogSummary` reduces each record to
   command, outcome and error code. The field the writer added for this purpose
   is the one field the summary drops. The writer landed in `b2c2b03` and the
@@ -264,8 +309,13 @@ both measurable:
   sees nothing, because `import` writes its document and stderr carries the one
   JSON error object only on a rejection.
 
-**The larger fact the issue does not name.** The same fixture read as
-`lis-csv` produces this report in process:
+**The larger fact the issue does not name.** A different reference fixture,
+`fixtures/reference/lis-export.csv`, read as `lis-csv` at `--checkpoint
+lis_return` — the only checkpoint that importer accepts, since
+`_require_lis_checkpoint` in
+[`src/contextsafe/importers/lis.py`](../src/contextsafe/importers/lis.py)
+answers `import_checkpoint_mismatch` at any other, "an LIS export is evidence
+for the `lis_return` checkpoint only" — produces this report in process:
 
 ```json
 {"format": "lis-csv", "mapping_version": "0.2.0", "observation_count": 3,
@@ -322,8 +372,14 @@ count that would make it usable does not exist yet.
 
 **B2, a variant worth pricing separately.** Print the closed warning codes to
 stderr on success unless `--quiet`. It publishes no document, breaks no
-exit-code contract (0 with output on stdout; 2 with one JSON error object on
-stderr), and carries only closed-vocabulary codes, so it cannot leak a token.
+exit-code contract, and carries only closed-vocabulary codes, so it cannot
+leak a token. The whole contract, since the next sentence calls this a
+CLI-wide question rather than an import-only one, is four codes in
+[`src/contextsafe/cli.py`](../src/contextsafe/cli.py): `EXIT_SUCCESS = 0`,
+`EXIT_FINDING = 1` for `evaluate --fail-on`, `EXIT_CONTRACT_ERROR = 2` with
+one JSON error object on stderr, and `EXIT_USAGE_ERROR = 64`. `import` has no
+`--fail-on` and so reaches only three of them; a command that grew one would
+be printing warnings on 0 and on 1 both.
 *Cost:* stderr today is trivially describable — one error object on rejection,
 nothing otherwise — and this makes it two things. It is also a CLI-wide
 decision rather than an import-only one, because the next command with a
@@ -411,9 +467,24 @@ result rows use. And `check_contrast` reads the stylesheet rather than the page,
 so every declared foreground/background pair is checked whether or not this
 receipt happens to use it.
 
+**Which render path each of those came from, because it bounds the claim.**
+The page has two, and they are separate code:
+`_summary_table` ([`src/contextsafe/html_receipt.py`](../src/contextsafe/html_receipt.py)
+line 531) emits a `<th data-cs-status=…>` per published status, and
+`_results_table` (line 500) emits a `<td data-cs-status=…>` per result row.
+Counting the rendered en-US page by element: the five `<th>` are one each of
+`blocked`, `fail`, `indeterminate`, `not_applicable` and `pass`; the five
+`<td>` are all `pass`, which is what the reference receipt's results are. Both
+draw their symbol from the shared `_STATUS_SYMBOLS` map and their label from
+the catalog through `_status_cell`, so a symbol or wording defect is visible
+on either path. What is not exercised is a non-`pass` status *in a result
+row* — the `<td>` markup, with its status key read from the receipt document.
+
 The coverage argument for more subjects is therefore weaker than
-[§7](08-ACCESSIBILITY-I18N.md)'s fixture list implies — which is worth knowing
-before spending anything on either more subjects or more engines.
+[§7](08-ACCESSIBILITY-I18N.md)'s fixture list implies, but not empty: it is
+one page-path-and-status combination rather than four missing statuses. That
+is worth knowing before spending anything on either more subjects or more
+engines.
 
 **One inconsistency the decision has to clear up either way.** §7 still lists,
 under "Automated on every change", "pa11y or equivalent on summary, all-status,
@@ -496,7 +567,13 @@ what this project can honestly say.
 - **The evidence is dated.** Every figure and quotation above was read at
   `cf3bf07` on 2026-09-05, and every command shown is re-runnable. A number here
   is a measurement of one run, not a running total; re-run the command rather
-  than trusting the number.
+  than trusting the number. A review pass on the same day corrected six of
+  them against the tree — the workflow trigger lists, `package.yml`'s
+  unguarded `provenance` job, the fixture and checkpoint the `lis-csv` report
+  comes from, the summary's `schema_version` field, the four exit codes, and
+  which render path each status marker came from — and each correction was
+  re-read the same way. No gate re-derives any of these; `tools/claims_gate.py`
+  discloses that under "outside this gate" rather than leaving it implied.
 - **The branch matters for section 2.** The event-log warning field and its
   reader are on this integration branch and not on `main`, so the seam described
   there is a state of the branch and not of the published default.
